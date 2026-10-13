@@ -75,4 +75,77 @@
             </xpath>
         </field>
     </record>
+
+    <!-- Bestand: Charge und Verfall je Packung -->
+    <record id="view_stock_quant_tree_grx" model="ir.ui.view">
+        <field name="name">stock.quant.list.greenrx</field>
+        <field name="model">stock.quant</field>
+        <field name="inherit_id" ref="stock.view_stock_quant_tree"/>
+        <field name="arch" type="xml">
+            <field name="lot_id" position="after">
+                <field name="plcs_batch" optional="show"/>
+                <field name="expiration_date" widget="date" optional="show"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_grx_stock_quant_list" model="ir.ui.view">
+        <field name="name">stock.quant.list.greenrx.bestand</field>
+        <field name="model">stock.quant</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <list string="Bestand GreenRX" create="0" delete="0" edit="0" export_xlsx="1"
+                  decoration-danger="expiration_date and expiration_date &lt; current_date">
+                <field name="location_id" string="Lagerort"/>
+                <field name="package_id" string="Box"/>
+                <field name="product_id" string="Artikel"/>
+                <field name="lot_id" string="Seriennummer"/>
+                <field name="plcs_batch"/>
+                <field name="expiration_date" string="Verfall" widget="date"/>
+                <field name="plcs_grx_ampel" widget="badge" optional="show"
+                       decoration-success="plcs_grx_ampel == 'gruen'" decoration-warning="plcs_grx_ampel == 'gelb'"
+                       decoration-danger="plcs_grx_ampel == 'rot'"/>
+                <field name="quantity" string="Menge" sum="Summe"/>
+                <field name="uom_id" groups="uom.group_uom" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="quant_search_view_grx" model="ir.ui.view">
+        <field name="name">stock.quant.search.greenrx</field>
+        <field name="model">stock.quant</field>
+        <field name="inherit_id" ref="stock.quant_search_view"/>
+        <field name="arch" type="xml">
+            <field name="lot_id" position="after">
+                <field name="plcs_batch"/>
+            </field>
+            <filter name="package" position="after">
+                <filter string="Charge" name="grx_batch" context="{'group_by': 'plcs_batch'}"/>
+                <filter string="Verfall (Monat)" name="grx_expiry" context="{'group_by': 'expiration_date:month'}"/>
+            </filter>
+        </field>
+    </record>
+
+    <!-- Wareneingang/Bewegungen: Charge neben der Seriennummer -->
+    <record id="view_stock_move_line_operation_tree_grx" model="ir.ui.view">
+        <field name="name">stock.move.line.operations.list.greenrx</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.view_stock_move_line_operation_tree"/>
+        <field name="arch" type="xml">
+            <field name="lot_id" position="after">
+                <field name="plcs_batch" optional="show"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_move_line_tree_grx" model="ir.ui.view">
+        <field name="name">stock.move.line.list.greenrx</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.view_move_line_tree"/>
+        <field name="arch" type="xml">
+            <field name="lot_id" position="after">
+                <field name="plcs_batch" optional="show"/>
+            </field>
+        </field>
+    </record>
 </odoo>

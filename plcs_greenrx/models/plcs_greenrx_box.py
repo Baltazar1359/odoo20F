@@ -628,7 +628,8 @@ class PlcsGreenrxBox(models.Model):
             "type": "ir.actions.act_window",
             "name": self.env._("Bestand GreenRX"),
             "res_model": "stock.quant",
-            "views": [(self.env.ref("stock.view_stock_quant_tree").id, "list")],
+            "views": [(self.env.ref("plcs_greenrx.view_grx_stock_quant_list").id, "list")],
+            "search_view_id": [self.env.ref("stock.quant_search_view").id],
             "domain": [("location_id", "in", locations.ids), ("quantity", ">", 0)],
             "context": {"group_by": ["location_id", "package_id"], "create": False, "edit": False},
         }

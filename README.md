@@ -30,6 +30,10 @@ Umgesetzt nach dem Entwurf „PLCS Lager-Oberfläche“ (Handy und PC mit Handsc
 
 Tasten am PC: **F8** Drucken, **F9** Weiter bzw. Box abschließen, **Esc** Meldung schließen.
 
+### Seriennummer und Charge in Odoo
+
+Odoo kennt je Packung nur ein „Los/Seriennummer“-Feld. Das Modul speichert dort die **securPharm-Seriennummer** (eindeutig je Packung) und die **Charge** in einem eigenen Feld „Charge“ am Los. Charge und Verfall werden in Bestand, Wareneingang (Details) und Bewegungen neben der Seriennummer angezeigt und sind dort such- und gruppierbar.
+
 ### Regeln, die Odoo durchsetzt
 
 - Eine Box enthält einen Artikel und eine Charge.
@@ -52,7 +56,7 @@ Tasten am PC: **F8** Drucken, **F9** Weiter bzw. Box abschließen, **Esc** Meldu
 - **Freigeben** bucht die Box nach GreenRX/Bestand. Bei einer gelben oder roten (gesperrten) Box ist eine Begründung Pflicht.
 - **Sperren** bucht die Box ins Sperrlager. Ein Grund ist Pflicht.
 
-Wo die Ware liegt: **GreenRX › Übersicht › Bestand GreenRX** (nach Lagerort und Box gruppiert) oder **Box-Erfassungen** (Status, Lagerort, VP, Begründung je Box).
+Wo die Ware liegt: **GreenRX › Übersicht › Bestand GreenRX** (nach Lagerort und Box gruppiert, je Packung Seriennummer, Charge, Verfall, Ampel) oder **Box-Erfassungen** (Status, Lagerort, VP, Begründung je Box).
 
 ### Retourenvorgänge und Tickets
 

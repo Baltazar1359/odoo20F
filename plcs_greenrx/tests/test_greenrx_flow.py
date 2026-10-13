@@ -269,6 +269,9 @@ class TestGreenrxFlow(TransactionCase):
         action = self.env["plcs.greenrx.box"].with_user(self.lager).action_grx_stock()
         found = self.env["stock.quant"].with_user(self.lager).search(action["domain"])
         self.assertIn(box.package_id, found.package_id)
+        mine = found.filtered(lambda q: q.package_id == box.package_id)
+        self.assertEqual(set(mine.mapped("plcs_batch")), {"BYE-T01"})
+        self.assertTrue(all(mine.mapped("expiration_date")))
 
     def test_short_expiry_suggests_red(self):
         ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 1}])

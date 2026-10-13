@@ -1,9 +1,11 @@
-from odoo import models
+from odoo import fields, models
 from odoo.exceptions import UserError
 
 
 class StockMoveLine(models.Model):
     _inherit = "stock.move.line"
+
+    plcs_batch = fields.Char("Charge", related="lot_id.plcs_batch")
 
     def _action_done(self):
         if not self.env.context.get("plcs_grx_controlled_move"):

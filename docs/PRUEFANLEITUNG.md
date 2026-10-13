@@ -56,7 +56,7 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
 
 ### C. Kontrollen
 
-- **GreenRX › Übersicht › Bestand GreenRX:** Ware nach Lagerort (Quarantäne, Bestand, Sperrlager) und Box gruppiert, bis zur einzelnen Seriennummer.
+- **GreenRX › Übersicht › Bestand GreenRX:** Ware nach Lagerort (Quarantäne, Bestand, Sperrlager) und Box gruppiert, je Packung mit Seriennummer, **Charge**, **Verfall** und Ampel. Über „Gruppieren nach“ auch nach Charge oder Verfallsmonat.
 - **GreenRX › Übersicht › Box-Erfassungen:** je Box Status, aktueller Lagerort, VP und Begründung.
 - **GreenRX › Übersicht › Seriennummern:** Jede Packung ist mit Charge, Verfall, Box und Ticket gespeichert.
 - **Sperre gegen Umgehung:** Versuch, Ware per normalem Transfer aus GreenRX/Quarantäne umzulagern. Erwartet: Odoo lehnt das ab.
