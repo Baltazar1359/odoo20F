@@ -720,7 +720,8 @@ export class GreenRxReceiptApp extends Component {
 
     async vpRelease() {
         const box = this.state.vpBox;
-        if (box.state === "blocked" && !(this.state.vpReason || "").trim()) {
+        const reasonRequired = box.state === "blocked" || box.ampel === "gelb" || box.ampel === "rot";
+        if (reasonRequired && !(this.state.vpReason || "").trim()) {
             this.state.vpAsk = "release";
             return;
         }

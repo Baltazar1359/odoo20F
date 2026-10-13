@@ -51,13 +51,14 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
 ### B. VP-Freigabe (als vp.test, also eine andere Person)
 
 1. **GreenRX › VP-Freigabe** öffnen. Die Boxen erscheinen, Rot zuerst. Eigene Boxen sieht man dort nicht (4-Augen-Prinzip).
-2. **GX001 freigeben.** Die Ware wird nach GreenRX/Bestand gebucht.
+2. **GX001 freigeben.** Die Ware wird nach GreenRX/Bestand gebucht. Bei einer **gelben** oder **roten** Box verlangt Odoo eine Begründung.
 3. **GX003 sperren** (Grund angeben). Die Ware bleibt im Sperrlager.
 
 ### C. Kontrollen
 
+- **GreenRX › Übersicht › Bestand GreenRX:** Ware nach Lagerort (Quarantäne, Bestand, Sperrlager) und Box gruppiert, bis zur einzelnen Seriennummer.
+- **GreenRX › Übersicht › Box-Erfassungen:** je Box Status, aktueller Lagerort, VP und Begründung.
 - **GreenRX › Übersicht › Seriennummern:** Jede Packung ist mit Charge, Verfall, Box und Ticket gespeichert.
-- **Lager › Berichte › Bestand:** Ware in Quarantäne bzw. Bestand bzw. Sperrlager.
 - **Sperre gegen Umgehung:** Versuch, Ware per normalem Transfer aus GreenRX/Quarantäne umzulagern. Erwartet: Odoo lehnt das ab.
 - **Suche:** Auf der Startseite nach Apotheke, Ticket- oder Reklamationsnummer suchen.
 

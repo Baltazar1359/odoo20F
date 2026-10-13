@@ -18,6 +18,8 @@
                 <field name="user_id"/>
                 <field name="vp_user_id" optional="show"/>
                 <field name="state" widget="badge" decoration-success="state == 'released'" decoration-danger="state == 'blocked'" decoration-info="state == 'to_release'"/>
+                <field name="location_id"/>
+                <field name="vp_reason" optional="show"/>
             </list>
         </field>
     </record>

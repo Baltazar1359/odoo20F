@@ -1,6 +1,6 @@
 {
     "name": "PLCS GreenRX Wareneingang",
-    "version": "20.0.1.0.0",
+    "version": "20.0.1.1.0",
     "summary": "GreenRX-Retouren: Scan je Packung (Seriennummer, Charge, Verfall), Boxen, Vorprüfung mit Ampel, KabQ-Drucke, VP-Freigabe",
     "description": """
 GreenRX-Wareneingang für PLCS GmbH

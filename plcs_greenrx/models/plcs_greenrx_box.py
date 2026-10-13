@@ -618,13 +618,35 @@ class PlcsGreenrxBox(models.Model):
             raise UserError(self.env._("Bewegung %s konnte nicht gebucht werden.", picking.name))
         return picking
 
+    @api.model
+    def action_grx_stock(self):
+        """Bestand in den GreenRX-Lagerorten, gruppiert nach Lagerort und Box."""
+        config = self.env.company._plcs_grx_config()
+        locations = (config.plcs_grx_quarantine_location_id | config.plcs_grx_stock_location_id
+                     | config.plcs_grx_blocked_location_id)
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.env._("Bestand GreenRX"),
+            "res_model": "stock.quant",
+            "views": [(self.env.ref("stock.view_stock_quant_tree").id, "list")],
+            "domain": [("location_id", "in", locations.ids), ("quantity", ">", 0)],
+            "context": {"group_by": ["location_id", "package_id"], "create": False, "edit": False},
+        }
+
+    def _grx_vp_reason_required(self):
+        """Begründungspflicht bei der VP-Freigabe: gesperrte (rote) und gelbe Boxen."""
+        self.ensure_one()
+        return self.state == "blocked" or self.ampel in ("gelb", "rot")
+
     def grx_vp_release(self, note=False):
         """VP gibt die Box frei → GreenRX-Bestand (verkaufsfähig)."""
         self.ensure_one()
         self._grx_check_state("to_release", "blocked")
         self._grx_check_vp()
-        if self.state == "blocked" and not (note or "").strip():
-            raise UserError(self.env._("Gesperrte Box freigeben: Bitte eine Begründung angeben."))
+        if self._grx_vp_reason_required() and not (note or "").strip():
+            if self.state == "blocked":
+                raise UserError(self.env._("Gesperrte Box freigeben: Bitte eine Begründung angeben."))
+            raise UserError(self.env._("Gelbe Box freigeben: Bitte eine Begründung angeben."))
         config = self.company_id._plcs_grx_config()
         picking = self.sudo()._grx_internal_move(config.plcs_grx_release_type_id, config.plcs_grx_stock_location_id, note)
         self.sudo().write({"state": "released", "vp_user_id": self.env.user.id, "vp_date": fields.Datetime.now(),

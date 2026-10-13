@@ -246,6 +246,30 @@ class TestGreenrxFlow(TransactionCase):
         box.with_user(self.vp1).grx_vp_release(note="Nachprüfung OK")
         self.assertEqual(box.state, "released")
 
+    def test_yellow_release_needs_reason(self):
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 1}])
+        box = self._fill_box(ticket, "GX025", self.gtin_a, ["Y1"])
+        box.grx_to_check()
+        self._close(box, ampel="gelb", q_damage="nein")
+        self.assertEqual(box.ampel, "gelb")
+        self.assertEqual(box.state, "to_release")
+        ticket.with_user(self.lager).grx_finish()
+        # Freigabe einer gelben Box nur mit Begründung
+        with self.assertRaises(UserError):
+            box.with_user(self.vp1).grx_vp_release()
+        with self.assertRaises(UserError):
+            box.with_user(self.vp1).grx_vp_release(note="   ")
+        box.with_user(self.vp1).grx_vp_release(note="Umkarton beschädigt, Packungen unversehrt")
+        self.assertEqual(box.state, "released")
+        self.assertEqual(box.vp_reason, "Umkarton beschädigt, Packungen unversehrt")
+        quants = box.package_id.quant_ids.filtered(lambda q: q.quantity > 0)
+        self.assertEqual(quants.location_id, self.cfg.plcs_grx_stock_location_id)
+        self.assertEqual(box.location_id, self.cfg.plcs_grx_stock_location_id)
+        # Übersicht „Bestand GreenRX“ zeigt die Box im Bestand
+        action = self.env["plcs.greenrx.box"].with_user(self.lager).action_grx_stock()
+        found = self.env["stock.quant"].with_user(self.lager).search(action["domain"])
+        self.assertIn(box.package_id, found.package_id)
+
     def test_short_expiry_suggests_red(self):
         ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 1}])
         Box = self.env["plcs.greenrx.box"].with_user(self.lager)

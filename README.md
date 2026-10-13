@@ -49,8 +49,10 @@ Tasten am PC: **F8** Drucken, **F9** Weiter bzw. Box abschließen, **Esc** Meldu
 
 - Die Liste ist nach Ampel sortiert (Rot zuerst).
 - Boxen, die die VP selbst erfasst hat, erscheinen nicht (4-Augen-Prinzip).
-- **Freigeben** bucht die Box nach GreenRX/Bestand. Bei einer gesperrten Box ist eine Begründung Pflicht.
+- **Freigeben** bucht die Box nach GreenRX/Bestand. Bei einer gelben oder roten (gesperrten) Box ist eine Begründung Pflicht.
 - **Sperren** bucht die Box ins Sperrlager. Ein Grund ist Pflicht.
+
+Wo die Ware liegt: **GreenRX › Übersicht › Bestand GreenRX** (nach Lagerort und Box gruppiert) oder **Box-Erfassungen** (Status, Lagerort, VP, Begründung je Box).
 
 ### Retourenvorgänge und Tickets
 

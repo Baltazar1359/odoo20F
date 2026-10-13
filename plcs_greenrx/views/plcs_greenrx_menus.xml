@@ -10,6 +10,14 @@
               action="action_grx_vp" groups="group_grx_vp"/>
 
     <menuitem id="menu_grx_data" name="Übersicht" parent="menu_grx_root" sequence="10"/>
+    <record id="action_grx_stock" model="ir.actions.server">
+        <field name="name">Bestand GreenRX</field>
+        <field name="model_id" ref="model_plcs_greenrx_box"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_grx_stock()</field>
+        <field name="group_ids" eval="[(4, ref('plcs_greenrx.group_grx_user')), (4, ref('plcs_greenrx.group_grx_vp')), (4, ref('stock.group_stock_manager'))]"/>
+    </record>
+    <menuitem id="menu_grx_stock" name="Bestand GreenRX" parent="menu_grx_data" sequence="0" action="action_grx_stock"/>
     <menuitem id="menu_grx_tickets" name="Retourenvorgänge" parent="menu_grx_data" sequence="1" action="action_grx_tickets"/>
     <menuitem id="menu_grx_boxes" name="Box-Erfassungen" parent="menu_grx_data" sequence="2" action="action_grx_boxes"/>
     <menuitem id="menu_grx_serials" name="Seriennummern" parent="menu_grx_data" sequence="3" action="action_grx_serials"/>
