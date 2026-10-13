@@ -78,6 +78,14 @@ class PlcsGreenrxTicket(models.Model):
             ticket.qty_received_total = sum(boxes.mapped("qty"))
             ticket.has_deviation = any(row["status"] != "ok" for row in ticket._grx_soll_ist())
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        # Über Datensätze importieren angelegt → Herkunft "Import"
+        if self.env.context.get("import_file"):
+            for vals in vals_list:
+                vals.setdefault("source", "import")
+        return super().create(vals_list)
+
     @api.model
     def get_import_templates(self):
         return [{
