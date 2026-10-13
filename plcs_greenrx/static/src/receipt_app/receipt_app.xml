@@ -16,19 +16,23 @@
     <t t-name="plcs_greenrx.PackagePanel">
         <div class="o_grx_card" t-if="this.ticket">
             <div class="o_grx_kicker">Paket</div>
-            <div class="o_grx_pkg_name" t-out="this.ticket.sender or '—'"/>
+            <div class="o_grx_pkg_name" t-out="this.ticket.sender or ('Vorgang ' + this.ticket.name)"/>
             <div class="o_grx_mono o_grx_muted" t-if="this.ticket.picking" t-out="this.ticket.picking"/>
             <dl class="o_grx_kv">
+                <div><dt>Referenz</dt><dd class="o_grx_mono" t-out="this.ticket.name"/></div>
+                <div><dt>Reklamation</dt><dd class="o_grx_mono" t-out="this.ticket.complaint_number or '—'"/></div>
                 <div><dt>Kundennr.</dt><dd class="o_grx_mono" t-out="this.ticket.customer_number or '—'"/></div>
-                <div><dt>Referenz</dt><dd class="o_grx_mono" t-out="this.ticket.reference or '—'"/></div>
-                <div><dt>Ticket</dt><dd class="o_grx_mono" t-out="this.ticket.name"/></div>
                 <div><dt>Gutschrift</dt><dd class="o_grx_mono" t-out="this.ticket.credit_note or '—'"/></div>
             </dl>
             <table class="o_grx_table" t-if="this.ticket.soll_ist and this.ticket.soll_ist.length">
-                <thead><tr><th>Laut Ticket</th><th class="text-end">Soll</th><th class="text-end">Ist</th><th/></tr></thead>
+                <thead><tr><th>Ticket · Produkt · Charge</th><th class="text-end">Soll</th><th class="text-end">Ist</th><th/></tr></thead>
                 <tbody>
                     <tr t-foreach="this.ticket.soll_ist" t-as="row" t-key="row_index">
-                        <td t-out="row.product"/>
+                        <td>
+                            <span class="o_grx_mono small d-block" t-if="row.ticket"><t t-out="row.ticket"/></span>
+                            <t t-out="row.product"/>
+                            <span class="o_grx_mono small o_grx_muted d-block" t-if="row.batch">Ch. <t t-out="row.batch"/></span>
+                        </td>
                         <td class="text-end" t-out="row.soll"/>
                         <td class="text-end" t-out="row.ist"/>
                         <td t-attf-class="o_grx_status o_grx_status_{{ row.status }}" t-out="row.status_text"/>
@@ -75,7 +79,7 @@
                     <t t-call="plcs_greenrx.Flash"/>
                     <button type="button" class="o_grx_scanbig" t-on-click="() => this.startNew()">
                         <span class="o_grx_scanbig_title">Scannen</span>
-                        <span class="o_grx_scanbig_sub">Paketetikett scannen oder Paket suchen – Odoo öffnet den passenden Schritt</span>
+                        <span class="o_grx_scanbig_sub">QR-Code auf dem Retourenschein scannen oder Paket suchen – Odoo öffnet den passenden Schritt</span>
                     </button>
                     <button type="button" class="o_grx_btn o_grx_btn_ghost w-100 mt-2" t-if="this.cameraSupported" t-on-click="() => this.openCamera()">Mit Kamera scannen</button>
 
@@ -88,7 +92,7 @@
                                 <span class="o_grx_kicker o_grx_blue" t-if="t.mine">Jetzt dran</span>
                                 <span class="d-block fw-bold">GreenRX-Eingang <span class="o_grx_mono" t-out="t.picking"/></span>
                                 <span class="d-block o_grx_muted">
-                                    <t t-out="t.sender"/> · Ticket <t t-out="t.name"/>
+                                    <t t-out="t.sender or 'Vorgang'"/> · Ref. <t t-out="t.name"/>
                                     <t t-if="t.open_box"> · Box <t t-out="t.open_box"/> (<t t-out="t.open_box_state"/>)</t>
                                     <t t-if="t.other_user"> · erfasst von <t t-out="t.other_user"/></t>
                                 </span>
@@ -130,9 +134,9 @@
                     <t t-if="this.state.step === 1">
                         <h2 class="o_grx_h2">Welches Paket liegt vor dir?</h2>
                         <t t-if="!this.state.selected">
-                            <label class="o_grx_label" for="grx_search">Paketetikett scannen oder suchen</label>
+                            <label class="o_grx_label" for="grx_search">QR-Code auf dem Retourenschein scannen oder suchen</label>
                             <input id="grx_search" type="search" class="o_grx_input" autocomplete="off"
-                                   placeholder="Apotheke, Kunden-, Referenz- oder Ticketnummer"
+                                   placeholder="Referenz (V…), Ticket-, Reklamations- oder Kundennummer, Apotheke"
                                    t-ref="this.searchInput"
                                    t-att-value="this.state.query"
                                    t-on-input="(ev) => this.onQueryInput(ev)"
@@ -142,12 +146,12 @@
                                 <button type="button" class="o_grx_result" t-foreach="this.state.results" t-as="r" t-key="r.id"
                                         t-on-click="() => this.selectTicket(r)">
                                     <span class="d-flex justify-content-between gap-2">
-                                        <b t-out="r.sender or '—'"/>
+                                        <b t-out="r.sender or ('Vorgang ' + r.name)"/>
                                         <span class="o_grx_muted small" t-out="r.match"/>
                                     </span>
-                                    <span class="d-block o_grx_mono small">Kd. <t t-out="r.customer_number or '—'"/> · Ref. <t t-out="r.reference or '—'"/> · Ticket <t t-out="r.name"/></span>
+                                    <span class="d-block o_grx_mono small">Ref. <t t-out="r.name"/> · Rekl. <t t-out="r.complaint_number or '—'"/> · Kd. <t t-out="r.customer_number or '—'"/></span>
                                     <span class="d-block small">
-                                        <t t-foreach="r.items" t-as="i" t-key="i_index"><t t-if="i_index"> · </t><t t-out="i.qty"/> × <t t-out="i.product"/></t>
+                                        <t t-foreach="r.items" t-as="i" t-key="i_index"><t t-if="i_index"> · </t><t t-out="i.qty"/> × <t t-out="i.product"/> (Ticket <t t-out="i.ticket or '—'"/>)</t>
                                         <b class="ms-1">(<t t-out="r.total"/> Pkg.)</b>
                                     </span>
                                 </button>
@@ -158,19 +162,24 @@
                             </div>
                         </t>
                         <div class="o_grx_card o_grx_card_sel" t-if="this.state.selected">
-                            <div class="o_grx_pkg_name" t-out="this.state.selected.sender or '—'"/>
+                            <div class="o_grx_pkg_name" t-out="this.state.selected.sender or ('Vorgang ' + this.state.selected.name)"/>
                             <dl class="o_grx_kv">
+                                <div><dt>Referenz</dt><dd class="o_grx_mono" t-out="this.state.selected.name"/></div>
+                                <div><dt>Reklamation</dt><dd class="o_grx_mono" t-out="this.state.selected.complaint_number or '—'"/></div>
                                 <div><dt>Kundennummer</dt><dd class="o_grx_mono" t-out="this.state.selected.customer_number or '—'"/></div>
-                                <div><dt>Referenz</dt><dd class="o_grx_mono" t-out="this.state.selected.reference or '—'"/></div>
-                                <div><dt>Ticket</dt><dd class="o_grx_mono" t-out="this.state.selected.name"/></div>
                                 <div><dt>Gutschrift</dt><dd class="o_grx_mono" t-out="this.state.selected.credit_note or '—'"/></div>
                             </dl>
-                            <div class="o_grx_kicker">Laut Ticket im Paket</div>
-                            <div class="d-flex justify-content-between" t-foreach="this.state.selected.items" t-as="i" t-key="i_index">
-                                <span t-out="i.product"/><b><t t-out="i.qty"/> Pkg.</b>
+                            <div class="o_grx_kicker">Angemeldete Produkte</div>
+                            <div class="o_grx_slipline" t-foreach="this.state.selected.items" t-as="i" t-key="i_index">
+                                <div class="d-flex justify-content-between gap-2">
+                                    <span t-out="i.product"/><b class="text-nowrap"><t t-out="i.qty"/> Pkg.</b>
+                                </div>
+                                <div class="o_grx_mono small o_grx_muted">Ticket <t t-out="i.ticket or '—'"/> · PZN <t t-out="i.pzn or '—'"/> · Ch. <t t-out="i.batch or '—'"/></div>
+                                <div class="o_grx_err small" t-if="!i.known">PZN nicht im Artikelstamm – Packungen dieses Produkts lassen sich erst nach Anlage des Artikels scannen.</div>
                             </div>
                             <div class="d-flex justify-content-between border-top mt-1 pt-1"><span>Gesamt</span><b><t t-out="this.state.selected.total"/> Packungen</b></div>
-                            <div class="o_grx_hint mt-2">Alle Nummern sind aus dem Ticket übernommen. Bitte nur prüfen, ob es das richtige Paket ist.</div>
+                            <div class="o_grx_hint o_grx_hint_warn mt-2" t-if="this.state.selected.slip_note">Retourenschein weicht ab: <t t-out="this.state.selected.slip_note"/></div>
+                            <div class="o_grx_hint mt-2">Alle Nummern sind aus dem Retourenschein bzw. GreenRX-ERP übernommen. Bitte nur prüfen, ob es das richtige Paket ist.</div>
                             <button type="button" class="o_grx_btn o_grx_btn_ghost mt-2" t-on-click="() => this.clearSelection()">Anderes Paket wählen</button>
                         </div>
                     </t>
@@ -425,7 +434,7 @@
                             <span class="flex-grow-1">
                                 <span class="d-block fw-bold"><t t-out="b.ampel_short"/> · <t t-out="b.product"/> · <t t-out="b.qty"/> Pkg.</span>
                                 <span class="d-block o_grx_muted small">
-                                    <t t-out="b.ticket.sender"/> · Ticket <t t-out="b.ticket.name"/> · erfasst von <t t-out="b.user"/>
+                                    <t t-out="b.ticket.sender or b.ticket.name"/> · Ticket <t t-out="b.ticket_number or '—'"/> · erfasst von <t t-out="b.user"/>
                                     <t t-if="b.reasons.length"> · <t t-out="b.reasons.join(', ')"/></t>
                                 </span>
                             </span>
@@ -452,7 +461,7 @@
                             <div><dt>Charge</dt><dd class="o_grx_mono" t-out="b.batch"/></div>
                             <div><dt>Verfall</dt><dd class="o_grx_mono" t-out="b.expiry"/></div>
                             <div><dt>Eingang</dt><dd class="o_grx_mono" t-out="b.ticket.picking"/></div>
-                            <div><dt>Ticket</dt><dd class="o_grx_mono" t-out="b.ticket.name"/></div>
+                            <div><dt>Vorgang / Ticket</dt><dd class="o_grx_mono"><t t-out="b.ticket.name"/> / <t t-out="b.ticket_number or '—'"/></dd></div>
                             <div><dt>Absender</dt><dd t-out="b.ticket.sender"/></div>
                             <div><dt>Erfasst von</dt><dd><t t-out="b.user"/>, <t t-out="b.closed_at"/></dd></div>
                             <div><dt>Lagerort</dt><dd t-out="b.location"/></div>

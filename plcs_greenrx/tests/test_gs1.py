@@ -2,7 +2,7 @@ import datetime
 
 from odoo.tests import BaseCase, tagged
 
-from ..tools import gs1
+from ..tools import gs1, slip
 
 GS = "\x1d"
 
@@ -65,3 +65,29 @@ class TestGs1(BaseCase):
         self.assertFalse(gs1.parse_box_code("12"))
         self.assertEqual(gs1.parse_box_code("12", allow_number_only=True), "GX012")
         self.assertFalse(gs1.parse_box_code("GX0081"))
+
+
+@tagged("post_install", "-at_install", "plcs_greenrx")
+class TestSlip(BaseCase):
+    RAW = ("REF:V202601693\nREKL:S23124\nTICKET|PZN|CHARGE|ANZAHL\n"
+           "1001982|13570727|214124|4\n1001983|07560038|33t32|3")
+
+    def test_parse(self):
+        r = slip.parse(self.RAW)
+        self.assertEqual(r["reference"], "V202601693")
+        self.assertEqual(r["complaint"], "S23124")
+        self.assertEqual(r["lines"][1], {"ticket": "1001983", "pzn": "07560038", "batch": "33t32", "qty": 3})
+
+    def test_parse_split_by_scanner(self):
+        # Odoo trennt Tastatur-Scans an Enter und "|" – wieder zusammengesetzt mit Zeilenumbruch
+        r = slip.parse(self.RAW.replace("|", "\n").replace("\n", "\r\n"))
+        self.assertEqual(len(r["lines"]), 2)
+
+    def test_parse_without_linebreaks_fails_clearly(self):
+        with self.assertRaises(slip.SlipError):
+            slip.parse(self.RAW.replace("\n", ""))
+
+    def test_not_a_slip(self):
+        self.assertFalse(slip.looks_like_slip("0104150123456782"))
+        with self.assertRaises(slip.SlipError):
+            slip.parse("GX001")

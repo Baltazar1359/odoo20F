@@ -35,7 +35,11 @@ class PlcsGreenrxConnector(models.Model):
     remote_domain = fields.Char("Filter (Domain)", default="[]",
                                 help="Welche Tickets abgerufen werden, z. B. [('stage_id.name', '=', 'Genehmigt')]")
     f_name = fields.Char("Feld Ticketnummer", default="ticket_ref", required=True)
-    f_reference = fields.Char("Feld Referenznummer", default="")
+    f_reference = fields.Char("Feld Referenznummer (Vorgang)", default="",
+                              help="Tickets mit gleicher Referenznummer werden zu einem Vorgang (Paket) zusammengefasst. "
+                                   "Leer = jedes Ticket ist ein eigener Vorgang.")
+    f_complaint = fields.Char("Feld Reklamationsnummer", default="")
+    f_batch = fields.Char("Feld Charge (Ticket)", default="x_studio_batch_number")
     f_credit_note = fields.Char("Feld Gutschriftnummer", default="x_studio_credit_note")
     f_partner = fields.Char("Feld Absender", default="partner_id")
     f_customer_number = fields.Char("Feld Kundennummer", default="",
@@ -124,11 +128,11 @@ class PlcsGreenrxConnector(models.Model):
     def action_sync(self, incremental=False):
         self.ensure_one()
         call = self._connect()
-        fnames = [f for f in (self.f_name, self.f_reference, self.f_credit_note, self.f_partner,
-                              self.f_customer_number, self.f_product, self.f_qty) if f]
+        fnames = [f for f in (self.f_name, self.f_reference, self.f_complaint, self.f_credit_note, self.f_partner,
+                              self.f_customer_number, self.f_product, self.f_qty, self.f_batch) if f]
         rows = call(self.remote_model, "search_read", [self._domain(incremental)],
                     {"fields": sorted(set(fnames)), "limit": 2000})
-        # Positionen (Sammelretoure)
+        # Positionen (Sammelretoure mit mehreren Produkten je Ticket)
         lines_by_ticket = {}
         if self.line_model and self.line_link_field and self.line_product_field:
             line_rows = call(self.line_model, "search_read",
@@ -152,35 +156,43 @@ class PlcsGreenrxConnector(models.Model):
                 for p in call("res.partner", "read", [list(partner_ids)], {"fields": ["ref"]}):
                     partner_refs[p["id"]] = p.get("ref") or False
 
-        def line_vals(product_value, qty):
+        def text(row, fname):
+            return (self._m2o_name(row.get(fname)) or False) if fname else False
+
+        def line_vals(row, product_value, qty):
             pid = self._m2o_id(product_value)
             info = codes.get(pid, {})
-            return {"gtin": info.get("gtin"), "pzn": info.get("pzn"),
-                    "product_name": info.get("name") or self._m2o_name(product_value), "qty": qty or 0}
+            return {"ticket_number": text(row, self.f_name) or str(row["id"]),
+                    "gtin": info.get("gtin"), "pzn": info.get("pzn"),
+                    "product_name": info.get("name") or self._m2o_name(product_value),
+                    "batch": text(row, self.f_batch), "credit_note": text(row, self.f_credit_note),
+                    "qty": qty or 0}
 
-        tickets = []
+        vorgaenge = {}
         for r in rows:
-            item = {
-                "external_id": str(r["id"]),
-                "name": self._m2o_name(r.get(self.f_name)) or str(r["id"]),
-                "reference": self._m2o_name(r.get(self.f_reference)) if self.f_reference else False,
-                "credit_note": self._m2o_name(r.get(self.f_credit_note)) if self.f_credit_note else False,
-                "partner_name": self._m2o_name(r.get(self.f_partner)) if self.f_partner else False,
-            }
-            if self.f_customer_number:
-                item["customer_number"] = self._m2o_name(r.get(self.f_customer_number))
-            elif self.f_partner:
-                item["customer_number"] = partner_refs.get(self._m2o_id(r.get(self.f_partner)))
-            lines = []
+            reference = text(r, self.f_reference) or text(r, self.f_name) or str(r["id"])
+            item = vorgaenge.get(reference)
+            if not item:
+                item = vorgaenge[reference] = {
+                    "external_id": reference,
+                    "name": reference,
+                    "partner_name": text(r, self.f_partner),
+                    "lines": [],
+                }
+                if self.f_complaint:
+                    item["complaint_number"] = text(r, self.f_complaint)
+                if self.f_customer_number:
+                    item["customer_number"] = text(r, self.f_customer_number)
+                elif self.f_partner:
+                    item["customer_number"] = partner_refs.get(self._m2o_id(r.get(self.f_partner)))
             if r["id"] in lines_by_ticket:
                 for lr in lines_by_ticket[r["id"]]:
-                    lines.append(line_vals(lr.get(self.line_product_field),
-                                           lr.get(self.line_qty_field) if self.line_qty_field else 1))
+                    item["lines"].append(line_vals(r, lr.get(self.line_product_field),
+                                                   lr.get(self.line_qty_field) if self.line_qty_field else 1))
             elif self.f_product and r.get(self.f_product):
-                lines.append(line_vals(r.get(self.f_product), r.get(self.f_qty) if self.f_qty else 1))
-            item["lines"] = lines
-            tickets.append(item)
-        stats = self.env["plcs.greenrx.ticket"].with_company(self.company_id).api_upsert(tickets, source="api")
+                item["lines"].append(line_vals(r, r.get(self.f_product), r.get(self.f_qty) if self.f_qty else 1))
+        stats = self.env["plcs.greenrx.ticket"].with_company(self.company_id).api_upsert(
+            list(vorgaenge.values()), source="api")
         summary = self.env._("%(c)s neu, %(u)s aktualisiert, %(s)s übersprungen, %(e)s Fehler",
                              c=stats["created"], u=stats["updated"], s=stats["skipped"], e=len(stats["errors"]))
         if stats["errors"]:
@@ -188,7 +200,7 @@ class PlcsGreenrxConnector(models.Model):
         self.write({"last_sync": fields.Datetime.now(), "last_result": summary})
         return {
             "type": "ir.actions.client", "tag": "display_notification",
-            "params": {"title": self.env._("Tickets abgerufen"), "message": summary.split("\n")[0],
+            "params": {"title": self.env._("Vorgänge abgerufen"), "message": summary.split("\n")[0],
                        "type": "warning" if stats["errors"] else "success", "sticky": False},
         }
 

@@ -4,11 +4,12 @@
         <field name="name">plcs.greenrx.ticket.list</field>
         <field name="model">plcs.greenrx.ticket</field>
         <field name="arch" type="xml">
-            <list string="GreenRX-Tickets" decoration-muted="state in ('done', 'cancel')" decoration-info="state == 'in_progress'">
+            <list string="GreenRX-Retourenvorgänge" decoration-muted="state in ('done', 'cancel')" decoration-info="state == 'in_progress'">
                 <field name="date_ticket"/>
                 <field name="name"/>
-                <field name="reference"/>
-                <field name="credit_note" optional="show"/>
+                <field name="complaint_number" optional="show"/>
+                <field name="ticket_numbers" optional="show"/>
+                <field name="credit_note" optional="hide"/>
                 <field name="display_sender" string="Absender"/>
                 <field name="customer_number" optional="show"/>
                 <field name="qty_expected_total" string="Soll"/>
@@ -25,7 +26,7 @@
         <field name="name">plcs.greenrx.ticket.form</field>
         <field name="model">plcs.greenrx.ticket</field>
         <field name="arch" type="xml">
-            <form string="GreenRX-Ticket">
+            <form string="GreenRX-Retourenvorgang">
                 <header>
                     <button name="action_cancel" type="object" string="Stornieren" invisible="state not in ('open', 'in_progress')"
                             confirm="Ticket wirklich stornieren?"/>
@@ -38,7 +39,7 @@
                     </div>
                     <group>
                         <group>
-                            <field name="reference" readonly="state in ('done', 'cancel')"/>
+                            <field name="complaint_number" readonly="state in ('done', 'cancel')"/>
                             <field name="credit_note" readonly="state in ('done', 'cancel')"/>
                             <field name="date_ticket"/>
                             <field name="source"/>
@@ -54,16 +55,22 @@
                         </group>
                     </group>
                     <notebook>
-                        <page string="Inhalt laut Ticket" name="lines">
+                        <page string="Angemeldete Produkte (Tickets)" name="lines">
                             <field name="line_ids" readonly="state != 'open'">
                                 <list editable="bottom">
+                                    <field name="ticket_number"/>
                                     <field name="product_id"/>
-                                    <field name="product_name"/>
+                                    <field name="product_name" optional="show"/>
                                     <field name="pzn"/>
                                     <field name="gtin" optional="hide"/>
+                                    <field name="batch_expected"/>
+                                    <field name="credit_note" optional="hide"/>
                                     <field name="qty_expected" sum="Summe"/>
                                 </list>
                             </field>
+                            <div class="alert alert-warning" role="status" invisible="not slip_note">
+                                <strong>Retourenschein weicht ab:</strong> <field name="slip_note" class="d-inline"/>
+                            </div>
                             <group>
                                 <group>
                                     <field name="qty_expected_total"/>
@@ -79,6 +86,7 @@
                             <field name="box_ids">
                                 <list>
                                     <field name="package_id"/>
+                                    <field name="ticket_number"/>
                                     <field name="product_id"/>
                                     <field name="batch"/>
                                     <field name="expiry_date"/>
@@ -101,7 +109,7 @@
         <field name="model">plcs.greenrx.ticket</field>
         <field name="arch" type="xml">
             <search>
-                <field name="name" filter_domain="['|', '|', '|', ('name', 'ilike', self), ('reference', 'ilike', self), ('credit_note', 'ilike', self), ('customer_number', 'ilike', self)]" string="Nummer"/>
+                <field name="name" filter_domain="['|', '|', '|', '|', ('name', 'ilike', self), ('complaint_number', 'ilike', self), ('ticket_numbers', 'ilike', self), ('credit_note', 'ilike', self), ('customer_number', 'ilike', self)]" string="Nummer"/>
                 <field name="partner_id"/>
                 <field name="partner_name"/>
                 <filter name="open" string="Offen / in Erfassung" domain="[('state', 'in', ('open', 'in_progress'))]"/>
@@ -117,13 +125,13 @@
     </record>
 
     <record id="action_grx_tickets" model="ir.actions.act_window">
-        <field name="name">GreenRX-Tickets</field>
+        <field name="name">GreenRX-Retourenvorgänge</field>
         <field name="res_model">plcs.greenrx.ticket</field>
         <field name="view_mode">list,form</field>
         <field name="context">{'search_default_open': 1}</field>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">Noch keine Tickets</p>
-            <p>Tickets kommen über die Schnittstelle aus dem GreenRX-ERP oder per Import (Zahnrad › Datensätze importieren).</p>
+            <p class="o_view_nocontent_smiling_face">Noch keine Retourenvorgänge</p>
+            <p>Vorgänge entstehen beim Scan des Retourenschein-QR-Codes, über die Schnittstelle aus dem GreenRX-ERP oder per Import (Zahnrad › Datensätze importieren).</p>
         </field>
     </record>
 </odoo>

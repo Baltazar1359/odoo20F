@@ -164,15 +164,22 @@ export class GreenRxReceiptApp extends Component {
         if (!box || !box.product) {
             return "";
         }
-        const row = (box.ticket.soll_ist || []).find((r) => r.product === box.product);
-        if (!row || !row.soll) {
-            return _t("Dieser Artikel steht nicht im Ticket.");
+        if (!box.ticket_number) {
+            return _t("Dieser Artikel steht nicht auf dem Retourenschein.");
         }
-        return _t("Laut Ticket im Paket: %(n)s × %(p)s (bisher %(ist)s erfasst)", {
-            n: row.soll,
+        const row = (box.ticket.soll_ist || []).find((r) => r.ticket === box.ticket_number);
+        let text = _t("Laut Schein: Ticket %(t)s · %(n)s × %(p)s", {
+            t: box.ticket_number,
+            n: box.slip_qty,
             p: box.product,
-            ist: row.ist,
         });
+        if (box.slip_batch) {
+            text += _t(" · Ch. %s", box.slip_batch);
+        }
+        if (row) {
+            text += _t(" (bisher %s erfasst)", row.ist);
+        }
+        return text;
     }
 
     get answeredCount() {
@@ -290,6 +297,14 @@ export class GreenRxReceiptApp extends Component {
         if (ev.key === "Enter") {
             ev.preventDefault();
             clearTimeout(this.searchTimer);
+            // Retourenschein-QR über einen Handscanner im Suchfeld: jede Zeile endet mit Enter.
+            const value = ev.target.value || "";
+            if (this.slipBuffer || value.trim().toUpperCase().startsWith("REF:")) {
+                ev.target.value = "";
+                this.state.query = "";
+                this.collectSlip(value);
+                return;
+            }
             await this.search();
             if (this.state.results.length === 1) {
                 this.selectTicket(this.state.results[0]);
@@ -334,12 +349,67 @@ export class GreenRxReceiptApp extends Component {
     // ------------------------------------------------------------------
     // Scannen (Handscanner, Kamera)
     // ------------------------------------------------------------------
-    async onScan(raw) {
-        if (this.state.busy) {
+    /**
+     * Teile eines Retourenschein-Codes sammeln. Handscanner im Tastaturmodus liefern
+     * den QR-Code zeilenweise (Enter) und Odoo trennt zusätzlich an "|". Nach einer
+     * kurzen Pause wird alles zusammengesetzt und an Odoo geschickt.
+     */
+    collectSlip(part) {
+        this.slipBuffer = (this.slipBuffer || "") + part + "\n";
+        clearTimeout(this.slipTimer);
+        this.slipTimer = setTimeout(() => {
+            const raw = this.slipBuffer;
+            this.slipBuffer = "";
+            this.openSlip(raw);
+        }, 450);
+    }
+
+    async openSlip(raw) {
+        if (this.state.screen === "step" && this.state.step > 1 && this.ticket) {
+            if (raw.includes(`REF:${this.ticket.name}`)) {
+                this.state.flash = { status: "info", title: _t("Gleiches Paket"), message: _t("Dieser Retourenschein gehört zum Paket in Arbeit.") };
+                return;
+            }
+            this.play("error");
+            this.state.flash = {
+                status: "error",
+                title: _t("Anderes Paket"),
+                message: _t("Erst das Paket %s fertig erfassen oder über „Meine Aufgaben“ wechseln.", this.ticket.name),
+            };
             return;
         }
+        if (this.state.screen !== "step") {
+            this.startNew();
+        }
+        await this.run(async () => {
+            const data = await this.call("plcs.greenrx.ticket", "grx_from_slip", [raw]);
+            this.state.results = [data];
+            this.state.searched = true;
+            this.selectTicket(data);
+            this.play("ok");
+            if (data.created_from_slip) {
+                this.state.flash = {
+                    status: "info",
+                    title: _t("Vorgang aus dem Retourenschein angelegt"),
+                    message: _t("Referenz %s war noch nicht in Odoo. Die Daten stammen aus dem QR-Code.", data.name),
+                };
+            } else if (data.slip_note) {
+                this.state.flash = { status: "warning", title: _t("Retourenschein weicht ab"), message: data.slip_note };
+            }
+        });
+    }
+
+    async onScan(raw) {
         if (this.state.mode === "vp") {
             return this.onVpScan(raw);
+        }
+        // Retourenschein: erster Teil beginnt mit REF:, weitere Teile folgen sofort
+        if (this.slipBuffer || String(raw).trim().toUpperCase().startsWith("REF:")) {
+            this.collectSlip(raw);
+            return;
+        }
+        if (this.state.busy) {
+            return;
         }
         if (this.state.screen === "home") {
             this.startNew();

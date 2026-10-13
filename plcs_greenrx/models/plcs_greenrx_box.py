@@ -61,6 +61,12 @@ class PlcsGreenrxBox(models.Model):
     # Inhalt (aus dem ersten Scan)
     product_id = fields.Many2one("product.product", "Artikel", readonly=True)
     batch = fields.Char("Charge", readonly=True)
+    line_id = fields.Many2one("plcs.greenrx.ticket.line", "Ticket (Position)", readonly=True, index="btree_not_null",
+                              help="Position des Retourenscheins, zu der die Box gehört (Artikel + Charge).")
+    ticket_number = fields.Char(related="line_id.ticket_number", string="Ticketnummer", store=True)
+    slip_match = fields.Selection([("ok", "passt"), ("batch_differs", "Charge weicht ab"),
+                                   ("not_on_slip", "nicht auf dem Schein")],
+                                  "Abgleich Retourenschein", readonly=True)
     expiry_date = fields.Date("Verfall", readonly=True)
     scan_ids = fields.One2many("plcs.greenrx.scan", "box_id", "Scans", readonly=True)
     accepted_scan_ids = fields.One2many("plcs.greenrx.scan", "box_id", "Packungen in der Box",
@@ -121,15 +127,19 @@ class PlcsGreenrxBox(models.Model):
         company = self.company_id or self.env.company
         checks = []
         ticket = self.ticket_id
-        checks.append({"label": self.env._("Ware ist für uns: Ticket %s zugeordnet", ticket.name),
-                       "ok": True})
+        if self.line_id.ticket_number:
+            checks.append({"label": self.env._("Ware ist für uns: Vorgang %(v)s, Ticket %(t)s",
+                                               v=ticket.name, t=self.line_id.ticket_number), "ok": True})
+        else:
+            checks.append({"label": self.env._("Ware ist für uns: Vorgang %s zugeordnet", ticket.name), "ok": True})
         if ticket.partner_id:
             checks.append({"label": self.env._("Absender im Kontaktstamm: %s", ticket.partner_id.display_name),
                            "ok": True})
         else:
-            checks.append({"label": self.env._("Absender nicht im Kontaktstamm (%s)", ticket.partner_name or "-"),
-                           "ok": False, "level": "gelb",
-                           "reason": self.env._("Absender nicht im Kontaktstamm")})
+            # Der Absender ist im GreenRX-ERP angemeldet und geprüft (Retourenschein/Ticket).
+            # Ohne Kontakt in Odoo nur Hinweis, keine Auswirkung auf die Ampel.
+            checks.append({"label": self.env._("Absender laut GreenRX-ERP angemeldet (Vorgang %s)", ticket.name),
+                           "ok": True})
         checks.append({"label": self.env._("Seriennummern neu, keine doppelt"), "ok": True})
         checks.append({"label": self.env._("Ein Artikel, eine Charge (%s)", self.batch or "—"), "ok": True})
         if self.expiry_date:
@@ -146,20 +156,25 @@ class PlcsGreenrxBox(models.Model):
                                "reason": self.env._("Verfall %(exp)s – weniger als %(m)s Monate",
                                                     exp=exp_text, m=minimum)})
         if self.product_id:
-            row = next((r for r in ticket._grx_soll_ist() if r["product_id"] == self.product_id.id), None)
-            if row and row["status"] == "extra":
-                checks.append({"label": self.env._("Artikel nicht laut Ticket"), "ok": False, "level": "gelb",
-                               "reason": self.env._("Artikel steht nicht im Ticket")})
-            elif row and row["status"] == "over":
-                checks.append({"label": self.env._("Mehr Packungen als laut Ticket (%s)", row["status_text"]),
+            if self.slip_match == "not_on_slip":
+                checks.append({"label": self.env._("Artikel steht nicht auf dem Retourenschein"), "ok": False,
+                               "level": "gelb", "reason": self.env._("Artikel steht nicht auf dem Retourenschein")})
+            elif self.slip_match == "batch_differs":
+                checks.append({"label": self.env._("Charge weicht vom Retourenschein ab (Schein %(a)s, Scan %(b)s)",
+                                                   a=self.line_id.batch_expected or "-", b=self.batch),
                                "ok": False, "level": "gelb",
-                               "reason": self.env._("Mehr Packungen als laut Ticket")})
+                               "reason": self.env._("Charge weicht vom Retourenschein ab")})
+            row = next((r for r in ticket._grx_soll_ist() if self.line_id and r["line_id"] == self.line_id.id), None)
+            if row and row["status"] == "over":
+                checks.append({"label": self.env._("Mehr Packungen als angemeldet (%s)", row["status_text"]),
+                               "ok": False, "level": "gelb",
+                               "reason": self.env._("Mehr Packungen als angemeldet")})
             elif row:
-                checks.append({"label": self.env._("Abgleich mit Ticket: %(ist)s von %(soll)s Packungen",
-                                                   ist=row["ist"], soll=row["soll"]), "ok": True})
+                checks.append({"label": self.env._("Abgleich mit Ticket %(t)s: %(ist)s von %(soll)s Packungen",
+                                                   t=row["ticket"] or "-", ist=row["ist"], soll=row["soll"]), "ok": True})
         return checks
 
-    @api.depends(lambda self: [q[0] for q in QUESTIONS] + ["expiry_date", "product_id", "qty", "batch"])
+    @api.depends(lambda self: [q[0] for q in QUESTIONS] + ["expiry_date", "product_id", "qty", "batch", "slip_match"])
     def _compute_suggestion(self):
         for box in self:
             level, reasons = box._grx_suggestion()
@@ -335,7 +350,9 @@ class PlcsGreenrxBox(models.Model):
                 new=parsed["expiry"].strftime("%m/%Y"), old=self.expiry_date.strftime("%m/%Y")))
 
         if not self.product_id:
-            self.sudo().write({"product_id": product.id, "batch": parsed["batch"], "expiry_date": parsed["expiry"]})
+            line, match = self.ticket_id._grx_match_line(product, parsed["batch"])
+            self.sudo().write({"product_id": product.id, "batch": parsed["batch"], "expiry_date": parsed["expiry"],
+                               "line_id": line.id, "slip_match": match})
         scan = Scan.sudo().create(dict(log, result="ok", accepted=True))
         result = {"status": "ok", "title": self.env._("Packung erfasst"),
                   "message": self.env._("SN %(sn)s · Ch. %(ch)s · Verf. %(exp)s",
@@ -359,7 +376,8 @@ class PlcsGreenrxBox(models.Model):
         scan.sudo().write({"accepted": False, "result": "removed",
                     "message": self.env._("Wieder aus der Box genommen von %s", self.env.user.name)})
         if not self.scan_ids.filtered("accepted"):
-            self.sudo().write({"product_id": False, "batch": False, "expiry_date": False})
+            self.sudo().write({"product_id": False, "batch": False, "expiry_date": False,
+                               "line_id": False, "slip_match": False})
         return self._grx_ui_data()
 
     def grx_to_check(self):
@@ -640,6 +658,9 @@ class PlcsGreenrxBox(models.Model):
         return {
             "id": self.id,
             "box": self.package_id.name,
+            "ticket_number": self.line_id.ticket_number or "",
+            "slip_batch": self.line_id.batch_expected or "",
+            "slip_qty": self.line_id.qty_expected or 0,
             "product": self.product_id.display_name or "",
             "batch": self.batch or "",
             "expiry": self.expiry_date.strftime("%m/%Y") if self.expiry_date else "",
@@ -694,7 +715,7 @@ class PlcsGreenrxBox(models.Model):
         packs = [{"n": i + 1, "serial": s.serial, "pzn": s.pzn or pzn, "batch": s.batch,
                   "expiry": s.expiry_date.strftime("%m/%Y") if s.expiry_date else ""}
                  for i, s in enumerate(scans)]
-        row = next((r for r in ticket._grx_soll_ist() if r["product_id"] == self.product_id.id), None)
+        row = next((r for r in ticket._grx_soll_ist() if self.line_id and r["line_id"] == self.line_id.id), None)
         soll = row["soll"] if row else 0
         ist_total = row["ist"] if row else self.qty
         # Menge: Ja nur bei vollständigem Abgleich, Nein bei Überschuss/fremdem Artikel, sonst offen
@@ -705,7 +726,9 @@ class PlcsGreenrxBox(models.Model):
         exp_ok = all(c["ok"] for c in self._grx_system_checks() if "Verfall" in c["label"])
         all_same_pzn = len({p["pzn"] for p in packs}) <= 1
         rows_annahme = [
-            {"text": "Ist die Ware für uns?", "value": "ja", "remark": "Ticket %s zugeordnet" % ticket.name},
+            {"text": "Ist die Ware für uns?", "value": "ja" if self.line_id else "nein",
+             "remark": ("Vorgang %s · Ticket %s" % (ticket.name, self.line_id.ticket_number or "-")) if self.line_id
+             else "Artikel nicht auf dem Retourenschein (Vorgang %s)" % ticket.name},
             {"text": "Stammt die Ware von einem genehmigten Lieferanten?",
              "extra": "  ".join(("[X] " if ticket.sender_type == k else "[ ] ") + v for k, v in (
                  ("wholesaler", "Großhändler"), ("manufacturer", "Hersteller"), ("pharmacy", "Apotheke"))),
@@ -733,7 +756,10 @@ class PlcsGreenrxBox(models.Model):
             {"sub": True, "text": "– Bezeichnung", "value": "ja", "remark": self.product_id.display_name},
             {"sub": True, "text": "– Stärke", "value": "", "remark": "von Hand prüfen"},
             {"sub": True, "text": "– Packungsgröße", "value": "", "remark": "von Hand prüfen"},
-            {"sub": True, "text": "– Charge", "value": "ja", "remark": "Scan: %s · %s/%s gleich" % (self.batch, len(packs), len(packs))},
+            {"sub": True, "text": "– Charge", "value": "nein" if self.slip_match == "batch_differs" else "ja",
+             "remark": "Scan: %s · %s/%s gleich%s" % (
+                 self.batch, len(packs), len(packs),
+                 (" · Schein: %s" % self.line_id.batch_expected) if self.line_id.batch_expected else "")},
             {"sub": True, "text": "– Verfallsdatum (mind. %s Monate)" % (self.company_id.plcs_grx_min_shelf_months or 0),
              "value": "ja" if exp_ok else "nein", "remark": "Scan: %s" % exp},
             {"sub": True, "text": "– Ware verifizierbar (RX-Arzneimittel)", "value": "", "remark": "securPharm-Status von Hand"},
@@ -752,7 +778,8 @@ class PlcsGreenrxBox(models.Model):
             "ampel_upper": AMPEL_SHORT.get(self.ampel, "-").upper(),
             "sender": "%s%s" % (sender_name, (" (%s)" % ticket.customer_number) if ticket.customer_number else ""),
             "sender_name": sender_name,
-            "ref_ticket": " / ".join(x for x in (ticket.reference, ticket.name) if x),
+            "ref_ticket": " / ".join(x for x in (ticket.name, self.line_id.ticket_number) if x),
+            "ticket_number": self.line_id.ticket_number or "",
             "date": tz_now.strftime("%d.%m.%Y"),
             "checked_by": "%s · %s" % (self.user_id.name, tz_now.strftime("%d.%m.%Y, %H:%M")),
             "rows_annahme": rows_annahme,

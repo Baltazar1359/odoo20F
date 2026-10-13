@@ -48,6 +48,8 @@
                             <field name="remote_domain"/>
                             <field name="f_name"/>
                             <field name="f_reference"/>
+                            <field name="f_complaint"/>
+                            <field name="f_batch"/>
                             <field name="f_credit_note"/>
                             <field name="f_partner"/>
                             <field name="f_customer_number"/>

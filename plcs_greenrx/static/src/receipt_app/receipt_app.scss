@@ -121,6 +121,7 @@ $grx-card: #FFFFFF;
         text-align: left; margin-bottom: 8px; color: $grx-ink;
         &:hover, &:focus { border-color: $grx-blue; }
     }
+    .o_grx_slipline { padding: 8px 0; border-top: 1px solid #E5E7EB; &:first-of-type { border-top: none; } }
     .o_grx_hint { font-size: 14px; color: #374151; line-height: 1.45; }
     .o_grx_hint_warn { background: #FDF3D0; border-radius: 12px; padding: 10px 12px; color: #78350F; }
 

@@ -10,7 +10,7 @@
               action="action_grx_vp" groups="group_grx_vp"/>
 
     <menuitem id="menu_grx_data" name="Übersicht" parent="menu_grx_root" sequence="10"/>
-    <menuitem id="menu_grx_tickets" name="Tickets" parent="menu_grx_data" sequence="1" action="action_grx_tickets"/>
+    <menuitem id="menu_grx_tickets" name="Retourenvorgänge" parent="menu_grx_data" sequence="1" action="action_grx_tickets"/>
     <menuitem id="menu_grx_boxes" name="Box-Erfassungen" parent="menu_grx_data" sequence="2" action="action_grx_boxes"/>
     <menuitem id="menu_grx_serials" name="Seriennummern" parent="menu_grx_data" sequence="3" action="action_grx_serials"/>
     <menuitem id="menu_grx_scans" name="Scan-Protokoll" parent="menu_grx_data" sequence="4" action="action_grx_scans"/>

@@ -41,7 +41,7 @@
                     <table class="grid" style="margin-bottom:8px;">
                         <tr>
                             <td style="width:50%;"><span class="lbl">Lieferant</span><span class="odoo" t-out="v['sender']"/></td>
-                            <td><span class="lbl">Lieferscheinnummer (Referenz / Ticket)</span><span class="odoo mono" t-out="v['ref_ticket']"/></td>
+                            <td><span class="lbl">Lieferscheinnummer (Vorgang / Ticket)</span><span class="odoo mono" t-out="v['ref_ticket']"/></td>
                         </tr>
                         <tr>
                             <td><span class="lbl">Eingangsdatum</span><span class="odoo" t-out="v['date']"/></td>
@@ -120,9 +120,12 @@
                             <td><span class="lbl">Kundennummer</span><span class="odoo mono" t-out="o.ticket_id.customer_number or ''"/></td>
                         </tr>
                         <tr>
-                            <td><span class="lbl">Referenz</span><span class="odoo mono" t-out="o.ticket_id.reference or ''"/></td>
-                            <td><span class="lbl">Ticket</span><span class="odoo mono" t-out="o.ticket_id.name"/></td>
-                            <td><span class="lbl">Gutschrift</span><span class="odoo mono" t-out="o.ticket_id.credit_note or ''"/></td>
+                            <td><span class="lbl">Referenz (Vorgang)</span><span class="odoo mono" t-out="o.ticket_id.name"/></td>
+                            <td><span class="lbl">Ticket</span><span class="odoo mono" t-out="o.ticket_number or '–'"/></td>
+                            <td><span class="lbl">Reklamation</span><span class="odoo mono" t-out="o.ticket_id.complaint_number or ''"/></td>
+                        </tr>
+                        <tr t-if="o.ticket_id.credit_note or o.line_id.credit_note">
+                            <td colspan="3"><span class="lbl">Gutschrift</span><span class="odoo mono" t-out="o.line_id.credit_note or o.ticket_id.credit_note"/></td>
                         </tr>
                     </table>
                     <div style="font-weight:bold;font-size:10.5px;margin:8px 0 3px;">BOX</div>
@@ -199,7 +202,7 @@
                                 <tr>
                                     <td><span class="lbl">Absender</span><t t-out="v['sender_name']"/></td>
                                     <td><span class="lbl">Kundennummer</span><span class="mono" t-out="o.ticket_id.customer_number or ''"/></td>
-                                    <td><span class="lbl">Ticket</span><span class="mono" t-out="o.ticket_id.name"/></td>
+                                    <td><span class="lbl">Vorgang / Ticket</span><span class="mono"><t t-out="o.ticket_id.name"/> / <t t-out="o.ticket_number or '–'"/></span></td>
                                 </tr>
                             </table>
                             <div style="border:2px solid #B42318;padding:8px 10px;margin-top:12px;">

@@ -17,6 +17,10 @@
                             <field name="plcs_grx_allow_heuristic"/>
                             <label for="plcs_grx_allow_heuristic" class="o_light_label"/>
                         </div>
+                        <div class="mt8">
+                            <field name="plcs_grx_create_from_slip"/>
+                            <label for="plcs_grx_create_from_slip" class="o_light_label"/>
+                        </div>
                     </setting>
                     <setting id="grx_boxes" string="Boxen" company_dependent="1" help="Box-Nummern für den GreenRX-Eingang">
                         <div class="mt8">

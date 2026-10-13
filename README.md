@@ -14,7 +14,12 @@ Umgesetzt nach dem Entwurf „PLCS Lager-Oberfläche“ (Handy und PC mit Handsc
 
 ### Ablauf im Lager (Menü GreenRX › Wareneingang scannen)
 
-1. **Paket wählen:** Paketetikett scannen oder nach Apotheke, Kunden-, Referenz- oder Ticketnummer suchen. Odoo zeigt den Inhalt laut Ticket.
+1. **Paket wählen:** Den **QR-Code auf dem Retourenschein** scannen. Er enthält:
+   - die Referenznummer (Vorgang, z. B. V202601693),
+   - die Reklamationsnummer,
+   - je Produkt Ticketnummer, PZN, Charge und Packungsanzahl.
+
+   Odoo findet den Vorgang. Ist er noch nicht in Odoo, legt Odoo ihn aus dem QR-Code an (abschaltbar). Weicht der Schein von den ERP-Daten ab, zeigt Odoo einen Hinweis. Ein schon erfasster Vorgang wird abgelehnt. Alternativ lässt sich nach Referenz, Ticket-, Reklamations- oder Kundennummer oder nach der Apotheke suchen.
 2. **Box scannen:** QR-Code einer leeren Box GX001–GX200 scannen. Handeingabe ist möglich und wird im Verlauf vermerkt.
 3. **Packungen scannen:** Ein Scan speichert Seriennummer, Charge und Verfall aus dem securPharm-Code (GS1 oder IFA). Der erste Scan legt Artikel und Charge der Box fest.
 4. **Vorprüfung:** 6 Sichtprüfungen (Ja/Nein) und die Prüfungen des Systems ergeben einen Ampel-Vorschlag. Eine mildere Ampel als der Vorschlag ist nicht möglich. Wer strenger wählt, gibt einen Grund an.
@@ -29,7 +34,11 @@ Tasten am PC: **F8** Drucken, **F9** Weiter bzw. Box abschließen, **Esc** Meldu
 - Jede Seriennummer gibt es nur einmal im System. Das gilt auch für offene Erfassungen.
 - Ein Doppelscan derselben Packung wird erkannt und nicht doppelt gezählt.
 - Die Restlaufzeit wird geprüft (Standard 3 Monate). Darunter schlägt Odoo Rot vor.
-- Ein Artikel, der nicht im Ticket steht, und eine Menge über dem Soll führen zum Vorschlag Gelb.
+- Jede Box wird dem passenden Ticket des Retourenscheins zugeordnet (Artikel + Charge). Diese Fälle führen zum Vorschlag Gelb:
+  - die Charge weicht vom Schein ab,
+  - der Artikel steht nicht auf dem Schein,
+  - es sind mehr Packungen als angemeldet.
+- Soll/Ist wird je Ticket geführt.
 - Eine Box kann nur eine Person befüllen.
 - Ware verlässt Quarantäne und Sperrlager **nur** über die VP-Freigabe. Andere Wege werden abgelehnt: Transfer, Barcode-App, Inventur oder Ausschuss.
 - Status und Ergebnisse lassen sich nicht direkt per API ändern. Alle Änderungen laufen über die geprüften Funktionen.
@@ -41,10 +50,15 @@ Tasten am PC: **F8** Drucken, **F9** Weiter bzw. Box abschließen, **Esc** Meldu
 - **Freigeben** bucht die Box nach GreenRX/Bestand. Bei einer gesperrten Box ist eine Begründung Pflicht.
 - **Sperren** bucht die Box ins Sperrlager. Ein Grund ist Pflicht.
 
-### Tickets aus dem GreenRX-ERP
+### Retourenvorgänge und Tickets
+
+Ein Paket ist ein **Vorgang** (Referenznummer V…). Er enthält je Produkt ein **Ticket** mit PZN, erwarteter Charge und Anzahl, so wie auf dem Retourenschein.
+
+Handscanner im Tastaturmodus müssen beim Retourenschein-QR die **Zeilenumbrüche** mitsenden. Sonst lässt sich der Code nicht eindeutig lesen, und Odoo meldet das. Mit der Handykamera funktioniert es immer.
 
 - **Schnittstelle:** GreenRX › Konfiguration › Schnittstelle GreenRX-ERP (URL, Datenbank, Benutzer, API-Schlüssel, Feldzuordnung). Der Abruf läuft auf Knopfdruck oder alle 15 Minuten.
-  - Die Feldzuordnung ist nach dem Datenstand 06/2025 vorbelegt: `helpdesk.ticket`, `ticket_ref`, `x_studio_credit_note`, `x_studio_product`, `x_studio_product_number`.
+  - Die Feldzuordnung ist nach dem Datenstand 06/2025 vorbelegt: `helpdesk.ticket`, `ticket_ref`, `x_studio_credit_note`, `x_studio_product`, `x_studio_product_number`, `x_studio_batch_number`.
+  - Mit dem Feld „Referenznummer (Vorgang)“ werden die Tickets eines Vorgangs zu einem Paket zusammengefasst.
   - **Vor dem ersten Abruf mit dem aktuellen GreenRX-ERP abgleichen.**
   - Sammelretouren mit mehreren Positionen lassen sich über „Positions-Modell“ abbilden.
 - **Import:** GreenRX › Übersicht › Tickets › Zahnrad › Datensätze importieren. Eine Vorlage liegt dort bei.
@@ -72,9 +86,9 @@ Danach:
 odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --stop-after-init
 ```
 
-23 automatische Tests decken ab:
+31 automatische Tests decken ab:
 
-- den GS1/IFA-Parser,
+- den GS1/IFA-Parser und den Retourenschein-QR (auch zerteilt durch den Handscanner),
 - den ganzen Ablauf von Ticket bis VP-Freigabe,
 - das 4-Augen-Prinzip,
 - die rote Box und das Sperrlager,

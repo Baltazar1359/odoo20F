@@ -4,7 +4,7 @@ from odoo import api, fields, models
 from odoo.exceptions import UserError
 from odoo.fields import Command
 
-from ..tools import gs1
+from ..tools import gs1, slip
 
 
 def _norm(value):
@@ -12,13 +12,22 @@ def _norm(value):
 
 
 class PlcsGreenrxTicket(models.Model):
+    """Ein Retourenpaket = ein Vorgang im GreenRX-ERP (Referenz V…).
+
+    Ein Vorgang enthält je Produkt eine Position mit eigener Ticketnummer,
+    PZN, erwarteter Charge und Packungsanzahl (siehe QR-Code des Retourenscheins).
+    Der technische Modellname bleibt plcs.greenrx.ticket.
+    """
+
     _name = "plcs.greenrx.ticket"
-    _description = "GreenRX-Ticket (Retourenpaket)"
+    _description = "GreenRX-Retourenvorgang (Paket)"
     _inherit = ["mail.thread"]
     _order = "date_ticket desc, id desc"
 
-    name = fields.Char("Ticketnummer", required=True, index=True, tracking=True)
-    reference = fields.Char("Referenznummer", index=True, tracking=True)
+    name = fields.Char("Referenznummer (Vorgang)", required=True, index=True, tracking=True,
+                       help="Vorgangsnummer laut Retourenschein, z. B. V202601693.")
+    reference = fields.Char(related="name", string="Referenznummer")
+    complaint_number = fields.Char("Reklamationsnummer", index=True, tracking=True)
     credit_note = fields.Char("Gutschriftnummer", tracking=True)
     partner_id = fields.Many2one("res.partner", "Absender", index=True, tracking=True)
     partner_name = fields.Char("Absender (Name)", help="Name laut GreenRX-ERP, falls kein Kontakt zugeordnet ist.")
@@ -26,34 +35,42 @@ class PlcsGreenrxTicket(models.Model):
     sender_type = fields.Selection(
         [("pharmacy", "Apotheke"), ("wholesaler", "Großhändler"), ("manufacturer", "Hersteller")],
         string="Absender-Art", default="pharmacy")
-    date_ticket = fields.Date("Ticketdatum", default=fields.Date.context_today)
+    date_ticket = fields.Date("Anmeldedatum", default=fields.Date.context_today)
     state = fields.Selection(
         [("open", "Offen"), ("in_progress", "In Erfassung"), ("done", "Erfasst"), ("cancel", "Storniert")],
         default="open", required=True, tracking=True, index=True)
     source = fields.Selection(
-        [("manual", "Von Hand"), ("import", "Import"), ("api", "Schnittstelle")],
+        [("manual", "Von Hand"), ("import", "Import"), ("api", "Schnittstelle"), ("slip", "Retourenschein (QR)")],
         default="manual", required=True, readonly=True)
     external_id = fields.Char("Externe ID", index=True, readonly=True, copy=False,
-                              help="ID des Tickets im GreenRX-ERP.")
+                              help="ID des Vorgangs im GreenRX-ERP.")
     company_id = fields.Many2one("res.company", required=True, default=lambda self: self.env.company)
-    line_ids = fields.One2many("plcs.greenrx.ticket.line", "ticket_id", "Inhalt laut Ticket", copy=True)
+    line_ids = fields.One2many("plcs.greenrx.ticket.line", "ticket_id", "Angemeldete Produkte", copy=True)
+    ticket_numbers = fields.Char("Ticketnummern", compute="_compute_ticket_numbers", store=True, index="trigram")
     picking_id = fields.Many2one("stock.picking", "Eingang (Odoo)", readonly=True, copy=False)
     box_ids = fields.One2many("plcs.greenrx.box", "ticket_id", "Boxen", readonly=True)
     qty_expected_total = fields.Integer("Soll (Packungen)", compute="_compute_totals")
     qty_received_total = fields.Integer("Ist (Packungen)", compute="_compute_totals")
     has_deviation = fields.Boolean("Soll/Ist-Abweichung", compute="_compute_totals")
     deviation_note = fields.Text("Abweichung (Begründung)", readonly=True)
+    slip_note = fields.Text("Abweichung Retourenschein", readonly=True,
+                            help="Unterschiede zwischen gescanntem Retourenschein und den Daten aus dem GreenRX-ERP.")
     display_sender = fields.Char("Absender (Anzeige)", compute="_compute_display_sender")
 
     _name_company_uniq = models.Constraint(
-        "UNIQUE(name, company_id)", "Diese Ticketnummer gibt es schon.")
+        "UNIQUE(name, company_id)", "Diesen Vorgang (Referenznummer) gibt es schon.")
 
     @api.depends("partner_id", "partner_name")
     def _compute_display_sender(self):
         for ticket in self:
             ticket.display_sender = ticket.partner_id.display_name or ticket.partner_name or ""
 
-    @api.depends("line_ids.qty_expected", "box_ids.qty", "box_ids.state", "box_ids.product_id")
+    @api.depends("line_ids.ticket_number")
+    def _compute_ticket_numbers(self):
+        for ticket in self:
+            ticket.ticket_numbers = ", ".join(n for n in ticket.line_ids.mapped("ticket_number") if n) or False
+
+    @api.depends("line_ids.qty_expected", "box_ids.qty", "box_ids.state", "box_ids.product_id", "box_ids.batch")
     def _compute_totals(self):
         for ticket in self:
             ticket.qty_expected_total = sum(ticket.line_ids.mapped("qty_expected"))
@@ -64,47 +81,74 @@ class PlcsGreenrxTicket(models.Model):
     @api.model
     def get_import_templates(self):
         return [{
-            "label": self.env._("Vorlage GreenRX-Tickets"),
+            "label": self.env._("Vorlage GreenRX-Retourenvorgänge"),
             "template": "/plcs_greenrx/static/xls/greenrx_tickets_vorlage.csv",
         }]
 
     # ------------------------------------------------------------------
-    # Soll / Ist
+    # Positionen und Soll / Ist
     # ------------------------------------------------------------------
-    def _grx_soll_ist(self):
+    def _grx_match_line(self, product, batch=False):
+        """Position des Retourenscheins für Artikel + Charge finden.
+
+        Rückgabe: (Position oder leer, Grund) mit Grund in
+        "ok" | "batch_differs" | "not_on_slip".
+        """
         self.ensure_one()
-        rows = {}
+        lines = self.line_ids.filtered(lambda l: l.product_id == product)
+        if not lines:
+            return self.env["plcs.greenrx.ticket.line"], "not_on_slip"
+        if batch:
+            exact = lines.filtered(lambda l: (l.batch_expected or "").strip().lower() == batch.strip().lower())
+            if exact:
+                return exact[0], "ok"
+            no_batch = lines.filtered(lambda l: not l.batch_expected)
+            if no_batch:
+                return no_batch[0], "ok"
+            return lines[0], "batch_differs"
+        return lines[0], "ok"
+
+    def _grx_soll_ist(self):
+        """Soll/Ist je Position (Ticket) des Vorgangs, dazu Boxen ohne passende Position."""
+        self.ensure_one()
+        rows = []
+        by_line = {}
         for line in self.line_ids:
-            key = line.product_id.id or ("name", line.product_name or line.pzn)
-            row = rows.setdefault(key, {
+            row = {
+                "line_id": line.id,
                 "product_id": line.product_id.id,
                 "product": line.product_id.display_name or line.product_name or line.pzn or "?",
-                "soll": 0, "ist": 0,
-            })
-            row["soll"] += line.qty_expected
+                "ticket": line.ticket_number or "",
+                "pzn": line.pzn or "",
+                "batch": line.batch_expected or "",
+                "soll": line.qty_expected, "ist": 0,
+            }
+            rows.append(row)
+            by_line[line.id] = row
+        extra = {}
         for box in self.box_ids.filtered(lambda b: b.state != "cancel" and b.product_id):
-            row = rows.setdefault(box.product_id.id, {
-                "product_id": box.product_id.id,
-                "product": box.product_id.display_name,
-                "soll": 0, "ist": 0,
-            })
-            row["ist"] += box.qty
-        result = []
-        for row in rows.values():
-            if row["soll"] == row["ist"]:
-                row["status"] = "ok"
-                row["status_text"] = "OK"
-            elif row["soll"] == 0:
-                row["status"] = "extra"
-                row["status_text"] = self.env._("nicht laut Ticket")
-            elif row["ist"] > row["soll"]:
-                row["status"] = "over"
-                row["status_text"] = self.env._("%s zu viel", row["ist"] - row["soll"])
+            line = box.line_id
+            if line and line.id in by_line:
+                by_line[line.id]["ist"] += box.qty
             else:
-                row["status"] = "open"
-                row["status_text"] = self.env._("%s offen", row["soll"] - row["ist"])
-            result.append(row)
-        return result
+                key = (box.product_id.id, box.batch)
+                row = extra.setdefault(key, {
+                    "line_id": False, "product_id": box.product_id.id, "product": box.product_id.display_name,
+                    "ticket": "", "pzn": box.product_id.plcs_pzn or "", "batch": box.batch or "",
+                    "soll": 0, "ist": 0,
+                })
+                row["ist"] += box.qty
+        rows.extend(extra.values())
+        for row in rows:
+            if row["soll"] == row["ist"]:
+                row["status"], row["status_text"] = "ok", "OK"
+            elif row["soll"] == 0:
+                row["status"], row["status_text"] = "extra", self.env._("nicht auf dem Schein")
+            elif row["ist"] > row["soll"]:
+                row["status"], row["status_text"] = "over", self.env._("%s zu viel", row["ist"] - row["soll"])
+            else:
+                row["status"], row["status_text"] = "open", self.env._("%s offen", row["soll"] - row["ist"])
+        return rows
 
     # ------------------------------------------------------------------
     # Daten für die Scan-Oberfläche
@@ -114,17 +158,26 @@ class PlcsGreenrxTicket(models.Model):
         data = {
             "id": self.id,
             "name": self.name,
-            "reference": self.reference or "",
+            "reference": self.name,
+            "complaint_number": self.complaint_number or "",
             "credit_note": self.credit_note or "",
             "sender": self.display_sender or "",
             "customer_number": self.customer_number or "",
             "state": self.state,
+            "source": self.source,
             "picking": self.picking_id.name or "",
-            "items": [{"product": l.product_id.display_name or l.product_name or l.pzn or "?",
-                       "qty": l.qty_expected} for l in self.line_ids],
+            "items": [{
+                "product": l.product_id.display_name or l.product_name or l.pzn or "?",
+                "ticket": l.ticket_number or "",
+                "pzn": l.pzn or "",
+                "batch": l.batch_expected or "",
+                "qty": l.qty_expected,
+                "known": bool(l.product_id),
+            } for l in self.line_ids],
             "total": self.qty_expected_total,
             "received": self.qty_received_total,
             "soll_ist": self._grx_soll_ist(),
+            "slip_note": self.slip_note or "",
         }
         if with_boxes:
             data["boxes"] = [b._grx_summary() for b in self.box_ids.filtered(
@@ -133,14 +186,14 @@ class PlcsGreenrxTicket(models.Model):
 
     @api.model
     def grx_search(self, query, limit=20):
-        """Offene Tickets nach Apotheke, Kunden-, Referenz-, Ticket- oder Gutschriftnummer suchen."""
+        """Offene Vorgänge suchen: Referenz, Ticket-, Reklamations-, Gutschrift-, Kundennummer, Apotheke."""
         q = _norm(query)
         if not q:
             return []
         tickets = self.search([("state", "in", ("open", "in_progress"))], limit=1000)
         labels = (
-            ("name", self.env._("Ticket")),
-            ("reference", self.env._("Referenz")),
+            ("name", self.env._("Referenz")),
+            ("complaint_number", self.env._("Reklamation")),
             ("credit_note", self.env._("Gutschrift")),
             ("customer_number", self.env._("Kundennr.")),
             ("display_sender", self.env._("Apotheke")),
@@ -148,16 +201,21 @@ class PlcsGreenrxTicket(models.Model):
         found = []
         for ticket in tickets:
             match = False
-            # exakter Treffer auf Ticket/Referenz zuerst (gescanntes Paketetikett)
+            ticket_nos = [_norm(n) for n in ticket.line_ids.mapped("ticket_number") if n]
+            # exakter Treffer zuerst (gescanntes Etikett)
             for fname, label in labels:
                 if _norm(ticket[fname]) == q:
                     match = (0, label)
                     break
+            if not match and q in ticket_nos:
+                match = (0, self.env._("Ticket"))
             if not match:
                 for fname, label in labels:
                     if q in _norm(ticket[fname]):
                         match = (1, label)
                         break
+            if not match and any(q in n for n in ticket_nos):
+                match = (1, self.env._("Ticket"))
             if not match:
                 if any(q in _norm(l.product_id.display_name or l.product_name) or q == _norm(l.pzn)
                        for l in ticket.line_ids):
@@ -168,6 +226,82 @@ class PlcsGreenrxTicket(models.Model):
                 found.append((match[0], data))
         found.sort(key=lambda x: x[0])
         return [d for _rank, d in found[:limit]]
+
+    @api.model
+    def grx_from_slip(self, raw):
+        """QR-Code des Retourenscheins gescannt → Vorgang finden (oder anlegen) und zurückgeben."""
+        try:
+            data = slip.parse(raw)
+        except slip.SlipError as e:
+            raise UserError(str(e)) from e
+        company = self.env.company
+        ticket = self.search([("name", "=", data["reference"]), ("company_id", "=", company.id)], limit=1)
+        lines = [{
+            "ticket_number": l["ticket"], "pzn": l["pzn"], "batch_expected": l["batch"], "qty_expected": l["qty"],
+        } for l in data["lines"]]
+        created = False
+        if ticket:
+            if ticket.state == "done":
+                raise UserError(self.env._(
+                    "Vorgang %s ist schon erfasst (Eingang %s). Paket nicht noch einmal annehmen, Lagerleitung fragen.",
+                    ticket.name, ticket.picking_id.name or "-"))
+            if ticket.state == "cancel":
+                raise UserError(self.env._("Vorgang %s ist storniert. Lagerleitung fragen.", ticket.name))
+            note = ticket._grx_compare_slip(data)
+            vals = {}
+            if data["complaint"] and not ticket.complaint_number:
+                vals["complaint_number"] = data["complaint"]
+            if not ticket.line_ids and ticket.state == "open":
+                vals["line_ids"] = [Command.create(l) for l in lines]
+                note = False
+            if note != (ticket.slip_note or False):
+                vals["slip_note"] = note
+                if note:
+                    ticket.sudo().message_post(body=self.env._("Retourenschein weicht ab: %s", note))
+            if vals:
+                ticket.sudo().write(vals)
+        else:
+            if not company.plcs_grx_create_from_slip:
+                raise UserError(self.env._(
+                    "Vorgang %s ist in Odoo nicht bekannt. Bitte warten, bis er aus dem GreenRX-ERP übertragen ist, "
+                    "oder die Lagerleitung fragen.", data["reference"]))
+            ticket = self.sudo().create({
+                "name": data["reference"],
+                "complaint_number": data["complaint"],
+                "source": "slip",
+                "company_id": company.id,
+                "line_ids": [Command.create(l) for l in lines],
+            }).sudo(False)
+            ticket.sudo().message_post(body=self.env._("Vorgang aus dem QR-Code des Retourenscheins angelegt."))
+            created = True
+        result = ticket._grx_ui_data(with_boxes=False)
+        result["created_from_slip"] = created
+        result["match"] = self.env._("Retourenschein gescannt")
+        return result
+
+    def _grx_compare_slip(self, data):
+        """Unterschiede zwischen Retourenschein und gespeicherten Positionen (Text oder False)."""
+        self.ensure_one()
+        if not self.line_ids:
+            return False
+        diffs = []
+        if data.get("complaint") and self.complaint_number and data["complaint"] != self.complaint_number:
+            diffs.append(self.env._("Reklamation Schein %(a)s, Odoo %(b)s", a=data["complaint"], b=self.complaint_number))
+        stored = {(l.ticket_number or "", (l.pzn or "").zfill(8)): l for l in self.line_ids}
+        for item in data["lines"]:
+            line = stored.pop((item["ticket"], item["pzn"]), None)
+            if not line:
+                diffs.append(self.env._("Ticket %(t)s / PZN %(p)s nur auf dem Schein", t=item["ticket"], p=item["pzn"]))
+                continue
+            if line.qty_expected != item["qty"]:
+                diffs.append(self.env._("Ticket %(t)s: Anzahl Schein %(a)s, Odoo %(b)s",
+                                        t=item["ticket"], a=item["qty"], b=line.qty_expected))
+            if (line.batch_expected or "") and line.batch_expected != item["batch"]:
+                diffs.append(self.env._("Ticket %(t)s: Charge Schein %(a)s, Odoo %(b)s",
+                                        t=item["ticket"], a=item["batch"], b=line.batch_expected))
+        for (ticket_no, pzn), _line in stored.items():
+            diffs.append(self.env._("Ticket %(t)s / PZN %(p)s fehlt auf dem Schein", t=ticket_no or "-", p=pzn))
+        return "; ".join(diffs) or False
 
     @api.model
     def grx_home(self):
@@ -208,7 +342,7 @@ class PlcsGreenrxTicket(models.Model):
         }
 
     def grx_resume(self):
-        """In Erfassung befindliches Ticket fortsetzen (ggf. mit offener Box des Benutzers)."""
+        """In Erfassung befindlichen Vorgang fortsetzen (ggf. mit offener Box des Benutzers)."""
         self.ensure_one()
         data = self.grx_start()
         box = self.box_ids.filtered(
@@ -219,7 +353,7 @@ class PlcsGreenrxTicket(models.Model):
         """Paket ausgewählt: Eingang anlegen (falls nötig) und Daten zurückgeben."""
         self.ensure_one()
         if self.state not in ("open", "in_progress"):
-            raise UserError(self.env._("Ticket %s ist nicht mehr offen.", self.name))
+            raise UserError(self.env._("Vorgang %s ist nicht mehr offen.", self.name))
         config = self.company_id._plcs_grx_config()
         if not self.picking_id:
             picking_type = config.plcs_grx_receipt_type_id
@@ -246,7 +380,7 @@ class PlcsGreenrxTicket(models.Model):
         """Paket fertig: alle Boxen abgeschlossen → Eingang buchen (Ware in Quarantäne/Sperrlager)."""
         self.ensure_one()
         if self.state != "in_progress":
-            raise UserError(self.env._("Ticket %s ist nicht in Erfassung.", self.name))
+            raise UserError(self.env._("Vorgang %s ist nicht in Erfassung.", self.name))
         boxes = self.box_ids.filtered(lambda b: b.state != "cancel")
         open_boxes = boxes.filtered(lambda b: b.state in ("scan", "check", "print"))
         if open_boxes:
@@ -259,7 +393,7 @@ class PlcsGreenrxTicket(models.Model):
         if deviations and not (deviation_note or "").strip():
             raise UserError(self.env._(
                 "Soll und Ist stimmen nicht überein (%s). Bitte eine Begründung angeben.",
-                "; ".join("%s: %s" % (r["product"], r["status_text"]) for r in deviations)))
+                "; ".join(self._grx_row_label(r) for r in deviations)))
         picking = self.picking_id
         if picking.state not in ("done", "cancel"):
             if picking.state == "draft":
@@ -274,17 +408,21 @@ class PlcsGreenrxTicket(models.Model):
             vals["deviation_note"] = deviation_note
             self.sudo().message_post(body=self.env._(
                 "Paket mit Soll/Ist-Abweichung abgeschlossen: %(dev)s. Begründung: %(note)s",
-                dev="; ".join("%s: %s" % (r["product"], r["status_text"]) for r in deviations),
-                note=deviation_note))
+                dev="; ".join(self._grx_row_label(r) for r in deviations), note=deviation_note))
         self.sudo().write(vals)
         for box in boxes.filtered(lambda b: b.state in ("to_release", "blocked")):
             box.sudo().message_post(body=self.env._("Eingang %s gebucht. Box wartet auf die VP.", picking.name))
         return self._grx_ui_data()
 
+    @staticmethod
+    def _grx_row_label(row):
+        prefix = ("Ticket %s · " % row["ticket"]) if row.get("ticket") else ""
+        return "%s%s: %s" % (prefix, row["product"], row["status_text"])
+
     def action_cancel(self):
         for ticket in self:
             if ticket.box_ids.filtered(lambda b: b.state not in ("cancel",)):
-                raise UserError(self.env._("Ticket %s hat schon erfasste Boxen.", ticket.name))
+                raise UserError(self.env._("Vorgang %s hat schon erfasste Boxen.", ticket.name))
             if ticket.picking_id and ticket.picking_id.state != "done":
                 ticket.picking_id.action_cancel()
             ticket.state = "cancel"
@@ -294,12 +432,13 @@ class PlcsGreenrxTicket(models.Model):
     # ------------------------------------------------------------------
     @api.model
     def api_upsert(self, tickets, source="api"):
-        """Tickets anlegen oder aktualisieren (Schnittstelle GreenRX-ERP).
+        """Vorgänge anlegen oder aktualisieren (Schnittstelle GreenRX-ERP).
 
-        tickets: Liste von dicts mit external_id oder name, reference, credit_note,
-        partner_name, customer_number, sender_type, date_ticket und
-        lines = [{gtin|pzn|product_name, qty}].
-        Begonnene Tickets werden nur in den Kopfdaten aktualisiert.
+        tickets: Liste von dicts mit
+          name (Referenznummer/Vorgang, Pflicht), external_id, complaint_number, credit_note,
+          partner_name, customer_number, sender_type, date_ticket,
+          lines = [{ticket_number, gtin|pzn|product_name, batch, qty, credit_note}].
+        Begonnene Vorgänge werden nur in den Kopfdaten aktualisiert.
         Rückgabe: {"created": n, "updated": n, "skipped": n, "errors": [...]}
         """
         stats = {"created": 0, "updated": 0, "skipped": 0, "errors": []}
@@ -315,7 +454,7 @@ class PlcsGreenrxTicket(models.Model):
         name = (item.get("name") or "").strip()
         ext = str(item.get("external_id") or "").strip()
         if not name:
-            raise UserError(self.env._("Ticketnummer fehlt."))
+            raise UserError(self.env._("Referenznummer (Vorgang) fehlt."))
         ticket = self.browse()
         if ext:
             ticket = self.search([("external_id", "=", ext), ("source", "=", source)], limit=1)
@@ -324,13 +463,10 @@ class PlcsGreenrxTicket(models.Model):
         partner = self.env["res.partner"]
         if item.get("customer_number"):
             partner = partner.search([("ref", "=", item["customer_number"])], limit=1)
-        vals = {
-            "name": name,
-            "reference": item.get("reference") or False,
-            "credit_note": item.get("credit_note") or False,
-            "partner_name": item.get("partner_name") or False,
-            "customer_number": item.get("customer_number") or False,
-        }
+        vals = {"name": name}
+        for key in ("complaint_number", "credit_note", "partner_name", "customer_number"):
+            if key in item:
+                vals[key] = item.get(key) or False
         if partner:
             vals["partner_id"] = partner.id
         if item.get("sender_type") in ("pharmacy", "wholesaler", "manufacturer"):
@@ -343,9 +479,12 @@ class PlcsGreenrxTicket(models.Model):
             if qty <= 0:
                 continue
             lines.append({
+                "ticket_number": line.get("ticket_number") or False,
                 "gtin": line.get("gtin") or False,
                 "pzn": line.get("pzn") or False,
                 "product_name": line.get("product_name") or False,
+                "batch_expected": line.get("batch") or False,
+                "credit_note": line.get("credit_note") or False,
                 "qty_expected": qty,
             })
         if ticket:
@@ -366,13 +505,18 @@ class PlcsGreenrxTicket(models.Model):
 
 class PlcsGreenrxTicketLine(models.Model):
     _name = "plcs.greenrx.ticket.line"
-    _description = "GreenRX-Ticket: Inhalt laut Ticket"
+    _description = "GreenRX-Retourenvorgang: angemeldetes Produkt (Ticket)"
+    _order = "ticket_id, id"
+    _rec_name = "ticket_number"
 
-    ticket_id = fields.Many2one("plcs.greenrx.ticket", required=True, ondelete="cascade", index=True)
+    ticket_id = fields.Many2one("plcs.greenrx.ticket", "Vorgang", required=True, ondelete="cascade", index=True)
+    ticket_number = fields.Char("Ticketnummer", index=True)
     product_id = fields.Many2one("product.product", "Artikel")
-    product_name = fields.Char("Bezeichnung laut Ticket")
+    product_name = fields.Char("Bezeichnung laut Schein")
     pzn = fields.Char("PZN")
     gtin = fields.Char("GTIN")
+    batch_expected = fields.Char("Charge laut Schein")
+    credit_note = fields.Char("Gutschriftnummer")
     qty_expected = fields.Integer("Packungen (Soll)", default=1)
 
     @api.model_create_multi

@@ -41,7 +41,7 @@ class TestGreenrxFlow(TransactionCase):
 
     def _ticket(self, name="T-0826", lines=None):
         res = self.env["plcs.greenrx.ticket"].api_upsert([{
-            "external_id": name, "name": name, "reference": "REF-" + name, "credit_note": "GS-" + name,
+            "external_id": name, "name": name, "complaint_number": "S-" + name, "credit_note": "GS-" + name,
             "partner_name": "Linden-Apotheke", "customer_number": "K-10234",
             "lines": lines if lines is not None else [{"pzn": "12345678", "qty": 3}, {"pzn": "87654321", "qty": 2}],
         }])
@@ -88,7 +88,8 @@ class TestGreenrxFlow(TransactionCase):
         T = self.env["plcs.greenrx.ticket"].with_user(self.lager)
         self.assertEqual(T.grx_search("linden")[0]["id"], ticket.id)
         self.assertEqual(T.grx_search("k 10234")[0]["id"], ticket.id)
-        self.assertEqual(T.grx_search("REF-T-0826")[0]["match"], "Treffer: Referenz")
+        self.assertEqual(T.grx_search("T-0826")[0]["match"], "Treffer: Referenz")
+        self.assertEqual(T.grx_search("S-T-0826")[0]["match"], "Treffer: Reklamation")
         self.assertEqual(T.grx_search("byetta")[0]["match"], "Treffer: Medikament")
         # Update vor Beginn ersetzt Positionen, danach nur Kopfdaten
         self.env["plcs.greenrx.ticket"].api_upsert([{"external_id": "T-0826", "name": "T-0826",
@@ -345,3 +346,69 @@ class TestGreenrxFlow(TransactionCase):
         with self.assertRaises(AccessError):
             self.env["plcs.greenrx.box"].with_user(self.lager).create(
                 {"ticket_id": ticket.id, "package_id": box.package_id.id})
+
+
+    # ------------------------------------------------------------------
+    # Retourenschein-QR
+    # ------------------------------------------------------------------
+    SLIP = ("REF:V202601693\nREKL:S23124\nTICKET|PZN|CHARGE|ANZAHL\n"
+            "1001982|12345678|214124|2\n1001983|87654321|33t32|1")
+
+    def test_slip_creates_and_finds_vorgang(self):
+        T = self.env["plcs.greenrx.ticket"].with_user(self.lager)
+        data = T.grx_from_slip(self.SLIP)
+        self.assertTrue(data["created_from_slip"])
+        ticket = self.env["plcs.greenrx.ticket"].browse(data["id"])
+        self.assertEqual(ticket.name, "V202601693")
+        self.assertEqual(ticket.complaint_number, "S23124")
+        self.assertEqual(ticket.source, "slip")
+        self.assertEqual(ticket.line_ids.mapped("ticket_number"), ["1001982", "1001983"])
+        self.assertEqual(ticket.line_ids.product_id, self.prod_a | self.prod_b)
+        self.assertEqual(ticket.qty_expected_total, 3)
+        # zweiter Scan findet denselben Vorgang, auch wenn der Scanner an | und Zeilen trennt
+        again = T.grx_from_slip(self.SLIP.replace("|", "\n"))
+        self.assertEqual(again["id"], ticket.id)
+        self.assertFalse(again["created_from_slip"])
+        # Suche nach Ticketnummer
+        self.assertEqual(T.grx_search("1001983")[0]["match"], "Treffer: Ticket")
+
+    def test_slip_box_matches_ticket_and_batch(self):
+        T = self.env["plcs.greenrx.ticket"].with_user(self.lager)
+        ticket = T.browse(T.grx_from_slip(self.SLIP)["id"])
+        box = self._fill_box(ticket, "GX110", self.gtin_a, ["Q1", "Q2"], batch="214124")
+        self.assertEqual(box.ticket_number, "1001982")
+        self.assertEqual(box.slip_match, "ok")
+        box.grx_to_check()
+        self._close(box)
+        # andere Charge als auf dem Schein → Gelb-Vorschlag
+        box2 = self._fill_box(ticket, "GX111", self.gtin_b, ["Q3"], batch="FALSCH")
+        self.assertEqual(box2.slip_match, "batch_differs")
+        self.assertEqual(box2.ticket_number, "1001983")
+        box2.grx_to_check()
+        self._all_yes(box2)
+        self.assertEqual(box2.ampel_suggest, "gelb")
+        self._close(box2, ampel="gelb")
+        rows = {r["ticket"]: r for r in ticket._grx_soll_ist()}
+        self.assertEqual(rows["1001982"]["status"], "ok")
+        self.assertEqual(rows["1001983"]["status"], "ok")
+        ticket.with_user(self.lager).grx_finish()
+        html = self.env["ir.actions.report"]._render_qweb_html(
+            "plcs_greenrx.action_report_grx_box_documents", box2.ids)[0].decode()
+        self.assertIn("1001983", html)
+        self.assertIn("S23124", html)
+        # erfasster Vorgang darf nicht noch einmal angenommen werden
+        with self.assertRaises(UserError):
+            T.grx_from_slip(self.SLIP)
+
+    def test_slip_difference_to_erp(self):
+        # Vorgang kam schon aus dem ERP, Schein meldet andere Anzahl
+        self.env["plcs.greenrx.ticket"].api_upsert([{"name": "V202601693", "lines": [
+            {"ticket_number": "1001982", "pzn": "12345678", "batch": "214124", "qty": 5},
+            {"ticket_number": "1001983", "pzn": "87654321", "batch": "33t32", "qty": 1}]}])
+        data = self.env["plcs.greenrx.ticket"].with_user(self.lager).grx_from_slip(self.SLIP)
+        self.assertIn("Anzahl Schein 2, Odoo 5", data["slip_note"])
+
+    def test_slip_unknown_when_creation_off(self):
+        self.company.plcs_grx_create_from_slip = False
+        with self.assertRaises(UserError):
+            self.env["plcs.greenrx.ticket"].with_user(self.lager).grx_from_slip(self.SLIP)

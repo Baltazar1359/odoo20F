@@ -6,6 +6,7 @@ class ResConfigSettings(models.TransientModel):
 
     plcs_grx_min_shelf_months = fields.Integer(related="company_id.plcs_grx_min_shelf_months", readonly=False)
     plcs_grx_allow_heuristic = fields.Boolean(related="company_id.plcs_grx_allow_heuristic", readonly=False)
+    plcs_grx_create_from_slip = fields.Boolean(related="company_id.plcs_grx_create_from_slip", readonly=False)
     plcs_grx_box_prefix = fields.Char(related="company_id.plcs_grx_box_prefix", readonly=False)
     plcs_grx_box_max = fields.Integer(related="company_id.plcs_grx_box_max", readonly=False)
     plcs_grx_quarantine_location_id = fields.Many2one(related="company_id.plcs_grx_quarantine_location_id", readonly=False)

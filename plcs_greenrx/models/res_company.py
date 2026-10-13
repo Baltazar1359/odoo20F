@@ -12,6 +12,10 @@ class ResCompany(models.Model):
         "GreenRX: Codes ohne Trennzeichen zulassen", default=False,
         help="Wenn der Scanner keine GS-Trennzeichen sendet, versucht Odoo den Code zu trennen. "
              "Aus Sicherheitsgründen standardmäßig aus.")
+    plcs_grx_create_from_slip = fields.Boolean(
+        "GreenRX: Vorgang aus Retourenschein anlegen", default=True,
+        help="Ist der Vorgang (Referenznummer) beim Scan des Retourenschein-QR-Codes noch nicht in Odoo, "
+             "wird er mit den Daten aus dem QR-Code angelegt.")
     plcs_grx_box_prefix = fields.Char("GreenRX: Box-Präfix", default="GX")
     plcs_grx_box_max = fields.Integer("GreenRX: Höchste Box-Nummer", default=200)
     plcs_grx_quarantine_location_id = fields.Many2one("stock.location", "GreenRX: Quarantäne")

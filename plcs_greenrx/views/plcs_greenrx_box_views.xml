@@ -8,6 +8,7 @@
                 <field name="closed_at"/>
                 <field name="package_id"/>
                 <field name="ticket_id"/>
+                <field name="ticket_number"/>
                 <field name="picking_id" optional="show"/>
                 <field name="product_id"/>
                 <field name="batch"/>
@@ -38,6 +39,8 @@
                             <field name="package_id"/>
                             <field name="box_manual"/>
                             <field name="ticket_id"/>
+                            <field name="ticket_number"/>
+                            <field name="slip_match"/>
                             <field name="picking_id"/>
                             <field name="location_id"/>
                             <field name="user_id"/>
