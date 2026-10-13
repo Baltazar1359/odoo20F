@@ -11,7 +11,7 @@
 
 ### Eingerichtet
 
-- Modul `plcs_greenrx` installiert, mit Lagerorten **GreenRX/Quarantäne, /Bestand, /Sperrlager**, Vorgangstypen **GRXIN, GRXFRG, GRXSPR** und Boxen **GX001–GX200**.
+- Modul `plcs_greenrx` (Version 20.0.1.3.0) installiert, mit Lagerorten **GreenRX/Quarantäne, /Bestand, /Sperrlager**, Vorgangstypen **GRXIN, GRXFRG, GRXSPR** und Boxen **GX001–GX200**.
 - **30 Artikel** mit PZN, GTIN-Barcode, Chargenverfolgung und Ablaufdatum (`import/greenrx_artikel_pzn.csv`).
 - **100 Retourenvorgänge** mit 101 Tickets und 287 angemeldeten Packungen aus dem GreenRX-ERP (`import/greenrx_vorgaenge_letzte100.csv`). Alle Tickets sind einem Artikel zugeordnet.
 - Benutzer:
@@ -42,8 +42,10 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
 3. **Box GX001 scannen**, dann die 3 BRILIQUE-Packungen scannen.
    - Einen Code zweimal scannen: wird als Doppelscan erkannt und nicht doppelt gezählt.
    - „Fehlerfall: andere Charge" in dieser Box scannen: wird abgelehnt (eine Box = ein Artikel, eine Charge).
+   - **Schnell scannen:** Die Packungen so schnell wie möglich nacheinander scannen. Erwartet: Jeder Scan piept und erscheint unter „Letzte Scans“, keiner geht verloren. Die große Zahl oben rechts zeigt die Packungen in der Box.
 4. **Vorprüfung:** 6 Fragen beantworten. Bei unauffälligen Antworten erwartet: Vorschlag Grün. Eine mildere Ampel als der Vorschlag ist nicht wählbar.
 5. **Drucken (F8):** KabQ-Checkliste und Anlage Box-Inhalt erscheinen als PDF. Ausdruck bestätigen, **Box abschließen (F9)**.
+   - **Änderung nach dem Druck (einmal bei GX001 prüfen):** Nach dem Druck **Zurück**, eine Antwort ändern, wieder weiter. Erwartet: Hinweis „Der letzte Ausdruck … ist ungültig“, die Bestätigung ist weg, Abschließen geht erst nach neuem Druck. Der neue Ausdruck trägt oben rechts **„Neuausdruck Nr. 1“** mit Uhrzeit. Den alten Ausdruck vernichten.
 6. **Nächste Box GX002**: die 4 BEVESPI-Packungen, Vorprüfung, Drucken, Abschließen.
 7. Optional **GX003** mit „Fehlerfall: Verfall in 6 Wochen". Erwartet: Vorschlag **Rot** (Restlaufzeit unter 3 Monaten) und zusätzlich das Sperrblatt im Druck.
 8. **Paket fertig.** Bei Abweichung Soll/Ist (z. B. durch die Zusatzbox) verlangt Odoo eine Begründung. Danach liegt die Ware in GreenRX/Quarantäne, rote Boxen im Sperrlager.
@@ -60,7 +62,8 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
 - **GreenRX › Übersicht › Box-Erfassungen:** je Box Status, aktueller Lagerort, VP und Begründung.
 - **GreenRX › Übersicht › Seriennummern:** Jede Packung ist mit Charge, Verfall, Box und Ticket gespeichert.
 - **Sperre gegen Umgehung:** Versuch, Ware per normalem Transfer aus GreenRX/Quarantäne umzulagern. Erwartet: Odoo lehnt das ab.
-- **Suche:** Auf der Startseite nach Apotheke, Ticket- oder Reklamationsnummer suchen.
+- **Suche:** Auf der Startseite nach Apotheke, Ticket-, Reklamations-, Gutschrift- oder Kundennummer oder nach dem Artikel suchen. Die Suche läuft über alle offenen Vorgänge (auch bei mehr als 1.000); Leerzeichen und Bindestriche sind egal (z. B. „k 10234“ findet „K-10234“).
+- **Box-Erfassungen › Box öffnen › Verlauf:** Jeder Druck ist mit Nummer vermerkt, ein ungültig gewordener Ausdruck ebenfalls.
 
 ## Hinweise
 

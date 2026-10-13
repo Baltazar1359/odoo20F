@@ -34,6 +34,7 @@
                             <td><h1>Checkliste Warenannahme/ Wareneingang GreenRX</h1></td>
                             <td style="text-align:right;font-size:10px;">
                                 Vorprüfung: <span class="odoo" t-out="v['ampel_upper']"/><br/>
+                                <t t-if="v['reprint']"><b style="font-size:12px;" t-out="v['reprint']"/><br/></t>
                                 <span style="color:#1E3A8A;">Blau = von Odoo eingetragen</span>
                             </td>
                         </tr>
@@ -97,7 +98,7 @@
                     <table class="foot" style="width:100%;">
                         <tr>
                             <td>Formblatt Stand 01/10/2026 / PLC-Services GmbH – https://kab-q.de · Nachbildung in Odoo, Abgleich mit dem KabQ-Formblatt durch die QMB erforderlich</td>
-                            <td style="text-align:right;white-space:nowrap;" class="odoo mono"><t t-out="v['doc_ref']"/> · Seite 1 von <t t-out="v['pages']"/></td>
+                            <td style="text-align:right;white-space:nowrap;" class="odoo mono"><t t-out="v['doc_ref']"/><t t-if="v['reprint']"> · <t t-out="v['reprint']"/></t> · Seite 1 von <t t-out="v['pages']"/></td>
                         </tr>
                         <tr><td colspan="2">Dieser Ausdruck unterliegt nicht dem Änderungsdienst und ist vor Verwendung auf Aktualität zu prüfen!</td></tr>
                     </table>

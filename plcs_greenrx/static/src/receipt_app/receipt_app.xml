@@ -223,7 +223,22 @@
                                 <div class="o_grx_boxno o_grx_mono" t-out="this.box.box"/>
                                 <div class="o_grx_tag" t-if="this.box.box_manual">Box von Hand eingegeben</div>
                             </div>
-                            <div class="o_grx_count"><t t-out="this.box.qty"/><span><t t-if="this.box.qty === 1">Packung</t><t t-else="">Packungen</t></span></div>
+                            <div class="o_grx_count" aria-live="polite">
+                                <span class="o_grx_count_num" t-att-data-qty="this.box.qty" t-out="this.box.qty"/>
+                                <span class="o_grx_count_label"><t t-if="this.box.qty === 1">Packung</t><t t-else="">Packungen</t> in der Box</span>
+                                <span class="o_grx_count_label" t-if="this.box.slip_qty">angemeldet: <t t-out="this.box.slip_qty"/></span>
+                            </div>
+                        </div>
+                        <div class="o_grx_pending" t-if="this.state.pendingScans" role="status">
+                            <t t-out="this.state.pendingScans"/> <t t-if="this.state.pendingScans === 1">Scan wird</t><t t-else="">Scans werden</t> verarbeitet …
+                        </div>
+                        <div class="o_grx_card o_grx_scanlog" t-if="this.state.scanLog.length">
+                            <div class="o_grx_kicker">Letzte Scans</div>
+                            <div t-foreach="this.state.scanLog" t-as="e" t-key="e.id" t-attf-class="o_grx_scanlog_item o_grx_scanlog_{{ e.status }}">
+                                <span class="o_grx_scanlog_icon" aria-hidden="true"><t t-if="e.status === 'ok'">✓</t><t t-elif="e.status === 'info'">i</t><t t-else="">!</t></span>
+                                <span class="flex-grow-1"><b t-out="e.title"/> <span class="small" t-out="e.message"/></span>
+                                <span class="o_grx_mono o_grx_muted small" t-out="e.time"/>
+                            </div>
                         </div>
                         <div class="o_grx_card" t-if="this.box.product">
                             <div class="o_grx_kicker">Artikel · Charge · Verfall (aus dem Scan)</div>
@@ -326,8 +341,12 @@
                             <div class="o_grx_doc"><b>Anlage Box-Inhalt</b><span><t t-out="this.box.qty"/> Packungen mit Seriennummer und Charge</span></div>
                             <div class="o_grx_doc o_grx_doc_red" t-if="this.box.ampel === 'rot'"><b>Rotes Sperrblatt</b><span>Gut sichtbar an die Box hängen</span></div>
                         </div>
+                        <div class="o_grx_hint o_grx_hint_warn" t-if="!this.box.printed_at and this.box.print_count">
+                            Der letzte Ausdruck (Druck Nr. <t t-out="this.box.print_count"/>) ist ungültig, weil die Box danach geändert wurde.
+                            Bitte neu drucken, prüfen und unterschreiben. Den alten Ausdruck vernichten.
+                        </div>
                         <div t-if="this.box.printed_at" class="o_grx_card">
-                            <div class="o_grx_ok">Gedruckt um <t t-out="this.box.printed_at"/></div>
+                            <div class="o_grx_ok">Gedruckt um <t t-out="this.box.printed_at"/><t t-if="this.box.print_count > 1"> · Neuausdruck Nr. <t t-out="this.box.print_count - 1"/></t></div>
                             <label class="o_grx_confirm">
                                 <input type="checkbox" t-att-checked="this.box.signed_confirmed" t-on-change="(ev) => this.toggleSigned(ev)"/>
                                 <span>
@@ -408,7 +427,7 @@
                 <t t-if="this.state.step === 5 and this.box">
                     <button type="button" class="o_grx_btn o_grx_btn_ghost" t-on-click="() => this.back()">Zurück</button>
                     <button type="button" class="o_grx_btn o_grx_btn_dark o_grx_btn_big" t-if="!this.box.printed_at" t-on-click="() => this.printDocs()">
-                        <t t-if="this.box.ampel === 'rot'">Alle 3 Blätter drucken (F8)</t><t t-else="">Beide Blätter drucken (F8)</t>
+                        <t t-if="this.box.print_count">Neu drucken (F8)</t><t t-elif="this.box.ampel === 'rot'">Alle 3 Blätter drucken (F8)</t><t t-else="">Beide Blätter drucken (F8)</t>
                     </button>
                     <button type="button" class="o_grx_btn o_grx_btn_ghost" t-if="this.box.printed_at" t-on-click="() => this.printDocs()">Erneut drucken</button>
                     <button type="button" class="o_grx_btn o_grx_btn_primary o_grx_btn_big" t-if="this.box.printed_at" t-att-disabled="!this.box.signed_confirmed" t-on-click="() => this.closeBox()">

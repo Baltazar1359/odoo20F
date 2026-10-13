@@ -92,6 +92,10 @@ class PlcsGreenrxBox(models.Model):
     printed_by = fields.Many2one("res.users", "Gedruckt von", readonly=True)
     print_count = fields.Integer("Anzahl Drucke", readonly=True)
     signed_confirmed = fields.Boolean("Ausdruck geprüft und unterschrieben", readonly=True)
+    content_rev = fields.Integer("Änderungsstand", readonly=True,
+                                 help="Zählt jede Änderung an Packungen, Antworten, Ampel und Bemerkung.")
+    printed_rev = fields.Integer("Gedruckter Stand", readonly=True,
+                                 help="Änderungsstand beim letzten Druck. Weicht er ab, ist ein neuer Druck Pflicht.")
     closed_at = fields.Datetime("Abgeschlossen am", readonly=True)
     move_id = fields.Many2one("stock.move", "Lagerbewegung Eingang", readonly=True)
 
@@ -212,6 +216,21 @@ class PlcsGreenrxBox(models.Model):
         for box in self:
             if box.user_id != self.env.user and not self.env.user.has_group("plcs_greenrx.group_grx_vp"):
                 raise AccessError(self.env._("Box %s wird von %s erfasst.", box.package_id.name, box.user_id.name))
+
+    def _grx_changed(self, vals=None):
+        """Inhalt der Box ändert sich: Änderungsstand hochzählen, Ausdruck ungültig machen.
+
+        Nach jeder Änderung muss neu gedruckt und der Ausdruck neu bestätigt werden,
+        damit Papier und Daten übereinstimmen.
+        """
+        self.ensure_one()
+        vals = dict(vals or {}, content_rev=self.content_rev + 1)
+        if self.printed_at or self.signed_confirmed:
+            vals.update(printed_at=False, signed_confirmed=False)
+            self.sudo().message_post(body=self.env._(
+                "Ausdruck Nr. %s ist ungültig, weil die Box danach geändert wurde. Vor dem Abschluss neu drucken.",
+                self.print_count))
+        self.sudo().write(vals)
 
     @api.model
     def grx_open_box(self, ticket_id, code, manual=False):
@@ -349,10 +368,12 @@ class PlcsGreenrxBox(models.Model):
                 "legen und Lagerleitung Bescheid geben.",
                 new=parsed["expiry"].strftime("%m/%Y"), old=self.expiry_date.strftime("%m/%Y")))
 
+        vals = {}
         if not self.product_id:
             line, match = self.ticket_id._grx_match_line(product, parsed["batch"])
-            self.sudo().write({"product_id": product.id, "batch": parsed["batch"], "expiry_date": parsed["expiry"],
-                               "line_id": line.id, "slip_match": match})
+            vals = {"product_id": product.id, "batch": parsed["batch"], "expiry_date": parsed["expiry"],
+                    "line_id": line.id, "slip_match": match}
+        self._grx_changed(vals)
         scan = Scan.sudo().create(dict(log, result="ok", accepted=True))
         result = {"status": "ok", "title": self.env._("Packung erfasst"),
                   "message": self.env._("SN %(sn)s · Ch. %(ch)s · Verf. %(exp)s",
@@ -375,9 +396,10 @@ class PlcsGreenrxBox(models.Model):
             raise UserError(self.env._("Diese Packung ist nicht in der Box."))
         scan.sudo().write({"accepted": False, "result": "removed",
                     "message": self.env._("Wieder aus der Box genommen von %s", self.env.user.name)})
+        vals = {}
         if not self.scan_ids.filtered("accepted"):
-            self.sudo().write({"product_id": False, "batch": False, "expiry_date": False,
-                               "line_id": False, "slip_match": False})
+            vals = {"product_id": False, "batch": False, "expiry_date": False, "line_id": False, "slip_match": False}
+        self._grx_changed(vals)
         return self._grx_ui_data()
 
     def grx_to_check(self):
@@ -390,12 +412,13 @@ class PlcsGreenrxBox(models.Model):
         return self._grx_ui_data()
 
     def grx_back(self):
+        """Einen Schritt zurück. Ein vorhandener Ausdruck wird damit ungültig."""
         self.ensure_one()
         self._grx_check_owner()
         if self.state == "check":
-            self.sudo().state = "scan"
+            self._grx_changed({"state": "scan"})
         elif self.state == "print":
-            self.sudo().write({"state": "check", "signed_confirmed": False})
+            self._grx_changed({"state": "check"})
         else:
             raise UserError(self.env._("Zurück ist in diesem Schritt nicht möglich."))
         return self._grx_ui_data()
@@ -416,7 +439,9 @@ class PlcsGreenrxBox(models.Model):
             vals["ampel"] = ampel or False
         if note is not None:
             vals["note"] = note or False
-        self.sudo().write(vals)
+        changed = {k: v for k, v in vals.items() if self[k] != v}
+        if changed:
+            self._grx_changed(changed)
         # Ampel darf nicht milder sein als der Vorschlag
         if self.ampel and AMPEL_RANK[self.ampel] < AMPEL_RANK[self.ampel_suggest]:
             self.sudo().ampel = False
@@ -437,8 +462,13 @@ class PlcsGreenrxBox(models.Model):
                                        a=AMPEL_SHORT[self.ampel], s=AMPEL_SHORT[level]))
         if self.ampel != "gruen" and not reasons and not (self.note or "").strip():
             raise UserError(self.env._("Bitte einen Grund eintragen (die Ampel ist strenger als der Vorschlag)."))
-        self.sudo().write({"state": "print", "checked_at": fields.Datetime.now(), "signed_confirmed": False})
+        self._grx_changed({"state": "print", "checked_at": fields.Datetime.now()})
         return self._grx_ui_data()
+
+    def _grx_print_outdated(self):
+        """True, wenn kein gültiger Ausdruck zum aktuellen Stand der Box vorliegt."""
+        self.ensure_one()
+        return not self.printed_at or self.printed_rev != self.content_rev
 
     def grx_print(self):
         """Dokumente drucken: KabQ-Checkliste, Anlage Box-Inhalt, bei Rot das Sperrblatt."""
@@ -449,15 +479,21 @@ class PlcsGreenrxBox(models.Model):
             "printed_at": fields.Datetime.now(),
             "printed_by": self.env.user.id,
             "print_count": self.print_count + 1,
+            "printed_rev": self.content_rev,
         })
-        self.sudo().message_post(body=self.env._("Box-Dokumente gedruckt (Druck Nr. %s).", self.print_count))
+        if self.print_count > 1:
+            body = self.env._("Box-Dokumente gedruckt (Druck Nr. %(n)s, Neuausdruck Nr. %(r)s).",
+                              n=self.print_count, r=self.print_count - 1)
+        else:
+            body = self.env._("Box-Dokumente gedruckt (Druck Nr. %s).", self.print_count)
+        self.sudo().message_post(body=body)
         return self.env.ref("plcs_greenrx.action_report_grx_box_documents").report_action(self)
 
     def grx_confirm_signed(self, value=True):
         self.ensure_one()
         self._grx_check_state("print")
         self._grx_check_owner()
-        if value and not self.printed_at:
+        if value and self._grx_print_outdated():
             raise UserError(self.env._("Erst die Dokumente drucken."))
         self.sudo().signed_confirmed = bool(value)
         return self._grx_ui_data()
@@ -469,6 +505,10 @@ class PlcsGreenrxBox(models.Model):
         self._grx_check_owner()
         if not self.printed_at:
             raise UserError(self.env._("Erst die Dokumente drucken."))
+        if self._grx_print_outdated():
+            raise UserError(self.env._(
+                "Box %s wurde nach dem letzten Druck geändert. Bitte neu drucken, prüfen und unterschreiben.",
+                self.package_id.name))
         if not self.signed_confirmed:
             raise UserError(self.env._("Bitte bestätigen: Ausdruck geprüft und unterschrieben."))
         reason = self.package_id._plcs_grx_occupied_reason(ignore_box=self)
@@ -719,6 +759,7 @@ class PlcsGreenrxBox(models.Model):
             "note": self.note or "",
             "printed_at": fields.Datetime.context_timestamp(self, self.printed_at).strftime("%H:%M")
             if self.printed_at else "",
+            "print_count": self.print_count,
             "signed_confirmed": self.signed_confirmed,
             "location": self.location_id.display_name or "",
             "closed_at": fields.Datetime.context_timestamp(self, self.closed_at).strftime("%d.%m.%Y %H:%M")
@@ -799,7 +840,12 @@ class PlcsGreenrxBox(models.Model):
         block_reason = "; ".join(reasons) or (self.note or "")
         pairs = [packs[i:i + 2] for i in range(0, len(packs), 2)]
         config = self.company_id
+        reprint = ""
+        if self.print_count > 1:
+            printed = fields.Datetime.context_timestamp(self, self.printed_at or fields.Datetime.now())
+            reprint = "Neuausdruck Nr. %s · %s Uhr" % (self.print_count - 1, printed.strftime("%d.%m.%Y, %H:%M"))
         return {
+            "reprint": reprint,
             "ampel_upper": AMPEL_SHORT.get(self.ampel, "-").upper(),
             "sender": "%s%s" % (sender_name, (" (%s)" % ticket.customer_number) if ticket.customer_number else ""),
             "sender_name": sender_name,

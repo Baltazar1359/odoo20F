@@ -2,13 +2,32 @@ import re
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
-from odoo.fields import Command
+from odoo.fields import Command, Domain
 
 from ..tools import gs1, slip
+
+# Felder, die die Suche in der Datenbank durchsucht (Referenz, Reklamation, Gutschrift,
+# Kundennummer, Absender, Ticketnummer, Artikel der Positionen)
+SEARCH_FIELDS = (
+    "name", "complaint_number", "credit_note", "customer_number",
+    "partner_id.complete_name", "partner_name",
+    "line_ids.ticket_number", "line_ids.pzn", "line_ids.product_name",
+    "line_ids.product_id.name", "line_ids.product_id.default_code",
+)
 
 
 def _norm(value):
     return re.sub(r"[\s\-./]", "", str(value or "")).lower()
+
+
+def _norm_pattern(q):
+    """ILIKE-Muster zum normalisierten Suchbegriff: zwischen den Zeichen darf alles stehen.
+
+    So findet die Datenbank auch "K-10234" für "k 10234" (Trennzeichen egal). Das Muster
+    ist eine Obermenge; die genaue Prüfung und Rangfolge folgt in grx_search.
+    """
+    chars = (c.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") for c in q)
+    return "%" + "%".join(chars) + "%"
 
 
 class PlcsGreenrxTicket(models.Model):
@@ -198,7 +217,9 @@ class PlcsGreenrxTicket(models.Model):
         q = _norm(query)
         if not q:
             return []
-        tickets = self.search([("state", "in", ("open", "in_progress"))], limit=1000)
+        pattern = _norm_pattern(q)
+        tickets = self.search(Domain("state", "in", ("open", "in_progress")) & Domain.OR(
+            Domain(fname, "=ilike", pattern) for fname in SEARCH_FIELDS))
         labels = (
             ("name", self.env._("Referenz")),
             ("complaint_number", self.env._("Reklamation")),
@@ -229,11 +250,14 @@ class PlcsGreenrxTicket(models.Model):
                        for l in ticket.line_ids):
                     match = (2, self.env._("Medikament"))
             if match:
-                data = ticket._grx_ui_data(with_boxes=False)
-                data["match"] = self.env._("Treffer: %s", match[1])
-                found.append((match[0], data))
-        found.sort(key=lambda x: x[0])
-        return [d for _rank, d in found[:limit]]
+                found.append((match, ticket))
+        found.sort(key=lambda x: x[0][0])
+        result = []
+        for (_rank, label), ticket in found[:limit]:
+            data = ticket._grx_ui_data(with_boxes=False)
+            data["match"] = self.env._("Treffer: %s", label)
+            result.append(data)
+        return result
 
     @api.model
     def grx_from_slip(self, raw):

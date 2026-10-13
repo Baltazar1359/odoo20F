@@ -21,11 +21,17 @@ Umgesetzt nach dem Entwurf „PLCS Lager-Oberfläche“ (Handy und PC mit Handsc
    - die Reklamationsnummer,
    - je Produkt Ticketnummer, PZN, Charge und Packungsanzahl.
 
-   Odoo findet den Vorgang. Ist er noch nicht in Odoo, legt Odoo ihn aus dem QR-Code an (abschaltbar). Weicht der Schein von den ERP-Daten ab, zeigt Odoo einen Hinweis. Ein schon erfasster Vorgang wird abgelehnt. Alternativ lässt sich nach Referenz, Ticket-, Reklamations- oder Kundennummer oder nach der Apotheke suchen.
+   Odoo findet den Vorgang. Ist er noch nicht in Odoo, legt Odoo ihn aus dem QR-Code an (abschaltbar). Weicht der Schein von den ERP-Daten ab, zeigt Odoo einen Hinweis. Ein schon erfasster Vorgang wird abgelehnt. Alternativ lässt sich nach Referenz, Ticket-, Reklamations-, Gutschrift- oder Kundennummer, nach der Apotheke oder nach dem Artikel suchen. Die Suche läuft in der Datenbank über alle offenen Vorgänge; Trennzeichen (Leerzeichen, `-`, `.`, `/`) spielen keine Rolle. Exakte Treffer stehen vor Teiltreffern, Artikel-Treffer zuletzt (höchstens 20).
 2. **Box scannen:** QR-Code einer leeren Box GX001–GX200 scannen. Handeingabe ist möglich und wird im Verlauf vermerkt.
 3. **Packungen scannen:** Ein Scan speichert Seriennummer, Charge und Verfall aus dem securPharm-Code (GS1 oder IFA). Der erste Scan legt Artikel und Charge der Box fest.
+   - Scans kommen in eine **Warteschlange** und werden der Reihe nach verarbeitet. Auch sehr schnelle Scans hintereinander gehen nicht verloren.
+   - Jeder Scan bekommt eine eigene Rückmeldung: Ton (ok bzw. Fehler), Meldung oben und ein Eintrag unter **„Letzte Scans“**.
+   - Die **Zahl der Packungen in der Box** steht groß oben rechts, darunter die angemeldete Anzahl.
 4. **Vorprüfung:** 6 Sichtprüfungen (Ja/Nein) und die Prüfungen des Systems ergeben einen Ampel-Vorschlag. Eine mildere Ampel als der Vorschlag ist nicht möglich. Wer strenger wählt, gibt einen Grund an.
 5. **Drucken:** KabQ-Checkliste und Anlage Box-Inhalt, bei Rot zusätzlich das Sperrblatt. Danach Ausdruck bestätigen und Box abschließen.
+   - **Jede Änderung nach dem Druck macht den Ausdruck ungültig** (Zurück, Antworten, Ampel, Bemerkung, Packungen scannen oder entfernen). Dann ist ein neuer Druck Pflicht, und die Bestätigung muss neu gesetzt werden.
+   - Odoo zählt die Drucke. Ein Nachdruck trägt auf der KabQ-Checkliste **„Neuausdruck Nr. X“** mit Datum und Uhrzeit.
+   - „Box abschließen“ lehnt ab, wenn die Box seit dem letzten Druck geändert wurde.
 6. **Nächste Box oder Paket fertig:** Bei „Paket fertig“ wird der Eingang gebucht. Grün und Gelb landen in GreenRX/Quarantäne, Rot im GreenRX/Sperrlager. Weicht Soll von Ist ab, ist eine Begründung Pflicht.
 
 Tasten am PC: **F8** Drucken, **F9** Weiter bzw. Box abschließen, **Esc** Meldung schließen.
@@ -38,7 +44,8 @@ Odoo kennt je Packung nur ein „Los/Seriennummer“-Feld. Das Modul speichert d
 
 - Eine Box enthält einen Artikel und eine Charge.
 - Jede Seriennummer gibt es nur einmal im System. Das gilt auch für offene Erfassungen.
-- Ein Doppelscan derselben Packung wird erkannt und nicht doppelt gezählt.
+- Ein Doppelscan derselben Packung wird erkannt und nicht doppelt gezählt (Prüfung auf dem Server).
+- Papier und Daten stimmen überein: abgeschlossen wird nur mit einem Ausdruck, der zum aktuellen Stand der Box passt.
 - Die Restlaufzeit wird geprüft (Standard 3 Monate). Darunter schlägt Odoo Rot vor.
 - Jede Box wird dem passenden Ticket des Retourenscheins zugeordnet (Artikel + Charge). Diese Fälle führen zum Vorschlag Gelb:
   - die Charge weicht vom Schein ab,
@@ -94,7 +101,7 @@ Danach:
 odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --stop-after-init
 ```
 
-31 automatische Tests decken ab:
+41 automatische Tests decken ab:
 
 - den GS1/IFA-Parser und den Retourenschein-QR (auch zerteilt durch den Handscanner),
 - den ganzen Ablauf von Ticket bis VP-Freigabe,
@@ -104,9 +111,16 @@ odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --st
 - Soll/Ist-Abweichungen,
 - die Sperre gegen Bewegungen an der Freigabe vorbei,
 - die Sperre gegen direkte API-Schreibzugriffe,
-- die Schnittstelle (mit simuliertem GreenRX-ERP).
+- die Schnittstelle (mit simuliertem GreenRX-ERP),
+- ungültigen Ausdruck nach Änderungen, Neuausdruck und Abschluss-Sperre,
+- die Suche über mehr als 1.000 offene Vorgänge,
+- 5 Scans direkt hintereinander in der Scan-Oberfläche (Browser-Test, `TestGreenrxScanQueue`; braucht Chrome).
 
-Zusätzlich wurde der Ablauf im Browser durchgespielt (Handy- und PC-Ansicht, Lager und VP).
+Zusätzlich prüft `e2e/playwright_scan_queue.py` mit Playwright gegen einen laufenden Server, dass 5 schnelle Scans alle ankommen:
+
+```bash
+ODOO_PASSWORD=… python e2e/playwright_scan_queue.py --url http://127.0.0.1:8069 --db test_db --login admin
+```
 
 ### Offen / vor dem Echtbetrieb
 

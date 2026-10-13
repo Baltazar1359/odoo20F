@@ -392,6 +392,155 @@ class TestGreenrxFlow(TransactionCase):
             self.env["plcs.greenrx.box"].with_user(self.lager).create(
                 {"ticket_id": ticket.id, "package_id": box.package_id.id})
 
+    # ------------------------------------------------------------------
+    # Druck und Daten (Review-Befund 2)
+    # ------------------------------------------------------------------
+    def _render(self, box):
+        return self.env["ir.actions.report"]._render_qweb_html(
+            "plcs_greenrx.action_report_grx_box_documents", box.ids)[0].decode()
+
+    def test_change_after_print_needs_reprint(self):
+        """Zurück nach dem Druck, Antwort und Ampel ändern: alter Ausdruck ungültig, Abschluss erst nach Neudruck."""
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 2}])
+        box = self._fill_box(ticket, "GX120", self.gtin_a, ["P1", "P2"])
+        box.grx_to_check()
+        self._all_yes(box)
+        box.grx_save_check(ampel="gruen")
+        box.grx_to_print()
+        box.grx_print()
+        box.grx_confirm_signed(True)
+        self.assertNotIn("Neuausdruck", self._render(box))
+
+        box.grx_back()
+        self.assertEqual(box.state, "check")
+        self.assertFalse(box.printed_at, "Ausdruck muss nach Zurück ungültig sein")
+        self.assertFalse(box.signed_confirmed)
+        self._all_yes(box, q_damage="nein")
+        box.grx_save_check(ampel="gelb")
+        box.grx_to_print()
+        with self.assertRaises(UserError):
+            box.grx_confirm_signed(True)  # alter Ausdruck zählt nicht
+        with self.assertRaises(UserError):
+            box.grx_close()
+
+        box.grx_print()
+        self.assertEqual(box.print_count, 2)
+        html = self._render(box)
+        self.assertIn("Neuausdruck Nr. 1", html)
+        self.assertIn("Uhr", html)
+        self.assertIn("GELB", html)
+        box.grx_confirm_signed(True)
+        box.grx_close()
+        self.assertEqual((box.state, box.ampel), ("to_release", "gelb"))
+
+    def test_rescan_after_print_needs_reprint(self):
+        """Zurück bis zum Scannen, weitere Packung: Abschluss erst nach neuem Druck mit 3 Packungen."""
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 3}])
+        box = self._fill_box(ticket, "GX121", self.gtin_a, ["R10", "R11"])
+        box.grx_to_check()
+        self._all_yes(box)
+        box.grx_save_check(ampel="gruen")
+        box.grx_to_print()
+        box.grx_print()
+        box.grx_confirm_signed(True)
+        box.grx_back()
+        box.grx_back()
+        self.assertEqual(box.state, "scan")
+        self.assertEqual(box.grx_scan(code(self.gtin_a, "R12", "BYE-T01", self.exp_ok))["status"], "ok")
+        box.grx_to_check()
+        box.grx_to_print()
+        self.assertFalse(box.printed_at, "Ausdruck mit 2 Packungen darf nicht mehr gelten")
+        with self.assertRaises(UserError):
+            box.grx_confirm_signed(True)
+        with self.assertRaises(UserError):
+            box.grx_close()
+        box.grx_print()
+        self.assertIn("R12", self._render(box))
+        box.grx_confirm_signed(True)
+        box.grx_close()
+        self.assertEqual(len(box.lot_ids), 3)
+
+    def test_every_change_invalidates_print(self):
+        """grx_scan, grx_remove_scan, grx_save_check, grx_to_print und grx_back machen den Ausdruck ungültig."""
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 3}])
+        box = self._fill_box(ticket, "GX122", self.gtin_a, ["I1"])
+
+        def stamp():
+            box.sudo().write({"printed_at": fields.Datetime.now(), "signed_confirmed": True,
+                              "printed_rev": box.content_rev})
+
+        def assert_invalid(step):
+            self.assertFalse(box.printed_at, step)
+            self.assertFalse(box.signed_confirmed, step)
+
+        stamp()
+        res = box.grx_scan(code(self.gtin_a, "I2", "BYE-T01", self.exp_ok))
+        assert_invalid("grx_scan")
+        stamp()
+        box.grx_remove_scan(res["scan_id"])
+        assert_invalid("grx_remove_scan")
+        box.grx_to_check()
+        stamp()
+        self._all_yes(box)
+        assert_invalid("grx_save_check (Antworten)")
+        stamp()
+        box.grx_save_check(ampel="gruen")
+        assert_invalid("grx_save_check (Ampel)")
+        stamp()
+        box.grx_to_print()
+        assert_invalid("grx_to_print")
+        stamp()
+        box.grx_back()
+        assert_invalid("grx_back")
+
+    def test_close_rejects_change_since_last_print(self):
+        """grx_close prüft selbst, ob der Ausdruck zum aktuellen Stand passt."""
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 1}])
+        box = self._fill_box(ticket, "GX123", self.gtin_a, ["K1"])
+        box.grx_to_check()
+        self._all_yes(box)
+        box.grx_save_check(ampel="gruen")
+        box.grx_to_print()
+        box.grx_print()
+        box.grx_confirm_signed(True)
+        # Änderung, die den Ausdruck nicht zurückgesetzt hat (z. B. ein künftiger Weg an grx_* vorbei)
+        box.sudo().content_rev += 1
+        with self.assertRaises(UserError):
+            box.grx_close()
+        box.grx_print()
+        box.grx_confirm_signed(True)
+        box.grx_close()
+        self.assertEqual(box.state, "to_release")
+
+    # ------------------------------------------------------------------
+    # Suche (Review-Befund 3)
+    # ------------------------------------------------------------------
+    def test_search_beyond_1000_open(self):
+        """Die Suche findet auch Vorgänge hinter den ersten 1.000 offenen; Rangfolge bleibt gleich."""
+        T = self.env["plcs.greenrx.ticket"].with_context(tracking_disable=True, mail_create_nolog=True)
+        today = fields.Date.today()
+        T.create([{"name": "BULK-%04d" % i, "date_ticket": today} for i in range(1100)])
+        target = self._ticket("ALT-4711", lines=[{"pzn": "87654321", "qty": 1, "ticket_number": "9004711"}])
+        similar = self._ticket("ALT-47119", lines=[{"pzn": "12345678", "qty": 1}])
+        # ganz hinten in der Standard-Reihenfolge (Anmeldedatum absteigend)
+        (target | similar).write({"date_ticket": today - relativedelta(years=3)})
+        self.assertGreater(T.search_count([("state", "in", ("open", "in_progress"))]), 1000)
+
+        S = self.env["plcs.greenrx.ticket"].with_user(self.lager)
+        res = S.grx_search("ALT-4711")
+        self.assertEqual([r["id"] for r in res], [target.id, similar.id], "exakter Treffer zuerst")
+        self.assertEqual(res[0]["match"], "Treffer: Referenz")
+        self.assertEqual(set(res[0]), set(target._grx_ui_data(with_boxes=False)) | {"match"})
+        self.assertEqual(S.grx_search("alt 4711")[0]["id"], target.id)
+        self.assertEqual(S.grx_search("9004711")[0]["match"], "Treffer: Ticket")
+        self.assertEqual(S.grx_search("S-ALT-4711")[0]["match"], "Treffer: Reklamation")
+        self.assertEqual(S.grx_search("gs alt 4711")[0]["match"], "Treffer: Gutschrift")
+        self.assertEqual(S.grx_search("Artikel B")[0]["id"], target.id)
+        self.assertEqual(S.grx_search("Artikel B")[0]["match"], "Treffer: Medikament")
+        self.assertEqual(len(S.grx_search("BULK")), 20, "Begrenzung auf 20 Treffer bleibt")
+        self.assertEqual(S.grx_search("BULK-1099")[0]["match"], "Treffer: Referenz")
+        self.assertFalse(S.grx_search("gibt es nicht 0815"))
+
 
     # ------------------------------------------------------------------
     # Retourenschein-QR

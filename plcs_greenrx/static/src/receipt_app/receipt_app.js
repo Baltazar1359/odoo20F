@@ -64,7 +64,12 @@ export class GreenRxReceiptApp extends Component {
             vpBox: null,
             vpReason: "",
             vpAsk: false,
+            scanLog: [],
+            pendingScans: 0,
         });
+        // Warteschlange: Scans werden der Reihe nach verarbeitet, keiner geht verloren
+        this.scanQueue = Promise.resolve();
+        this.scanSeq = 0;
         this.barcode = usePlugin(BarcodePlugin);
         useBus(this.barcode.bus, "barcode_scanned", (ev) => this.onScan(ev.detail.barcode));
         useListener(window, "keydown", (ev) => this.onKeydown(ev));
@@ -84,8 +89,8 @@ export class GreenRxReceiptApp extends Component {
     play(kind) {
         const sound = this.sounds?.[kind];
         if (sound) {
-            sound.currentTime = 0;
-            sound.play().catch(() => {});
+            // eigene Kopie je Ton: schnelle Scans hintereinander sind alle hörbar
+            sound.cloneNode().play().catch(() => {});
         }
         if (kind === "error" && "vibrate" in navigator) {
             navigator.vibrate([80, 60, 80]);
@@ -399,7 +404,7 @@ export class GreenRxReceiptApp extends Component {
         });
     }
 
-    async onScan(raw) {
+    onScan(raw) {
         if (this.state.mode === "vp") {
             return this.onVpScan(raw);
         }
@@ -408,9 +413,18 @@ export class GreenRxReceiptApp extends Component {
             this.collectSlip(raw);
             return;
         }
-        if (this.state.busy) {
-            return;
-        }
+        // Jeder Scan kommt in die Warteschlange und wird nach dem vorherigen verarbeitet.
+        // Doppelscans erkennt der Server.
+        this.state.pendingScans++;
+        const done = this.scanQueue
+            .then(() => this.handleScan(raw))
+            .catch((error) => this.showError(error))
+            .finally(() => this.state.pendingScans--);
+        this.scanQueue = done;
+        return done;
+    }
+
+    async handleScan(raw) {
         if (this.state.screen === "home") {
             this.startNew();
             this.state.query = raw;
@@ -468,6 +482,9 @@ export class GreenRxReceiptApp extends Component {
     // Schritt 2: Box
     // ------------------------------------------------------------------
     applyBox(box) {
+        if (this.state.box?.id !== box.id) {
+            this.state.scanLog = [];
+        }
         this.state.box = box;
         this.state.noteDraft = box.note || "";
         if (box.ticket) {
@@ -541,13 +558,35 @@ export class GreenRxReceiptApp extends Component {
         if (!box) {
             return;
         }
-        await this.run(async () => {
+        try {
             const res = await this.call("plcs.greenrx.box", "grx_scan", [[box.id], raw]);
             this.state.box = res.box;
-            this.state.flash = { status: res.status, title: res.title, message: res.message };
-            this.play(res.status === "ok" ? "ok" : res.status === "info" ? "ok" : "error");
-            this.scrollTop();
+            const entry = this.packageBoxes.find((b) => b.id === res.box.id);
+            if (entry) {
+                entry.qty = res.box.qty;
+            }
+            this.confirmScan(res.status, res.title, res.message);
+        } catch (error) {
+            this.confirmScan("error", _t("Scan nicht verarbeitet"), errorMessage(error));
+        }
+    }
+
+    /**
+     * Rückmeldung zu genau einem Scan: Meldung oben, Eintrag in "Letzte Scans" und Ton.
+     * So bleibt jeder Scan sichtbar, auch wenn mehrere schnell hintereinander kommen.
+     */
+    confirmScan(status, title, message) {
+        this.state.flash = { status, title, message };
+        this.state.scanLog.unshift({
+            id: ++this.scanSeq,
+            status,
+            title,
+            message,
+            time: new Date().toLocaleTimeString("de-DE"),
         });
+        this.state.scanLog.splice(10);
+        this.play(status === "ok" || status === "info" ? "ok" : "error");
+        this.scrollTop();
     }
 
     async removeScan(scan) {
