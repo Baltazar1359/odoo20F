@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_lot_form_grx" model="ir.ui.view">
+        <field name="name">stock.lot.form.greenrx</field>
+        <field name="model">stock.lot</field>
+        <field name="inherit_id" ref="stock.view_production_lot_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <div invisible="not plcs_is_grx_serial" class="text-muted">
+                    GreenRX-Packung: Seriennummer · Charge <field name="plcs_batch" class="fw-bold"/>
+                    · <field name="plcs_grx_box_id"/>
+                    <field name="plcs_is_grx_serial" invisible="1"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_lot_list_grx" model="ir.ui.view">
+        <field name="name">stock.lot.list.greenrx</field>
+        <field name="model">stock.lot</field>
+        <field name="inherit_id" ref="stock.view_production_lot_tree"/>
+        <field name="arch" type="xml">
+            <field name="product_id" position="after">
+                <field name="plcs_batch" optional="show"/>
+                <field name="expiration_date" optional="show"/>
+                <field name="plcs_grx_box_id" optional="show"/>
+                <field name="plcs_grx_ticket_id" optional="hide"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_lot_search_grx" model="ir.ui.view">
+        <field name="name">stock.lot.search.greenrx</field>
+        <field name="model">stock.lot</field>
+        <field name="inherit_id" ref="stock.search_product_lot_filter"/>
+        <field name="arch" type="xml">
+            <field name="product_id" position="after">
+                <field name="plcs_batch"/>
+                <field name="plcs_grx_box_id"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_package_form_grx" model="ir.ui.view">
+        <field name="name">stock.package.form.greenrx</field>
+        <field name="model">stock.package</field>
+        <field name="inherit_id" ref="stock.stock_package_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="GreenRX" invisible="not plcs_is_grx_box">
+                    <field name="plcs_is_grx_box"/>
+                    <field name="plcs_grx_is_empty"/>
+                    <field name="plcs_grx_current_box_id"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_grx_packages" model="ir.actions.act_window">
+        <field name="name">GreenRX-Boxen</field>
+        <field name="res_model">stock.package</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('plcs_is_grx_box', '=', True)]</field>
+        <field name="context">{'create': 0}</field>
+    </record>
+
+    <record id="product_template_form_grx" model="ir.ui.view">
+        <field name="name">product.template.form.greenrx</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='barcode']" position="after">
+                <field name="plcs_pzn"/>
+                <field name="plcs_storage_temp"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

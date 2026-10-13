@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_grx_ticket_list" model="ir.ui.view">
+        <field name="name">plcs.greenrx.ticket.list</field>
+        <field name="model">plcs.greenrx.ticket</field>
+        <field name="arch" type="xml">
+            <list string="GreenRX-Tickets" decoration-muted="state in ('done', 'cancel')" decoration-info="state == 'in_progress'">
+                <field name="date_ticket"/>
+                <field name="name"/>
+                <field name="reference"/>
+                <field name="credit_note" optional="show"/>
+                <field name="display_sender" string="Absender"/>
+                <field name="customer_number" optional="show"/>
+                <field name="qty_expected_total" string="Soll"/>
+                <field name="qty_received_total" string="Ist"/>
+                <field name="has_deviation" optional="show" widget="boolean"/>
+                <field name="picking_id" optional="show"/>
+                <field name="source" optional="hide"/>
+                <field name="state" widget="badge" decoration-info="state == 'in_progress'" decoration-success="state == 'done'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_grx_ticket_form" model="ir.ui.view">
+        <field name="name">plcs.greenrx.ticket.form</field>
+        <field name="model">plcs.greenrx.ticket</field>
+        <field name="arch" type="xml">
+            <form string="GreenRX-Ticket">
+                <header>
+                    <button name="action_cancel" type="object" string="Stornieren" invisible="state not in ('open', 'in_progress')"
+                            confirm="Ticket wirklich stornieren?"/>
+                    <field name="state" widget="statusbar" statusbar_visible="open,in_progress,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" readonly="state != 'open'"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="reference" readonly="state in ('done', 'cancel')"/>
+                            <field name="credit_note" readonly="state in ('done', 'cancel')"/>
+                            <field name="date_ticket"/>
+                            <field name="source"/>
+                            <field name="external_id" invisible="not external_id"/>
+                        </group>
+                        <group>
+                            <field name="partner_id" readonly="state in ('done', 'cancel')"/>
+                            <field name="partner_name" readonly="state in ('done', 'cancel')"/>
+                            <field name="customer_number" readonly="state in ('done', 'cancel')"/>
+                            <field name="sender_type"/>
+                            <field name="picking_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Inhalt laut Ticket" name="lines">
+                            <field name="line_ids" readonly="state != 'open'">
+                                <list editable="bottom">
+                                    <field name="product_id"/>
+                                    <field name="product_name"/>
+                                    <field name="pzn"/>
+                                    <field name="gtin" optional="hide"/>
+                                    <field name="qty_expected" sum="Summe"/>
+                                </list>
+                            </field>
+                            <group>
+                                <group>
+                                    <field name="qty_expected_total"/>
+                                    <field name="qty_received_total"/>
+                                    <field name="has_deviation"/>
+                                </group>
+                                <group>
+                                    <field name="deviation_note" invisible="not deviation_note"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Boxen" name="boxes">
+                            <field name="box_ids">
+                                <list>
+                                    <field name="package_id"/>
+                                    <field name="product_id"/>
+                                    <field name="batch"/>
+                                    <field name="expiry_date"/>
+                                    <field name="qty"/>
+                                    <field name="ampel" widget="badge" decoration-success="ampel == 'gruen'" decoration-warning="ampel == 'gelb'" decoration-danger="ampel == 'rot'"/>
+                                    <field name="user_id"/>
+                                    <field name="state" widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_grx_ticket_search" model="ir.ui.view">
+        <field name="name">plcs.greenrx.ticket.search</field>
+        <field name="model">plcs.greenrx.ticket</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name" filter_domain="['|', '|', '|', ('name', 'ilike', self), ('reference', 'ilike', self), ('credit_note', 'ilike', self), ('customer_number', 'ilike', self)]" string="Nummer"/>
+                <field name="partner_id"/>
+                <field name="partner_name"/>
+                <filter name="open" string="Offen / in Erfassung" domain="[('state', 'in', ('open', 'in_progress'))]"/>
+                <filter name="done" string="Erfasst" domain="[('state', '=', 'done')]"/>
+                <separator/>
+                <filter name="deviation" string="Soll/Ist-Abweichung" domain="[('deviation_note', '!=', False)]"/>
+                <group>
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_source" string="Herkunft" context="{'group_by': 'source'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_grx_tickets" model="ir.actions.act_window">
+        <field name="name">GreenRX-Tickets</field>
+        <field name="res_model">plcs.greenrx.ticket</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_open': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Noch keine Tickets</p>
+            <p>Tickets kommen über die Schnittstelle aus dem GreenRX-ERP oder per Import (Zahnrad › Datensätze importieren).</p>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="cron_grx_connector_sync" model="ir.cron">
+        <field name="name">GreenRX: Tickets aus dem GreenRX-ERP abrufen</field>
+        <field name="model_id" ref="model_plcs_greenrx_connector"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_sync()</field>
+        <field name="interval_number">15</field>
+        <field name="interval_type">minutes</field>
+        <field name="active" eval="True"/>
+    </record>
+</odoo>

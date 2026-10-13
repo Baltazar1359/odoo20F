@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_grx_box_list" model="ir.ui.view">
+        <field name="name">plcs.greenrx.box.list</field>
+        <field name="model">plcs.greenrx.box</field>
+        <field name="arch" type="xml">
+            <list string="Box-Erfassungen" create="0">
+                <field name="closed_at"/>
+                <field name="package_id"/>
+                <field name="ticket_id"/>
+                <field name="picking_id" optional="show"/>
+                <field name="product_id"/>
+                <field name="batch"/>
+                <field name="expiry_date"/>
+                <field name="qty" sum="Summe"/>
+                <field name="ampel" widget="badge" decoration-success="ampel == 'gruen'" decoration-warning="ampel == 'gelb'" decoration-danger="ampel == 'rot'"/>
+                <field name="user_id"/>
+                <field name="vp_user_id" optional="show"/>
+                <field name="state" widget="badge" decoration-success="state == 'released'" decoration-danger="state == 'blocked'" decoration-info="state == 'to_release'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_grx_box_form" model="ir.ui.view">
+        <field name="name">plcs.greenrx.box.form</field>
+        <field name="model">plcs.greenrx.box</field>
+        <field name="arch" type="xml">
+            <form string="Box-Erfassung" create="0" edit="0">
+                <header>
+                    <field name="state" widget="statusbar" statusbar_visible="scan,check,print,to_release,released"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Box">
+                            <field name="package_id"/>
+                            <field name="box_manual"/>
+                            <field name="ticket_id"/>
+                            <field name="picking_id"/>
+                            <field name="location_id"/>
+                            <field name="user_id"/>
+                        </group>
+                        <group string="Inhalt (aus dem Scan)">
+                            <field name="product_id"/>
+                            <field name="batch"/>
+                            <field name="expiry_date"/>
+                            <field name="qty"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Vorprüfung">
+                            <field name="q_damage"/>
+                            <field name="q_temp_controlled"/>
+                            <field name="q_temp_log"/>
+                            <field name="q_manufacturer"/>
+                            <field name="q_storage_proof"/>
+                            <field name="q_seal"/>
+                        </group>
+                        <group string="Ergebnis">
+                            <field name="ampel_suggest"/>
+                            <field name="ampel" widget="badge" decoration-success="ampel == 'gruen'" decoration-warning="ampel == 'gelb'" decoration-danger="ampel == 'rot'"/>
+                            <field name="reasons"/>
+                            <field name="note"/>
+                            <field name="checked_at"/>
+                            <field name="printed_at"/>
+                            <field name="print_count"/>
+                            <field name="signed_confirmed"/>
+                            <field name="closed_at"/>
+                        </group>
+                    </group>
+                    <group string="VP-Entscheidung">
+                        <group>
+                            <field name="vp_user_id"/>
+                            <field name="vp_date"/>
+                        </group>
+                        <group>
+                            <field name="vp_reason"/>
+                            <field name="vp_picking_id"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Packungen" name="packs">
+                            <field name="accepted_scan_ids">
+                                <list>
+                                    <field name="serial"/>
+                                    <field name="batch"/>
+                                    <field name="expiry_date"/>
+                                    <field name="pzn"/>
+                                    <field name="lot_id"/>
+                                    <field name="create_date" string="Zeit"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Scan-Protokoll" name="scans">
+                            <field name="scan_ids">
+                                <list decoration-danger="not accepted and result != 'removed'" decoration-muted="result == 'removed'">
+                                    <field name="create_date" string="Zeit"/>
+                                    <field name="user_id"/>
+                                    <field name="result"/>
+                                    <field name="serial"/>
+                                    <field name="batch"/>
+                                    <field name="message"/>
+                                    <field name="raw" optional="hide"/>
+                                    <field name="accepted"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_grx_box_search" model="ir.ui.view">
+        <field name="name">plcs.greenrx.box.search</field>
+        <field name="model">plcs.greenrx.box</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="package_id"/>
+                <field name="ticket_id"/>
+                <field name="product_id"/>
+                <field name="batch"/>
+                <field name="lot_ids" string="Seriennummer"/>
+                <filter name="to_release" string="Wartet auf VP" domain="[('state', '=', 'to_release')]"/>
+                <filter name="blocked" string="Gesperrt" domain="[('state', '=', 'blocked')]"/>
+                <filter name="released" string="Freigegeben" domain="[('state', '=', 'released')]"/>
+                <filter name="open" string="In Erfassung" domain="[('state', 'in', ('scan', 'check', 'print'))]"/>
+                <separator/>
+                <filter name="rot" string="Ampel Rot" domain="[('ampel', '=', 'rot')]"/>
+                <filter name="gelb" string="Ampel Gelb" domain="[('ampel', '=', 'gelb')]"/>
+                <group>
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_ampel" string="Ampel" context="{'group_by': 'ampel'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_grx_boxes" model="ir.actions.act_window">
+        <field name="name">Box-Erfassungen</field>
+        <field name="res_model">plcs.greenrx.box</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="view_grx_scan_list" model="ir.ui.view">
+        <field name="name">plcs.greenrx.scan.list</field>
+        <field name="model">plcs.greenrx.scan</field>
+        <field name="arch" type="xml">
+            <list string="Scan-Protokoll" create="0" edit="0" delete="0"
+                  decoration-danger="not accepted and result != 'removed'" decoration-muted="result == 'removed'">
+                <field name="create_date" string="Zeit"/>
+                <field name="user_id"/>
+                <field name="ticket_id"/>
+                <field name="box_id"/>
+                <field name="result"/>
+                <field name="product_id"/>
+                <field name="serial"/>
+                <field name="batch"/>
+                <field name="expiry_date"/>
+                <field name="message"/>
+                <field name="raw" optional="hide"/>
+                <field name="accepted"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_grx_scan_search" model="ir.ui.view">
+        <field name="name">plcs.greenrx.scan.search</field>
+        <field name="model">plcs.greenrx.scan</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="serial"/>
+                <field name="batch"/>
+                <field name="box_id"/>
+                <field name="ticket_id"/>
+                <field name="user_id"/>
+                <filter name="rejected" string="Abgelehnt" domain="[('accepted', '=', False), ('result', '!=', 'removed')]"/>
+                <group>
+                    <filter name="group_result" string="Ergebnis" context="{'group_by': 'result'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_grx_scans" model="ir.actions.act_window">
+        <field name="name">Scan-Protokoll</field>
+        <field name="res_model">plcs.greenrx.scan</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <record id="action_grx_serials" model="ir.actions.act_window">
+        <field name="name">GreenRX-Seriennummern</field>
+        <field name="res_model">stock.lot</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('plcs_is_grx_serial', '=', True)]</field>
+        <field name="context">{'create': 0}</field>
+    </record>
+
+    <record id="action_grx_app" model="ir.actions.client">
+        <field name="name">GreenRX-Eingang</field>
+        <field name="tag">plcs_greenrx.receipt_app</field>
+        <field name="target">fullscreen</field>
+        <field name="context">{'grx_mode': 'receipt'}</field>
+    </record>
+
+    <record id="action_grx_vp" model="ir.actions.client">
+        <field name="name">GreenRX: VP-Freigabe</field>
+        <field name="tag">plcs_greenrx.receipt_app</field>
+        <field name="target">fullscreen</field>
+        <field name="context">{'grx_mode': 'vp'}</field>
+    </record>
+</odoo>

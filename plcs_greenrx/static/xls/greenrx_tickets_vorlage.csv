@@ -1,0 +1,3 @@
+name,reference,credit_note,partner_name,customer_number,sender_type,date_ticket,line_ids/pzn,line_ids/product_name,line_ids/qty_expected
+T-0826,REF-55162,GS-7811,Linden-Apotheke,K-10234,pharmacy,2026-10-13,12345678,BYETTA,5
+,,,,,,,87654321,Artikel B,2

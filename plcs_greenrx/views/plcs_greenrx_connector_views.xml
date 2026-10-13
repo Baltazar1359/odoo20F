@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_grx_connector_list" model="ir.ui.view">
+        <field name="name">plcs.greenrx.connector.list</field>
+        <field name="model">plcs.greenrx.connector</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="url"/>
+                <field name="sync_enabled"/>
+                <field name="last_sync"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_grx_connector_form" model="ir.ui.view">
+        <field name="name">plcs.greenrx.connector.form</field>
+        <field name="model">plcs.greenrx.connector</field>
+        <field name="arch" type="xml">
+            <form string="Schnittstelle GreenRX-ERP">
+                <header>
+                    <button name="action_test" type="object" string="Verbindung testen" class="btn-secondary"/>
+                    <button name="action_sync" type="object" string="Jetzt abrufen" class="btn-primary"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Zugang">
+                            <field name="url" placeholder="https://greenrx.example.de"/>
+                            <field name="db"/>
+                            <field name="login"/>
+                            <field name="api_key" password="True"/>
+                            <field name="sync_enabled"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Letzter Abruf">
+                            <field name="last_sync"/>
+                            <field name="last_result"/>
+                        </group>
+                    </group>
+                    <group string="Feldzuordnung im GreenRX-ERP">
+                        <div class="alert alert-info" role="status" colspan="2">
+                            Vorbelegt nach dem Datenstand des GreenRX-ERP von 06/2025 (Helpdesk-Ticket mit Studio-Feldern).
+                            Vor dem ersten Abruf mit dem aktuellen GreenRX-ERP abgleichen.
+                        </div>
+                        <group>
+                            <field name="remote_model"/>
+                            <field name="remote_domain"/>
+                            <field name="f_name"/>
+                            <field name="f_reference"/>
+                            <field name="f_credit_note"/>
+                            <field name="f_partner"/>
+                            <field name="f_customer_number"/>
+                        </group>
+                        <group>
+                            <field name="f_product"/>
+                            <field name="f_qty"/>
+                            <field name="product_code_fields"/>
+                            <field name="line_model"/>
+                            <field name="line_link_field"/>
+                            <field name="line_product_field"/>
+                            <field name="line_qty_field"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_grx_connector" model="ir.actions.act_window">
+        <field name="name">Schnittstelle GreenRX-ERP</field>
+        <field name="res_model">plcs.greenrx.connector</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

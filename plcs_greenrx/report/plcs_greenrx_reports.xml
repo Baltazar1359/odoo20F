@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="paperformat_grx_a4" model="report.paperformat">
+        <field name="name">GreenRX A4 (Formblatt)</field>
+        <field name="format">A4</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">8</field>
+        <field name="margin_bottom">8</field>
+        <field name="margin_left">8</field>
+        <field name="margin_right">8</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">96</field>
+    </record>
+
+    <record id="action_report_grx_box_documents" model="ir.actions.report">
+        <field name="name">GreenRX: Box-Dokumente (Checkliste, Anlage, Sperrblatt)</field>
+        <field name="model">plcs.greenrx.box</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">plcs_greenrx.report_box_documents</field>
+        <field name="print_report_name">'GreenRX %s %s' % (object.ticket_id.name, object.package_id.name)</field>
+        <field name="paperformat_id" ref="paperformat_grx_a4"/>
+        <field name="binding_model_id" ref="model_plcs_greenrx_box"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <record id="action_report_grx_box_label" model="ir.actions.report">
+        <field name="name">GreenRX: Box-Etikett (QR)</field>
+        <field name="model">stock.package</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">plcs_greenrx.report_box_label</field>
+        <field name="print_report_name">'GreenRX-Boxetiketten'</field>
+        <field name="paperformat_id" ref="paperformat_grx_a4"/>
+        <field name="binding_model_id" ref="stock.model_stock_package"/>
+        <field name="binding_type">report</field>
+    </record>
+</odoo>

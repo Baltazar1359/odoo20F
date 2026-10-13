@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Ankreuzfeld: checked = True/False -->
+    <template id="grx_cb">
+        <span t-attf-style="display:inline-block;width:12px;height:12px;border:1.3px solid #15181C;vertical-align:-2px;text-align:center;line-height:11px;font-size:11px;font-weight:bold;color:#1E3A8A;">
+            <t t-if="checked">X</t>
+        </span>
+    </template>
+
+    <template id="grx_styles">
+        <style>
+            .grx { font-family: 'DejaVu Sans', Arial, sans-serif; color: #15181C; font-size: 11.5px; line-height: 1.35; }
+            .grx h1 { font-size: 17px; margin: 0 0 6px 0; }
+            .grx .odoo { color: #1E3A8A; font-weight: bold; }
+            .grx .mono { font-family: 'DejaVu Sans Mono', monospace; }
+            .grx table.grid { width: 100%; border-collapse: collapse; }
+            .grx table.grid td, .grx table.grid th { border: 1px solid #15181C; padding: 4px 6px; vertical-align: top; }
+            .grx table.grid th { background: #E5E7EB; text-align: left; }
+            .grx .lbl { font-size: 9.5px; color: #4B5563; display: block; }
+            .grx .sec { font-weight: bold; font-size: 12.5px; background: #E5E7EB; }
+            .grx .note { border: 1.2px dashed #B45309; padding: 5px 8px; font-size: 10px; color: #78350F; margin-bottom: 8px; }
+            .grx .foot { border-top: 1px solid #15181C; margin-top: 10px; padding-top: 4px; font-size: 9px; color: #374151; }
+            .grx .center { text-align: center; }
+            .grx .sig { border-bottom: 1px solid #15181C; height: 30px; }
+            .grx-page { page-break-after: always; }
+            .grx-page:last-child { page-break-after: auto; }
+        </style>
+    </template>
+
+    <template id="report_box_documents">
+        <t t-call="web.html_container">
+            <t t-call="plcs_greenrx.grx_styles"/>
+            <t t-foreach="docs" t-as="o">
+                <t t-set="v" t-value="o._grx_report_values()"/>
+
+                <!-- Seite 1: KabQ-Checkliste -->
+                <div class="grx grx-page">
+                    <table style="width:100%;margin-bottom:6px;">
+                        <tr>
+                            <td><h1>Checkliste Warenannahme/ Wareneingang GreenRX</h1></td>
+                            <td style="text-align:right;font-size:10px;">
+                                Vorprüfung: <span class="odoo" t-out="v['ampel_upper']"/><br/>
+                                <span style="color:#1E3A8A;">Blau = von Odoo eingetragen</span>
+                            </td>
+                        </tr>
+                    </table>
+                    <table class="grid" style="margin-bottom:8px;">
+                        <tr>
+                            <td style="width:50%;"><span class="lbl">Lieferant</span><span class="odoo" t-out="v['sender']"/></td>
+                            <td><span class="lbl">Lieferscheinnummer (Referenz / Ticket)</span><span class="odoo mono" t-out="v['ref_ticket']"/></td>
+                        </tr>
+                        <tr>
+                            <td><span class="lbl">Eingangsdatum</span><span class="odoo" t-out="v['date']"/></td>
+                            <td><span class="lbl">Name Bearbeiter</span><span class="odoo" t-out="o.user_id.name"/></td>
+                        </tr>
+                    </table>
+
+                    <table class="grid">
+                        <tr class="sec"><td>Warenannahme – Prüfkriterium</td><td class="center" style="width:34px;">Ja</td><td class="center" style="width:34px;">Nein</td><td style="width:34%;">Bemerkung</td></tr>
+                        <t t-foreach="v['rows_annahme']" t-as="row">
+                            <tr>
+                                <td><t t-out="row['text']"/>
+                                    <div t-if="row.get('extra')" style="font-size:10px;margin-top:2px;"><t t-out="row['extra']"/></div>
+                                </td>
+                                <td class="center"><t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="row['value'] == 'ja'"/></t></td>
+                                <td class="center"><t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="row['value'] == 'nein'"/></t></td>
+                                <td><span class="odoo" t-out="row.get('remark') or ''"/>
+                                    <div t-if="row.get('if_no')" style="font-size:10px;"><t t-out="row['if_no']"/></div>
+                                </td>
+                            </tr>
+                        </t>
+                        <tr class="sec"><td>Wareneingang – Prüfkriterium</td><td class="center">Ja</td><td class="center">Nein</td><td>Bemerkung</td></tr>
+                        <t t-foreach="v['rows_eingang']" t-as="row">
+                            <tr>
+                                <td t-attf-style="#{'padding-left:18px;' if row.get('sub') else ''}"><t t-out="row['text']"/></td>
+                                <td class="center"><t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="row['value'] == 'ja'"/></t></td>
+                                <td class="center"><t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="row['value'] == 'nein'"/></t></td>
+                                <td><span class="odoo" t-out="row.get('remark') or ''"/>
+                                    <div t-if="row.get('if_no')" style="font-size:10px;"><t t-out="row['if_no']"/></div>
+                                </td>
+                            </tr>
+                        </t>
+                    </table>
+
+                    <table class="grid" style="margin-top:8px;">
+                        <tr>
+                            <td style="width:50%;"><span class="lbl">Wareneingangsprüfung durchgeführt von</span>
+                                <span class="odoo" t-out="v['checked_by']"/>
+                                <div class="sig"/><span class="lbl">Unterschrift</span>
+                            </td>
+                            <td><span class="lbl">Ware nach vollständigem Erfüllen aller Prüfkriterien durch QMB oder VP freigegeben</span>
+                                Ware freigegeben:
+                                ja <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
+                                nein <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
+                                siehe Zusatzblätter <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
+                                <div class="sig"/><span class="lbl">Datum und Unterschrift</span>
+                            </td>
+                        </tr>
+                    </table>
+                    <div style="margin-top:4px;font-size:10.5px;"><b>Bei Abweichungen Vorlage VP.</b>
+                        <t t-if="o.note"> Bemerkung Lager: <span class="odoo" t-out="o.note"/></t>
+                    </div>
+                    <table class="foot" style="width:100%;">
+                        <tr>
+                            <td>Formblatt Stand 01/10/2026 / PLC-Services GmbH – https://kab-q.de · Nachbildung in Odoo, Abgleich mit dem KabQ-Formblatt durch die QMB erforderlich</td>
+                            <td style="text-align:right;white-space:nowrap;" class="odoo mono"><t t-out="v['doc_ref']"/> · Seite 1 von <t t-out="v['pages']"/></td>
+                        </tr>
+                        <tr><td colspan="2">Dieser Ausdruck unterliegt nicht dem Änderungsdienst und ist vor Verwendung auf Aktualität zu prüfen!</td></tr>
+                    </table>
+                </div>
+
+                <!-- Seite 2: Anlage Box-Inhalt -->
+                <div class="grx grx-page">
+                    <table style="width:100%;margin-bottom:4px;">
+                        <tr>
+                            <td><h1>Anlage zur Checkliste: Box-Inhalt</h1></td>
+                            <td style="text-align:right;font-size:10px;color:#1E3A8A;">Blau = von Odoo eingetragen</td>
+                        </tr>
+                    </table>
+                    <div class="note">Neues Blatt, nicht Teil der KabQ-Vorlage. Vor dem Einsatz durch die QMB als Formblatt freigeben lassen.</div>
+                    <div style="font-weight:bold;font-size:10.5px;margin:6px 0 3px;">PAKET</div>
+                    <table class="grid">
+                        <tr>
+                            <td><span class="lbl">Eingang (Odoo)</span><span class="odoo mono" t-out="o.picking_id.name or ''"/></td>
+                            <td><span class="lbl">Absender</span><span class="odoo" t-out="v['sender_name']"/></td>
+                            <td><span class="lbl">Kundennummer</span><span class="odoo mono" t-out="o.ticket_id.customer_number or ''"/></td>
+                        </tr>
+                        <tr>
+                            <td><span class="lbl">Referenz</span><span class="odoo mono" t-out="o.ticket_id.reference or ''"/></td>
+                            <td><span class="lbl">Ticket</span><span class="odoo mono" t-out="o.ticket_id.name"/></td>
+                            <td><span class="lbl">Gutschrift</span><span class="odoo mono" t-out="o.ticket_id.credit_note or ''"/></td>
+                        </tr>
+                    </table>
+                    <div style="font-weight:bold;font-size:10.5px;margin:8px 0 3px;">BOX</div>
+                    <table class="grid">
+                        <tr>
+                            <td><span class="lbl">Box</span><span class="odoo mono" style="font-size:15px;" t-out="o.package_id.name"/>
+                                <t t-if="o.box_manual"><br/><span style="font-size:9px;">Box-Nr. von Hand eingegeben</span></t></td>
+                            <td><span class="lbl">Artikel</span><span class="odoo" t-out="o.product_id.display_name"/></td>
+                            <td><span class="lbl">Charge · Verfall</span><span class="odoo mono" t-out="v['batch_exp']"/></td>
+                            <td><span class="lbl">Packungen</span><span class="odoo" style="font-size:15px;" t-out="o.qty"/></td>
+                        </tr>
+                    </table>
+                    <div style="font-weight:bold;font-size:10.5px;margin:8px 0 3px;">PACKUNGEN IN DER BOX</div>
+                    <table class="grid">
+                        <tr><th style="width:34px;">Nr.</th><th>Seriennummer</th><th style="width:90px;">PZN</th><th style="width:95px;">Charge (Scan)</th><th style="width:85px;">Verfall (Scan)</th></tr>
+                        <t t-foreach="v['packs']" t-as="p">
+                            <tr class="mono">
+                                <td><t t-out="p['n']"/></td>
+                                <td class="odoo"><t t-out="p['serial']"/></td>
+                                <td class="odoo"><t t-out="p['pzn']"/></td>
+                                <td class="odoo"><t t-out="p['batch']"/></td>
+                                <td class="odoo"><t t-out="p['expiry']"/></td>
+                            </tr>
+                        </t>
+                        <tr><td colspan="4">Summe</td><td class="odoo"><t t-out="o.qty"/> Packungen</td></tr>
+                    </table>
+                    <table style="width:100%;margin-top:18px;">
+                        <tr>
+                            <td style="width:50%;padding-right:12px;">Erfasst von: <span class="odoo" t-out="v['checked_by']"/>
+                                <div class="sig"/><span class="lbl">Unterschrift</span></td>
+                            <td style="padding-left:12px;">Geprüft (QMB/VP):
+                                <div class="sig"/><span class="lbl">Datum, Unterschrift</span></td>
+                        </tr>
+                    </table>
+                    <table class="foot" style="width:100%;">
+                        <tr>
+                            <td>Anlage zu: Checkliste Warenannahme/ Wareneingang GreenRX, Formblatt Stand 01/10/2026</td>
+                            <td style="text-align:right;white-space:nowrap;" class="odoo mono"><t t-out="v['doc_ref']"/> · Seite 2 von <t t-out="v['pages']"/></td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Seite 3: rotes Sperrblatt -->
+                <div t-if="o.ampel == 'rot'" class="grx grx-page">
+                    <div style="border:9px solid #B42318;">
+                        <div style="background:#B42318;color:#FFFFFF;padding:10px 20px 14px;">
+                            <div style="font-size:70px;font-weight:bold;letter-spacing:3px;line-height:1;">GESPERRT</div>
+                            <div style="font-size:17px;font-weight:bold;">Nicht verwenden · Nicht ausliefern · Nicht umlagern</div>
+                        </div>
+                        <div style="padding:16px 20px;">
+                            <table style="width:100%;">
+                                <tr>
+                                    <td>
+                                        <span style="font-size:12px;">Box</span><br/>
+                                        <span class="mono" style="font-size:64px;font-weight:bold;line-height:1;" t-out="o.package_id.name"/><br/>
+                                        <span style="font-size:13px;font-weight:bold;">Gesperrt am <t t-out="v['blocked_at']"/> · <t t-out="o.user_id.name"/></span>
+                                    </td>
+                                    <td style="width:130px;text-align:right;">
+                                        <div t-out="o.package_id.name" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 120, 'height': 120}"/>
+                                    </td>
+                                </tr>
+                            </table>
+                            <table class="grid" style="margin-top:12px;font-size:13px;">
+                                <tr>
+                                    <td><span class="lbl">Artikel</span><b t-out="o.product_id.display_name"/></td>
+                                    <td><span class="lbl">Charge</span><b class="mono" t-out="o.batch"/></td>
+                                    <td><span class="lbl">Packungen</span><b t-out="o.qty"/></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="lbl">PZN</span><span class="mono" t-out="v['pzn']"/></td>
+                                    <td><span class="lbl">Verfall</span><span class="mono" t-out="v['expiry']"/></td>
+                                    <td><span class="lbl">Paket</span><span class="mono" t-out="o.picking_id.name or ''"/></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="lbl">Absender</span><t t-out="v['sender_name']"/></td>
+                                    <td><span class="lbl">Kundennummer</span><span class="mono" t-out="o.ticket_id.customer_number or ''"/></td>
+                                    <td><span class="lbl">Ticket</span><span class="mono" t-out="o.ticket_id.name"/></td>
+                                </tr>
+                            </table>
+                            <div style="border:2px solid #B42318;padding:8px 10px;margin-top:12px;">
+                                <div style="font-size:10px;font-weight:bold;color:#B42318;">GRUND DER SPERRE</div>
+                                <div style="font-size:18px;font-weight:bold;" t-out="v['block_reason']"/>
+                                <div t-if="o.note" style="font-size:11px;">Bemerkung: <t t-out="o.note"/></div>
+                            </div>
+                            <div style="margin-top:10px;font-size:10.5px;font-weight:bold;">SERIENNUMMERN IN DIESER BOX (<t t-out="o.qty"/>)</div>
+                            <table style="width:100%;font-size:11px;" class="mono">
+                                <t t-foreach="v['pack_pairs']" t-as="pair">
+                                    <tr><t t-foreach="pair" t-as="p"><td style="width:50%;"><t t-out="p['n']"/> · <t t-out="p['serial']"/></td></t></tr>
+                                </t>
+                            </table>
+                            <div style="margin-top:8px;font-size:12px;"><b>Lagerort:</b> <t t-out="v['blocked_location']"/></div>
+                            <div style="border-top:2px solid #15181C;margin-top:16px;padding-top:8px;font-size:12px;">
+                                <b>Entsperren nur durch VP oder QMB</b><br/>
+                                Entscheidung:
+                                Freigabe <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
+                                Rücksendung <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
+                                Vernichtung <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
+                                <div class="sig" style="width:320px;"/><span class="lbl">Datum, Unterschrift</span>
+                            </div>
+                        </div>
+                        <div style="border-top:2px solid #B42318;padding:5px 20px;font-size:9px;color:#374151;">
+                            Sperrkennzeichnung GreenRX · neues Formblatt, Freigabe durch QMB nötig ·
+                            <span class="mono" t-out="v['doc_ref']"/> · Seite 3 von 3
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+
+    <template id="report_box_label">
+        <t t-call="web.html_container">
+            <t t-call="plcs_greenrx.grx_styles"/>
+            <div class="grx">
+                <table style="width:100%;border-collapse:collapse;">
+                    <t t-foreach="[docs[i:i + 3] for i in range(0, len(docs), 3)]" t-as="row">
+                        <tr>
+                            <t t-foreach="row" t-as="pkg">
+                                <td style="width:33%;border:1px dashed #9CA3AF;padding:14px;text-align:center;">
+                                    <div t-out="pkg.name" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 150, 'height': 150}"/>
+                                    <div class="mono" style="font-size:30px;font-weight:bold;" t-out="pkg.name"/>
+                                    <div style="font-size:10px;">GreenRX-Box · PLCS</div>
+                                </td>
+                            </t>
+                        </tr>
+                    </t>
+                </table>
+            </div>
+        </t>
+    </template>
+</odoo>
