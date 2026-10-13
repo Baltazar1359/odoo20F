@@ -416,9 +416,12 @@ class PlcsGreenrxTicket(models.Model):
         boxes = self.box_ids.filtered(lambda b: b.state != "cancel")
         open_boxes = boxes.filtered(lambda b: b.state in ("scan", "check", "print"))
         if open_boxes:
+            states = dict(open_boxes._fields["state"].selection)
             raise UserError(self.env._(
-                "Box %s ist noch nicht abgeschlossen. Erst die Box abschließen oder abbrechen.",
-                ", ".join(open_boxes.package_id.mapped("name"))))
+                "Noch nicht abgeschlossen: %s. Erst die Box abschließen oder abbrechen "
+                "(Box-Nummer scannen oder von Hand eingeben).",
+                ", ".join("%s (Schritt „%s“, erfasst von %s)" % (b.package_id.name, states[b.state], b.user_id.name)
+                          for b in open_boxes)))
         if not boxes:
             raise UserError(self.env._("Für dieses Paket ist noch keine Box erfasst."))
         deviations = [r for r in self._grx_soll_ist() if r["status"] != "ok"]

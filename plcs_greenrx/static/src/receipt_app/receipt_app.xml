@@ -12,6 +12,22 @@
         </div>
     </t>
 
+    <!-- Paket fertig mit Soll/Ist-Abweichung: Begründung (Schritt 2 und 6) -->
+    <t t-name="plcs_greenrx.DeviationForm">
+        <div class="o_grx_card o_grx_card_warn o_grx_deviation" t-if="this.state.askDeviation">
+            <div class="o_grx_kicker">Soll und Ist stimmen nicht überein</div>
+            <t t-foreach="this.ticket.soll_ist" t-as="row" t-key="row_index">
+                <div t-if="row.status !== 'ok'"><t t-if="row.ticket">Ticket <t t-out="row.ticket"/> · </t><t t-out="row.product"/>: <b t-out="row.status_text"/></div>
+            </t>
+            <label class="o_grx_label mt-2" for="grx_dev">Begründung (Pflicht)</label>
+            <textarea id="grx_dev" class="o_grx_input" rows="2" t-att-value="this.state.deviationNote" t-on-input="(ev) => this.onDeviationInput(ev)"/>
+            <div class="d-flex gap-2 mt-2">
+                <button type="button" class="o_grx_btn o_grx_btn_ghost" t-on-click="() => this.state.askDeviation = false">Zurück</button>
+                <button type="button" class="o_grx_btn o_grx_btn_primary" t-on-click="() => this.finishPackage(true)">Mit Begründung abschließen</button>
+            </div>
+        </div>
+    </t>
+
     <!-- Seitenleiste / Paketkarte: Paketdaten, Soll/Ist, Boxen -->
     <t t-name="plcs_greenrx.PackagePanel">
         <div class="o_grx_card" t-if="this.ticket">
@@ -186,6 +202,7 @@
 
                     <!-- Schritt 2 -->
                     <t t-if="this.state.step === 2">
+                        <t t-call="plcs_greenrx.DeviationForm"/>
                         <h2 class="o_grx_h2">Leere Box nehmen und ihren QR-Code scannen</h2>
                         <div class="o_grx_wait" t-if="!this.state.manual">
                             <div class="o_grx_wait_ring" aria-hidden="true"/>
@@ -375,18 +392,7 @@
                         </div>
                         <h2 class="o_grx_h2" t-else="">Nächste Box oder Paket fertig</h2>
                         <div class="o_grx_hint">Nächste Box: einfach den Box-QR scannen oder unten tippen.</div>
-                        <div class="o_grx_card o_grx_card_warn" t-if="this.state.askDeviation">
-                            <div class="o_grx_kicker">Soll und Ist stimmen nicht überein</div>
-                            <t t-foreach="this.ticket.soll_ist" t-as="row" t-key="row_index">
-                                <div t-if="row.status !== 'ok'"><t t-out="row.product"/>: <b t-out="row.status_text"/></div>
-                            </t>
-                            <label class="o_grx_label mt-2" for="grx_dev">Begründung (Pflicht)</label>
-                            <textarea id="grx_dev" class="o_grx_input" rows="2" t-att-value="this.state.deviationNote" t-on-input="(ev) => this.onDeviationInput(ev)"/>
-                            <div class="d-flex gap-2 mt-2">
-                                <button type="button" class="o_grx_btn o_grx_btn_ghost" t-on-click="() => this.state.askDeviation = false">Zurück</button>
-                                <button type="button" class="o_grx_btn o_grx_btn_primary" t-on-click="() => this.finishPackage(true)">Mit Begründung abschließen</button>
-                            </div>
-                        </div>
+                        <t t-call="plcs_greenrx.DeviationForm"/>
                         <div class="o_grx_only_mobile"><t t-call="plcs_greenrx.PackagePanel"/></div>
                     </t>
                 </main>
@@ -408,7 +414,7 @@
                         <t t-if="this.state.selected">Richtig – weiter: Box scannen</t><t t-else="">Erst Paket auswählen</t>
                     </button>
                 </t>
-                <t t-if="this.state.step === 2">
+                <t t-if="this.state.step === 2 and !this.state.askDeviation">
                     <button type="button" class="o_grx_btn o_grx_btn_ghost o_grx_btn_big" t-on-click="() => this.goHome()">Zurück</button>
                     <button type="button" class="o_grx_btn o_grx_btn_dark o_grx_btn_big" t-if="this.packageBoxes.length" t-on-click="() => this.finishPackage(false)">Paket fertig</button>
                 </t>

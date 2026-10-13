@@ -465,6 +465,19 @@ class PlcsGreenrxBox(models.Model):
         self._grx_changed({"state": "print", "checked_at": fields.Datetime.now()})
         return self._grx_ui_data()
 
+    @api.model
+    def _grx_invalidate_legacy_prints(self):
+        """Ausdrücke offener Boxen ohne Änderungsstand (vor Version 1.3.0 gedruckt) ungültig machen.
+
+        Vor 1.3.0 konnte die Box nach dem Druck geändert werden, ohne dass der Ausdruck
+        zurückgesetzt wurde. Ob ein solcher Ausdruck noch passt, ist nicht nachweisbar:
+        neu drucken ist Pflicht. Rückgabe: betroffene Boxen.
+        """
+        boxes = self.sudo().search([("state", "=", "print"), ("printed_at", "!=", False), ("content_rev", "=", 0)])
+        for box in boxes:
+            box._grx_changed()
+        return boxes
+
     def _grx_print_outdated(self):
         """True, wenn kein gültiger Ausdruck zum aktuellen Stand der Box vorliegt."""
         self.ensure_one()
@@ -730,6 +743,7 @@ class PlcsGreenrxBox(models.Model):
             "batch": self.batch or "",
             "expiry": self.expiry_date.strftime("%m/%Y") if self.expiry_date else "",
             "qty": self.qty,
+            "user": self.user_id.name,
             "state": self.state,
             "state_label": dict(self._fields["state"].selection)[self.state],
             "ampel": self.ampel or "",

@@ -1,3 +1,6 @@
+import importlib.util
+import os
+
 from dateutil.relativedelta import relativedelta
 
 from odoo import fields
@@ -511,6 +514,62 @@ class TestGreenrxFlow(TransactionCase):
         box.grx_confirm_signed(True)
         box.grx_close()
         self.assertEqual(box.state, "to_release")
+
+    def test_legacy_print_invalidated_by_migration(self):
+        """1.3.1: Ausdrucke offener Boxen aus der Zeit vor 1.3.0 werden beim Update ungültig."""
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 2}])
+        legacy = self._fill_box(ticket, "GX124", self.gtin_a, ["L1"])
+        legacy.grx_to_check()
+        self._all_yes(legacy)
+        legacy.grx_save_check(ampel="gruen")
+        legacy.grx_to_print()
+        # Stand wie vor 1.3.0: gedruckt und bestätigt, aber ohne Änderungsstand
+        legacy.sudo().write({"printed_at": fields.Datetime.now(), "print_count": 1, "signed_confirmed": True,
+                             "content_rev": 0, "printed_rev": 0})
+        current = self._fill_box(ticket, "GX125", self.gtin_a, ["L2"])
+        current.grx_to_check()
+        self._all_yes(current)
+        current.grx_save_check(ampel="gruen")
+        current.grx_to_print()
+        current.grx_print()
+        current.grx_confirm_signed(True)
+
+        path = os.path.join(os.path.dirname(__file__), "..", "migrations", "20.0.1.3.1", "post-migrate.py")
+        spec = importlib.util.spec_from_file_location("plcs_greenrx_migrate_1_3_1", path)
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+        script.migrate(self.env.cr, "20.0.1.3.0")
+        self.env.invalidate_all()
+
+        self.assertFalse(legacy.printed_at, "alter Ausdruck ungültig")
+        self.assertFalse(legacy.signed_confirmed)
+        self.assertTrue(current.printed_at, "Ausdruck aus 1.3.0 bleibt gültig")
+        self.assertTrue(current.signed_confirmed)
+        with self.assertRaises(UserError):
+            legacy.grx_close()
+        legacy.grx_print()
+        self.assertIn("Neuausdruck Nr. 1", self._render(legacy))
+        legacy.grx_confirm_signed(True)
+        legacy.grx_close()
+        current.grx_close()
+        self.assertEqual((legacy.state, current.state), ("to_release", "to_release"))
+
+    def test_finish_names_open_boxes(self):
+        """Paket fertig mit offener Box: Meldung nennt Box, Schritt und Person."""
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 2}])
+        done = self._fill_box(ticket, "GX126", self.gtin_a, ["O1"])
+        done.grx_to_check()
+        self._close(done)
+        other = new_test_user(self.env, login="grx_lager3", name="Lager Drei", groups="plcs_greenrx.group_grx_user")
+        self._fill_box(ticket, "GX127", self.gtin_a, ["O2"], user=other).grx_to_check()
+        with self.assertRaises(UserError) as err:
+            ticket.with_user(self.lager).grx_finish(deviation_note="egal")
+        message = str(err.exception)
+        self.assertIn("GX127", message)
+        self.assertIn("Vorprüfung", message)
+        self.assertIn("Lager Drei", message)
+        self.assertNotIn("GX126", message)
+        self.assertEqual(ticket.state, "in_progress")
 
     # ------------------------------------------------------------------
     # Suche (Review-Befund 3)

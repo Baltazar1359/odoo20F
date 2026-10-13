@@ -11,7 +11,7 @@
 
 ### Eingerichtet
 
-- Modul `plcs_greenrx` (Version 20.0.1.3.0) installiert, mit Lagerorten **GreenRX/Quarantäne, /Bestand, /Sperrlager**, Vorgangstypen **GRXIN, GRXFRG, GRXSPR** und Boxen **GX001–GX200**.
+- Modul `plcs_greenrx` (Version 20.0.1.3.1) installiert, mit Lagerorten **GreenRX/Quarantäne, /Bestand, /Sperrlager**, Vorgangstypen **GRXIN, GRXFRG, GRXSPR** und Boxen **GX001–GX200**.
 - **30 Artikel** mit PZN, GTIN-Barcode, Chargenverfolgung und Ablaufdatum (`import/greenrx_artikel_pzn.csv`).
 - **100 Retourenvorgänge** mit 101 Tickets und 287 angemeldeten Packungen aus dem GreenRX-ERP (`import/greenrx_vorgaenge_letzte100.csv`). Alle Tickets sind einem Artikel zugeordnet.
 - Benutzer:
@@ -48,7 +48,7 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
    - **Änderung nach dem Druck (einmal bei GX001 prüfen):** Nach dem Druck **Zurück**, eine Antwort ändern, wieder weiter. Erwartet: Hinweis „Der letzte Ausdruck … ist ungültig“, die Bestätigung ist weg, Abschließen geht erst nach neuem Druck. Der neue Ausdruck trägt oben rechts **„Neuausdruck Nr. 1“** mit Uhrzeit. Den alten Ausdruck vernichten.
 6. **Nächste Box GX002**: die 4 BEVESPI-Packungen, Vorprüfung, Drucken, Abschließen.
 7. Optional **GX003** mit „Fehlerfall: Verfall in 6 Wochen". Erwartet: Vorschlag **Rot** (Restlaufzeit unter 3 Monaten) und zusätzlich das Sperrblatt im Druck.
-8. **Paket fertig.** Bei Abweichung Soll/Ist (z. B. durch die Zusatzbox) verlangt Odoo eine Begründung. Danach liegt die Ware in GreenRX/Quarantäne, rote Boxen im Sperrlager.
+8. **Paket fertig.** Bei Abweichung Soll/Ist (z. B. durch die Zusatzbox) verlangt Odoo eine Begründung; das Feld erscheint direkt unter der Fortschrittsanzeige. Ist noch eine Box offen, nennt Odoo Box, Schritt und Person. Diese Box über „Box-Nummer von Hand eingeben“ öffnen und abschließen oder abbrechen. Danach liegt die Ware in GreenRX/Quarantäne, rote Boxen im Sperrlager.
 
 ### B. VP-Freigabe (als vp.test, also eine andere Person)
 

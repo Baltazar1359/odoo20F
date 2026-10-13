@@ -1,13 +1,16 @@
-from odoo.tests import HttpCase, tagged
+from odoo.tests import HttpCase, new_test_user, tagged
 
 from ..tools import gs1
 
 PZN = "04711003"
+GS = "\x1d"
 
 
-@tagged("post_install", "-at_install", "plcs_greenrx")
-class TestGreenrxScanQueue(HttpCase):
-    """Scan-Oberfläche im Browser: schnelle Scans gehen nicht verloren (Review-Befund 1)."""
+def pack(serial, batch="QLOT"):
+    return "01" + gs1.pzn_to_gtin(PZN) + "21" + serial + GS + "10" + batch + GS + "17301231"
+
+
+class GreenrxUiCase(HttpCase):
 
     @classmethod
     def setUpClass(cls):
@@ -19,6 +22,36 @@ class TestGreenrxScanQueue(HttpCase):
             "name": "Queue-Testartikel", "is_storable": True, "tracking": "lot", "use_expiration_date": True,
             "barcode": gs1.pzn_to_gtin(PZN), "plcs_pzn": PZN,
         })
+
+    def _ticket(self, name, qty):
+        res = self.env["plcs.greenrx.ticket"].api_upsert([{
+            "name": name, "partner_name": "Queue-Apotheke",
+            "lines": [{"ticket_number": "95" + name[-4:], "pzn": PZN, "batch": "QLOT", "qty": qty}],
+        }])
+        self.assertFalse(res["errors"], res)
+        return self.env["plcs.greenrx.ticket"].search([("name", "=", name)])
+
+    def _box(self, ticket, box_code, serials, user, close=True):
+        """Box befüllen; mit close=True bis zum Abschluss, sonst bis zum Schritt Drucken."""
+        Box = self.env["plcs.greenrx.box"].with_user(user)
+        box = Box.browse(Box.grx_open_box(ticket.id, box_code)["id"])
+        for sn in serials:
+            self.assertIn(box.grx_scan(pack(sn))["status"], ("ok", "warning"))
+        box.grx_to_check()
+        box.grx_save_check(answers={f: "ja" for f in ("q_damage", "q_temp_controlled", "q_temp_log",
+                                                       "q_manufacturer", "q_storage_proof", "q_seal")})
+        box.grx_save_check(ampel=box.ampel_suggest, note="Test")
+        box.grx_to_print()
+        box.grx_print()
+        if close:
+            box.grx_confirm_signed(True)
+            box.grx_close()
+        return box
+
+
+@tagged("post_install", "-at_install", "plcs_greenrx")
+class TestGreenrxScanQueue(GreenrxUiCase):
+    """Scan-Oberfläche im Browser: schnelle Scans gehen nicht verloren (Review-Befund 1)."""
 
     def test_five_fast_scans_all_arrive(self):
         # Die Tour scannt diese GTIN fest codiert
@@ -39,3 +72,31 @@ class TestGreenrxScanQueue(HttpCase):
         self.assertEqual(sorted(box.scan_ids.filtered("accepted").mapped("serial")),
                          ["QUEUE1", "QUEUE2", "QUEUE3", "QUEUE4", "QUEUE5"])
         self.assertEqual(len(box.scan_ids), 5, "jeder Scan genau einmal verarbeitet")
+
+
+@tagged("post_install", "-at_install", "plcs_greenrx")
+class TestGreenrxPackageFinish(GreenrxUiCase):
+    """„Paket fertig“ in Schritt 2: offene Boxen werden genannt, die Begründung ist sichtbar (1.3.1)."""
+
+    def test_finish_reports_open_box_of_other_user(self):
+        lager = new_test_user(self.env, login="grx_lager_fertig", name="Lager Fertig",
+                              groups="plcs_greenrx.group_grx_user")
+        ticket = self._ticket("V-FIN-OPEN", qty=3)
+        self._box(ticket, "GX160", ["F1"], self.admin)
+        self._box(ticket, "GX161", ["F2"], lager, close=False)  # bleibt im Schritt Drucken
+
+        self.start_tour("/odoo/action-plcs_greenrx.action_grx_app", "plcs_greenrx_finish_open_box", login="admin")
+
+        ticket.invalidate_recordset()
+        self.assertEqual(ticket.state, "in_progress")
+
+    def test_finish_with_deviation_from_step_2(self):
+        ticket = self._ticket("V-FIN-DEV", qty=1)
+        self._box(ticket, "GX162", ["D1", "D2"], self.admin)
+
+        self.start_tour("/odoo/action-plcs_greenrx.action_grx_app", "plcs_greenrx_finish_deviation", login="admin")
+
+        ticket.invalidate_recordset()
+        self.assertEqual(ticket.state, "done")
+        self.assertEqual(ticket.deviation_note, "Eine Packung mehr im Paket als angemeldet")
+        self.assertEqual(ticket.picking_id.state, "done")

@@ -32,7 +32,7 @@ Umgesetzt nach dem Entwurf „PLCS Lager-Oberfläche“ (Handy und PC mit Handsc
    - **Jede Änderung nach dem Druck macht den Ausdruck ungültig** (Zurück, Antworten, Ampel, Bemerkung, Packungen scannen oder entfernen). Dann ist ein neuer Druck Pflicht, und die Bestätigung muss neu gesetzt werden.
    - Odoo zählt die Drucke. Ein Nachdruck trägt auf der KabQ-Checkliste **„Neuausdruck Nr. X“** mit Datum und Uhrzeit.
    - „Box abschließen“ lehnt ab, wenn die Box seit dem letzten Druck geändert wurde.
-6. **Nächste Box oder Paket fertig:** Bei „Paket fertig“ wird der Eingang gebucht. Grün und Gelb landen in GreenRX/Quarantäne, Rot im GreenRX/Sperrlager. Weicht Soll von Ist ab, ist eine Begründung Pflicht.
+6. **Nächste Box oder Paket fertig:** Bei „Paket fertig“ wird der Eingang gebucht. Grün und Gelb landen in GreenRX/Quarantäne, Rot im GreenRX/Sperrlager. Weicht Soll von Ist ab, ist eine Begründung Pflicht. Ist noch eine Box offen (auch von einer anderen Person), nennt Odoo Box, Schritt und Person. Die Box lässt sich über ihre Box-Nummer (Scan oder Handeingabe) fortsetzen, als VP auch die Box einer anderen Person.
 
 Tasten am PC: **F8** Drucken, **F9** Weiter bzw. Box abschließen, **Esc** Meldung schließen.
 
@@ -101,7 +101,7 @@ Danach:
 odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --stop-after-init
 ```
 
-41 automatische Tests decken ab:
+45 automatische Tests decken ab:
 
 - den GS1/IFA-Parser und den Retourenschein-QR (auch zerteilt durch den Handscanner),
 - den ganzen Ablauf von Ticket bis VP-Freigabe,
@@ -114,7 +114,8 @@ odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --st
 - die Schnittstelle (mit simuliertem GreenRX-ERP),
 - ungültigen Ausdruck nach Änderungen, Neuausdruck und Abschluss-Sperre,
 - die Suche über mehr als 1.000 offene Vorgänge,
-- 5 Scans direkt hintereinander in der Scan-Oberfläche (Browser-Test, `TestGreenrxScanQueue`; braucht Chrome).
+- 5 Scans direkt hintereinander in der Scan-Oberfläche (Browser-Test, `TestGreenrxScanQueue`; braucht Chrome),
+- 
 
 Zusätzlich prüft `e2e/playwright_scan_queue.py` mit Playwright gegen einen laufenden Server, dass 5 schnelle Scans alle ankommen:
 

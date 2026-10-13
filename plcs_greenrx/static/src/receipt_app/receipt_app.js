@@ -279,6 +279,7 @@ export class GreenRxReceiptApp extends Component {
             const data = await this.call("plcs.greenrx.ticket", "grx_resume", [[ticketId]]);
             this.state.ticket = data.ticket;
             this.state.screen = "step";
+            this.state.askDeviation = false;
             if (data.box) {
                 this.applyBox(data.box);
             } else {
@@ -693,10 +694,30 @@ export class GreenRxReceiptApp extends Component {
     }
 
     async finishPackage(withNote = false) {
-        const ticket = this.state.ticket;
+        // aktuellen Stand holen: Boxen anderer Personen können sich inzwischen geändert haben
+        const fresh = await this.run(() => this.call("plcs.greenrx.ticket", "grx_data", [[this.state.ticket.id]]));
+        if (!fresh) {
+            return;
+        }
+        this.state.ticket = fresh;
+        const ticket = fresh;
+        const openBoxes = (ticket.boxes || []).filter((b) => ["scan", "check", "print"].includes(b.state));
+        if (openBoxes.length) {
+            this.state.askDeviation = false;
+            this.showError(
+                _t(
+                    "Noch nicht abgeschlossen: %s. Box-Nummer scannen oder von Hand eingeben, dann abschließen oder abbrechen.",
+                    openBoxes.map((b) => `${b.box} (${b.state_label}, ${b.user})`).join(", ")
+                ),
+                _t("Paket noch nicht fertig")
+            );
+            return;
+        }
         const deviations = (ticket.soll_ist || []).filter((r) => r.status !== "ok");
         if (deviations.length && !withNote) {
             this.state.askDeviation = true;
+            this.state.flash = null;
+            setTimeout(() => document.getElementById("grx_dev")?.focus(), 50);
             return;
         }
         if (withNote && !(this.state.deviationNote || "").trim()) {
