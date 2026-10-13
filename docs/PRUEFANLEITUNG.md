@@ -64,7 +64,8 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
 
 ## Hinweise
 
-- Die Packungscodes sind Testdaten mit Präfix `TST…`. Eine Seriennummer lässt sich nur einmal erfassen. Für einen zweiten Durchlauf `python3 docs/make_testcodes.py` mit neuen Nummern ausführen.
+- Die Packungscodes sind Testdaten mit Präfix `TST…`. Eine Seriennummer lässt sich nur einmal erfassen.
+- Weitere Testbögen: `python3 docs/make_testcodes.py <Vorgang> --box <erste freie Box>` erzeugt `docs/testcodes_<Vorgang>.pdf` mit neuen Seriennummern, z. B. `docs/testcodes_V202601607.pdf` (FORXIGA 5 mg, 3 Packungen, Boxen GX004–GX006).
 - Die Vorgänge **V202601692** und **V202601693** sind ATIV-Testvorgänge aus dem ERP.
 - **V202601583, V202601584 und V202601618** haben im ERP kein Ticket. Sie wurden ohne Ticketnummer übernommen.
 - Die Schnittstelle zum GreenRX-ERP ist installiert, aber nicht verbunden. Für den Abruf fehlen ein API-Benutzer und die Anpassung an die aktuelle ERP-Struktur (Gutschrift/Vorgang).
