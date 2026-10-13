@@ -233,9 +233,9 @@ class PlcsGreenrxTicket(models.Model):
                 "plcs_grx_ticket_id": self.id,
                 "company_id": self.company_id.id,
             })
-            self.picking_id = picking
+            self.sudo().picking_id = picking
         if self.state == "open":
-            self.state = "in_progress"
+            self.sudo().state = "in_progress"
         return self._grx_ui_data()
 
     def grx_data(self):
@@ -272,13 +272,13 @@ class PlcsGreenrxTicket(models.Model):
         vals = {"state": "done"}
         if deviations:
             vals["deviation_note"] = deviation_note
-            self.message_post(body=self.env._(
+            self.sudo().message_post(body=self.env._(
                 "Paket mit Soll/Ist-Abweichung abgeschlossen: %(dev)s. Begründung: %(note)s",
                 dev="; ".join("%s: %s" % (r["product"], r["status_text"]) for r in deviations),
                 note=deviation_note))
-        self.write(vals)
+        self.sudo().write(vals)
         for box in boxes.filtered(lambda b: b.state in ("to_release", "blocked")):
-            box.message_post(body=self.env._("Eingang %s gebucht. Box wartet auf die VP.", picking.name))
+            box.sudo().message_post(body=self.env._("Eingang %s gebucht. Box wartet auf die VP.", picking.name))
         return self._grx_ui_data()
 
     def action_cancel(self):

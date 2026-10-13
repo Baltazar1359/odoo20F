@@ -232,7 +232,7 @@ class PlcsGreenrxBox(models.Model):
         if reason:
             raise UserError(self.env._("Box %(box)s ist nicht leer. %(reason)s Bitte eine leere Box nehmen.",
                                        box=name, reason=reason))
-        box = self.create({
+        box = self.sudo().create({
             "ticket_id": ticket.id,
             "package_id": package.id,
             "box_manual": bool(manual),
@@ -252,7 +252,7 @@ class PlcsGreenrxBox(models.Model):
         prefix = company.plcs_grx_box_prefix or "GX"
 
         def reject(result, title, message, level="error"):
-            Scan.create(dict(log, result=result, message=message, accepted=False))
+            Scan.sudo().create(dict(log, result=result, message=message, accepted=False))
             return {"status": level, "title": title, "message": message, "box": self._grx_ui_data()}
 
         if gs1.parse_box_code(raw, prefix=prefix):
@@ -335,8 +335,8 @@ class PlcsGreenrxBox(models.Model):
                 new=parsed["expiry"].strftime("%m/%Y"), old=self.expiry_date.strftime("%m/%Y")))
 
         if not self.product_id:
-            self.write({"product_id": product.id, "batch": parsed["batch"], "expiry_date": parsed["expiry"]})
-        scan = Scan.create(dict(log, result="ok", accepted=True))
+            self.sudo().write({"product_id": product.id, "batch": parsed["batch"], "expiry_date": parsed["expiry"]})
+        scan = Scan.sudo().create(dict(log, result="ok", accepted=True))
         result = {"status": "ok", "title": self.env._("Packung erfasst"),
                   "message": self.env._("SN %(sn)s · Ch. %(ch)s · Verf. %(exp)s",
                                         sn=serial, ch=parsed["batch"], exp=parsed["expiry"].strftime("%m/%Y")),
@@ -356,10 +356,10 @@ class PlcsGreenrxBox(models.Model):
         scan = self.scan_ids.filtered(lambda s: s.id == scan_id and s.accepted)
         if not scan:
             raise UserError(self.env._("Diese Packung ist nicht in der Box."))
-        scan.write({"accepted": False, "result": "removed",
+        scan.sudo().write({"accepted": False, "result": "removed",
                     "message": self.env._("Wieder aus der Box genommen von %s", self.env.user.name)})
         if not self.scan_ids.filtered("accepted"):
-            self.write({"product_id": False, "batch": False, "expiry_date": False})
+            self.sudo().write({"product_id": False, "batch": False, "expiry_date": False})
         return self._grx_ui_data()
 
     def grx_to_check(self):
@@ -368,16 +368,16 @@ class PlcsGreenrxBox(models.Model):
         self._grx_check_owner()
         if not self.qty:
             raise UserError(self.env._("Erst mindestens eine Packung scannen."))
-        self.state = "check"
+        self.sudo().state = "check"
         return self._grx_ui_data()
 
     def grx_back(self):
         self.ensure_one()
         self._grx_check_owner()
         if self.state == "check":
-            self.state = "scan"
+            self.sudo().state = "scan"
         elif self.state == "print":
-            self.write({"state": "check", "signed_confirmed": False})
+            self.sudo().write({"state": "check", "signed_confirmed": False})
         else:
             raise UserError(self.env._("Zurück ist in diesem Schritt nicht möglich."))
         return self._grx_ui_data()
@@ -398,10 +398,10 @@ class PlcsGreenrxBox(models.Model):
             vals["ampel"] = ampel or False
         if note is not None:
             vals["note"] = note or False
-        self.write(vals)
+        self.sudo().write(vals)
         # Ampel darf nicht milder sein als der Vorschlag
         if self.ampel and AMPEL_RANK[self.ampel] < AMPEL_RANK[self.ampel_suggest]:
-            self.ampel = False
+            self.sudo().ampel = False
         return self._grx_ui_data()
 
     def grx_to_print(self):
@@ -419,7 +419,7 @@ class PlcsGreenrxBox(models.Model):
                                        a=AMPEL_SHORT[self.ampel], s=AMPEL_SHORT[level]))
         if self.ampel != "gruen" and not reasons and not (self.note or "").strip():
             raise UserError(self.env._("Bitte einen Grund eintragen (die Ampel ist strenger als der Vorschlag)."))
-        self.write({"state": "print", "checked_at": fields.Datetime.now(), "signed_confirmed": False})
+        self.sudo().write({"state": "print", "checked_at": fields.Datetime.now(), "signed_confirmed": False})
         return self._grx_ui_data()
 
     def grx_print(self):
@@ -432,7 +432,7 @@ class PlcsGreenrxBox(models.Model):
             "printed_by": self.env.user.id,
             "print_count": self.print_count + 1,
         })
-        self.message_post(body=self.env._("Box-Dokumente gedruckt (Druck Nr. %s).", self.print_count))
+        self.sudo().message_post(body=self.env._("Box-Dokumente gedruckt (Druck Nr. %s).", self.print_count))
         return self.env.ref("plcs_greenrx.action_report_grx_box_documents").report_action(self)
 
     def grx_confirm_signed(self, value=True):
@@ -441,7 +441,7 @@ class PlcsGreenrxBox(models.Model):
         self._grx_check_owner()
         if value and not self.printed_at:
             raise UserError(self.env._("Erst die Dokumente drucken."))
-        self.signed_confirmed = bool(value)
+        self.sudo().signed_confirmed = bool(value)
         return self._grx_ui_data()
 
     def grx_close(self):
@@ -478,7 +478,7 @@ class PlcsGreenrxBox(models.Model):
             "expiration_date": exp_dt,
         } for s in scans])
         for scan, lot in zip(scans, lots):
-            scan.lot_id = lot
+            scan.sudo().lot_id = lot
         move = self.env["stock.move"].create({
             "product_id": self.product_id.id,
             "product_uom_qty": len(lots),
@@ -501,8 +501,8 @@ class PlcsGreenrxBox(models.Model):
         move._action_confirm()
         move.picked = True
         state = "blocked" if self.ampel == "rot" else "to_release"
-        self.write({"state": state, "closed_at": fields.Datetime.now(), "move_id": move.id})
-        self.message_post(body=self.env._(
+        self.sudo().write({"state": state, "closed_at": fields.Datetime.now(), "move_id": move.id})
+        self.sudo().message_post(body=self.env._(
             "Box abgeschlossen: %(n)s × %(p)s, Charge %(ch)s, Ampel %(a)s → %(loc)s.",
             n=len(lots), p=self.product_id.display_name, ch=self.batch,
             a=AMPEL_SHORT[self.ampel], loc=dest.display_name))
@@ -513,10 +513,10 @@ class PlcsGreenrxBox(models.Model):
         self.ensure_one()
         self._grx_check_state(*OPEN_STATES)
         self._grx_check_owner()
-        self.scan_ids.filtered("accepted").write({"accepted": False, "result": "removed",
+        self.sudo().scan_ids.filtered("accepted").write({"accepted": False, "result": "removed",
                                                   "message": self.env._("Erfassung abgebrochen")})
-        self.state = "cancel"
-        self.message_post(body=self.env._("Erfassung abgebrochen von %s.", self.env.user.name))
+        self.sudo().state = "cancel"
+        self.sudo().message_post(body=self.env._("Erfassung abgebrochen von %s.", self.env.user.name))
         return self.ticket_id._grx_ui_data()
 
     # ------------------------------------------------------------------
@@ -609,9 +609,9 @@ class PlcsGreenrxBox(models.Model):
             raise UserError(self.env._("Gesperrte Box freigeben: Bitte eine Begründung angeben."))
         config = self.company_id._plcs_grx_config()
         picking = self.sudo()._grx_internal_move(config.plcs_grx_release_type_id, config.plcs_grx_stock_location_id, note)
-        self.write({"state": "released", "vp_user_id": self.env.user.id, "vp_date": fields.Datetime.now(),
+        self.sudo().write({"state": "released", "vp_user_id": self.env.user.id, "vp_date": fields.Datetime.now(),
                     "vp_reason": note or False, "vp_picking_id": picking.id})
-        self.message_post(body=self.env._("Freigegeben durch VP %(vp)s → %(loc)s (%(p)s).",
+        self.sudo().message_post(body=self.env._("Freigegeben durch VP %(vp)s → %(loc)s (%(p)s).",
                                           vp=self.env.user.name, loc=config.plcs_grx_stock_location_id.display_name,
                                           p=picking.name))
         return self._grx_ui_data()
@@ -627,9 +627,9 @@ class PlcsGreenrxBox(models.Model):
         picking = False
         if self.location_id != config.plcs_grx_blocked_location_id:
             picking = self.sudo()._grx_internal_move(config.plcs_grx_block_type_id, config.plcs_grx_blocked_location_id, reason)
-        self.write({"state": "blocked", "vp_user_id": self.env.user.id, "vp_date": fields.Datetime.now(),
+        self.sudo().write({"state": "blocked", "vp_user_id": self.env.user.id, "vp_date": fields.Datetime.now(),
                     "vp_reason": reason, "vp_picking_id": picking.id if picking else False})
-        self.message_post(body=self.env._("Gesperrt durch VP %(vp)s: %(r)s", vp=self.env.user.name, r=reason))
+        self.sudo().message_post(body=self.env._("Gesperrt durch VP %(vp)s: %(r)s", vp=self.env.user.name, r=reason))
         return self._grx_ui_data()
 
     # ------------------------------------------------------------------

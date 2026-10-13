@@ -1,12 +1,9 @@
 id,name,model_id,group_id/id,operation,domain
-access_grx_ticket_user,grx.ticket.user,plcs.greenrx.ticket,group_grx_user,cru,
 access_grx_ticket_stock_user,grx.ticket.stock.user,plcs.greenrx.ticket,stock.group_stock_user,r,
 access_grx_ticket_manager,grx.ticket.manager,plcs.greenrx.ticket,stock.group_stock_manager,crud,
-access_grx_ticket_line_user,grx.ticket.line.user,plcs.greenrx.ticket.line,group_grx_user,crud,
 access_grx_ticket_line_stock_user,grx.ticket.line.stock.user,plcs.greenrx.ticket.line,stock.group_stock_user,r,
-access_grx_box_user,grx.box.user,plcs.greenrx.box,group_grx_user,cru,
+access_grx_ticket_line_manager,grx.ticket.line.manager,plcs.greenrx.ticket.line,stock.group_stock_manager,crud,
 access_grx_box_stock_user,grx.box.stock.user,plcs.greenrx.box,stock.group_stock_user,r,
-access_grx_scan_user,grx.scan.user,plcs.greenrx.scan,group_grx_user,cru,
 access_grx_scan_stock_user,grx.scan.stock.user,plcs.greenrx.scan,stock.group_stock_user,r,
 access_grx_connector_manager,grx.connector.manager,plcs.greenrx.connector,stock.group_stock_manager,crud,
 rule_grx_ticket_company,GreenRX-Ticket: Firma,plcs.greenrx.ticket,,crud,"[('company_id', 'in', company_ids)]"

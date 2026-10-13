@@ -331,3 +331,17 @@ class TestGreenrxFlow(TransactionCase):
         self.assertEqual(box.grx_scan(raw)["status"], "error")
         self.company.plcs_grx_allow_heuristic = True
         self.assertEqual(box.grx_scan(raw)["status"], "ok")
+
+    def test_no_direct_writes(self):
+        """Status und Ergebnis lassen sich nicht an den Regeln vorbei per API setzen."""
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 1}])
+        box = self._fill_box(ticket, "GX100", self.gtin_a, ["W1"])
+        with self.assertRaises(AccessError):
+            box.write({"state": "released"})
+        with self.assertRaises(AccessError):
+            box.scan_ids.write({"accepted": False})
+        with self.assertRaises(AccessError):
+            ticket.with_user(self.lager).write({"state": "done"})
+        with self.assertRaises(AccessError):
+            self.env["plcs.greenrx.box"].with_user(self.lager).create(
+                {"ticket_id": ticket.id, "package_id": box.package_id.id})
