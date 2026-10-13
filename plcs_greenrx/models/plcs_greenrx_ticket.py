@@ -169,6 +169,52 @@ class PlcsGreenrxTicket(models.Model):
         found.sort(key=lambda x: x[0])
         return [d for _rank, d in found[:limit]]
 
+    @api.model
+    def grx_home(self):
+        """Startseite der Scan-Oberfläche: was ist offen, was ist als Nächstes dran."""
+        Box = self.env["plcs.greenrx.box"]
+        user = self.env.user
+        in_progress = self.search([("state", "=", "in_progress")], order="write_date desc", limit=30)
+        rows = []
+        for ticket in in_progress:
+            open_box = ticket.box_ids.filtered(lambda b: b.state in ("scan", "check", "print"))
+            mine = open_box.filtered(lambda b: b.user_id == user)
+            rows.append({
+                "id": ticket.id,
+                "name": ticket.name,
+                "picking": ticket.picking_id.name or "",
+                "sender": ticket.display_sender or "",
+                "boxes": len(ticket.box_ids.filtered(lambda b: b.state != "cancel")),
+                "open_box": (mine or open_box)[:1].package_id.name or "",
+                "open_box_state": dict(Box._fields["state"].selection).get((mine or open_box)[:1].state, ""),
+                "mine": bool(mine),
+                "other_user": (open_box - mine)[:1].user_id.name or "",
+            })
+        rows.sort(key=lambda r: (not r["mine"], r["name"]))
+        is_vp = user.has_group("plcs_greenrx.group_grx_vp")
+        vp_count = 0
+        if is_vp:
+            vp_count = Box.search_count([
+                ("state", "in", ("to_release", "blocked")), ("vp_user_id", "=", False),
+                ("ticket_id.picking_id.state", "=", "done"), ("user_id", "!=", user.id)])
+        return {
+            "user": user.name,
+            "initials": "".join(p[:1] for p in (user.name or "?").split()[:2]).upper(),
+            "today": fields.Date.context_today(self).strftime("%d.%m."),
+            "in_progress": rows,
+            "open_count": self.search_count([("state", "=", "open")]),
+            "is_vp": is_vp,
+            "vp_count": vp_count,
+        }
+
+    def grx_resume(self):
+        """In Erfassung befindliches Ticket fortsetzen (ggf. mit offener Box des Benutzers)."""
+        self.ensure_one()
+        data = self.grx_start()
+        box = self.box_ids.filtered(
+            lambda b: b.state in ("scan", "check", "print") and b.user_id == self.env.user)[:1]
+        return {"ticket": data, "box": box._grx_ui_data() if box else False}
+
     def grx_start(self):
         """Paket ausgewählt: Eingang anlegen (falls nötig) und Daten zurückgeben."""
         self.ensure_one()
@@ -231,8 +277,8 @@ class PlcsGreenrxTicket(models.Model):
                 dev="; ".join("%s: %s" % (r["product"], r["status_text"]) for r in deviations),
                 note=deviation_note))
         self.write(vals)
-        boxes.filtered(lambda b: b.state in ("to_release", "blocked")).message_post(
-            body=self.env._("Eingang %s gebucht. Box wartet auf die VP.", picking.name))
+        for box in boxes.filtered(lambda b: b.state in ("to_release", "blocked")):
+            box.message_post(body=self.env._("Eingang %s gebucht. Box wartet auf die VP.", picking.name))
         return self._grx_ui_data()
 
     def action_cancel(self):

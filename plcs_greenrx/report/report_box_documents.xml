@@ -1,15 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Ankreuzfeld: checked = True/False -->
-    <template id="grx_cb">
-        <span t-attf-style="display:inline-block;width:12px;height:12px;border:1.3px solid #15181C;vertical-align:-2px;text-align:center;line-height:11px;font-size:11px;font-weight:bold;color:#1E3A8A;">
-            <t t-if="checked">X</t>
-        </span>
-    </template>
-
     <template id="grx_styles">
         <style>
-            .grx { font-family: 'DejaVu Sans', Arial, sans-serif; color: #15181C; font-size: 11.5px; line-height: 1.35; }
+            .grx { font-family: 'DejaVu Sans', Arial, sans-serif; color: #15181C; font-size: 13px; line-height: 1.35; }
             .grx h1 { font-size: 17px; margin: 0 0 6px 0; }
             .grx .odoo { color: #1E3A8A; font-weight: bold; }
             .grx .mono { font-family: 'DejaVu Sans Mono', monospace; }
@@ -22,13 +15,14 @@
             .grx .foot { border-top: 1px solid #15181C; margin-top: 10px; padding-top: 4px; font-size: 9px; color: #374151; }
             .grx .center { text-align: center; }
             .grx .sig { border-bottom: 1px solid #15181C; height: 30px; }
+            .grx .cb { display:inline-block; width:12px; height:12px; border:1.3px solid #15181C; vertical-align:-2px; text-align:center; line-height:11px; font-size:11px; font-weight:bold; color:#1E3A8A; }
             .grx-page { page-break-after: always; }
             .grx-page:last-child { page-break-after: auto; }
         </style>
     </template>
 
     <template id="report_box_documents">
-        <t t-call="web.html_container">
+        <t t-call="web.basic_layout">
             <t t-call="plcs_greenrx.grx_styles"/>
             <t t-foreach="docs" t-as="o">
                 <t t-set="v" t-value="o._grx_report_values()"/>
@@ -62,8 +56,8 @@
                                 <td><t t-out="row['text']"/>
                                     <div t-if="row.get('extra')" style="font-size:10px;margin-top:2px;"><t t-out="row['extra']"/></div>
                                 </td>
-                                <td class="center"><t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="row['value'] == 'ja'"/></t></td>
-                                <td class="center"><t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="row['value'] == 'nein'"/></t></td>
+                                <td class="center"><span class="cb" t-out="'X' if row['value'] == 'ja' else ''"/></td>
+                                <td class="center"><span class="cb" t-out="'X' if row['value'] == 'nein' else ''"/></td>
                                 <td><span class="odoo" t-out="row.get('remark') or ''"/>
                                     <div t-if="row.get('if_no')" style="font-size:10px;"><t t-out="row['if_no']"/></div>
                                 </td>
@@ -73,8 +67,8 @@
                         <t t-foreach="v['rows_eingang']" t-as="row">
                             <tr>
                                 <td t-attf-style="#{'padding-left:18px;' if row.get('sub') else ''}"><t t-out="row['text']"/></td>
-                                <td class="center"><t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="row['value'] == 'ja'"/></t></td>
-                                <td class="center"><t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="row['value'] == 'nein'"/></t></td>
+                                <td class="center"><span class="cb" t-out="'X' if row['value'] == 'ja' else ''"/></td>
+                                <td class="center"><span class="cb" t-out="'X' if row['value'] == 'nein' else ''"/></td>
                                 <td><span class="odoo" t-out="row.get('remark') or ''"/>
                                     <div t-if="row.get('if_no')" style="font-size:10px;"><t t-out="row['if_no']"/></div>
                                 </td>
@@ -90,9 +84,9 @@
                             </td>
                             <td><span class="lbl">Ware nach vollständigem Erfüllen aller Prüfkriterien durch QMB oder VP freigegeben</span>
                                 Ware freigegeben:
-                                ja <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
-                                nein <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
-                                siehe Zusatzblätter <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
+                                ja <span class="cb"/>
+                                nein <span class="cb"/>
+                                siehe Zusatzblätter <span class="cb"/>
                                 <div class="sig"/><span class="lbl">Datum und Unterschrift</span>
                             </td>
                         </tr>
@@ -173,9 +167,9 @@
 
                 <!-- Seite 3: rotes Sperrblatt -->
                 <div t-if="o.ampel == 'rot'" class="grx grx-page">
-                    <div style="border:9px solid #B42318;">
+                    <div style="border:9px solid #B42318;min-height:1180px;">
                         <div style="background:#B42318;color:#FFFFFF;padding:10px 20px 14px;">
-                            <div style="font-size:70px;font-weight:bold;letter-spacing:3px;line-height:1;">GESPERRT</div>
+                            <div style="font-size:96px;font-weight:bold;letter-spacing:3px;line-height:1;">GESPERRT</div>
                             <div style="font-size:17px;font-weight:bold;">Nicht verwenden · Nicht ausliefern · Nicht umlagern</div>
                         </div>
                         <div style="padding:16px 20px;">
@@ -183,7 +177,7 @@
                                 <tr>
                                     <td>
                                         <span style="font-size:12px;">Box</span><br/>
-                                        <span class="mono" style="font-size:64px;font-weight:bold;line-height:1;" t-out="o.package_id.name"/><br/>
+                                        <span class="mono" style="font-size:84px;font-weight:bold;line-height:1;" t-out="o.package_id.name"/><br/>
                                         <span style="font-size:13px;font-weight:bold;">Gesperrt am <t t-out="v['blocked_at']"/> · <t t-out="o.user_id.name"/></span>
                                     </td>
                                     <td style="width:130px;text-align:right;">
@@ -223,9 +217,9 @@
                             <div style="border-top:2px solid #15181C;margin-top:16px;padding-top:8px;font-size:12px;">
                                 <b>Entsperren nur durch VP oder QMB</b><br/>
                                 Entscheidung:
-                                Freigabe <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
-                                Rücksendung <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
-                                Vernichtung <t t-call="plcs_greenrx.grx_cb"><t t-set="checked" t-value="False"/></t>
+                                Freigabe <span class="cb"/>
+                                Rücksendung <span class="cb"/>
+                                Vernichtung <span class="cb"/>
                                 <div class="sig" style="width:320px;"/><span class="lbl">Datum, Unterschrift</span>
                             </div>
                         </div>
@@ -240,7 +234,7 @@
     </template>
 
     <template id="report_box_label">
-        <t t-call="web.html_container">
+        <t t-call="web.basic_layout">
             <t t-call="plcs_greenrx.grx_styles"/>
             <div class="grx">
                 <table style="width:100%;border-collapse:collapse;">

@@ -1,0 +1,488 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- Meldung (ok / warning / info / error) -->
+    <t t-name="plcs_greenrx.Flash">
+        <div t-if="this.state.flash" t-attf-class="o_grx_flash o_grx_flash_{{ this.state.flash.status }}" role="status">
+            <div class="o_grx_flash_text">
+                <div class="o_grx_flash_title" t-out="this.state.flash.title"/>
+                <div class="o_grx_flash_msg" t-out="this.state.flash.message"/>
+            </div>
+            <button type="button" class="o_grx_flash_close" aria-label="Meldung schließen" t-on-click="() => this.clearFlash()">×</button>
+        </div>
+    </t>
+
+    <!-- Seitenleiste / Paketkarte: Paketdaten, Soll/Ist, Boxen -->
+    <t t-name="plcs_greenrx.PackagePanel">
+        <div class="o_grx_card" t-if="this.ticket">
+            <div class="o_grx_kicker">Paket</div>
+            <div class="o_grx_pkg_name" t-out="this.ticket.sender or '—'"/>
+            <div class="o_grx_mono o_grx_muted" t-if="this.ticket.picking" t-out="this.ticket.picking"/>
+            <dl class="o_grx_kv">
+                <div><dt>Kundennr.</dt><dd class="o_grx_mono" t-out="this.ticket.customer_number or '—'"/></div>
+                <div><dt>Referenz</dt><dd class="o_grx_mono" t-out="this.ticket.reference or '—'"/></div>
+                <div><dt>Ticket</dt><dd class="o_grx_mono" t-out="this.ticket.name"/></div>
+                <div><dt>Gutschrift</dt><dd class="o_grx_mono" t-out="this.ticket.credit_note or '—'"/></div>
+            </dl>
+            <table class="o_grx_table" t-if="this.ticket.soll_ist and this.ticket.soll_ist.length">
+                <thead><tr><th>Laut Ticket</th><th class="text-end">Soll</th><th class="text-end">Ist</th><th/></tr></thead>
+                <tbody>
+                    <tr t-foreach="this.ticket.soll_ist" t-as="row" t-key="row_index">
+                        <td t-out="row.product"/>
+                        <td class="text-end" t-out="row.soll"/>
+                        <td class="text-end" t-out="row.ist"/>
+                        <td t-attf-class="o_grx_status o_grx_status_{{ row.status }}" t-out="row.status_text"/>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="o_grx_card" t-if="this.packageBoxes.length">
+            <div class="o_grx_kicker">Boxen in diesem Paket</div>
+            <div class="o_grx_boxrow" t-foreach="this.packageBoxes" t-as="b" t-key="b.id">
+                <span t-attf-class="o_grx_dot o_grx_bg_{{ b.ampel or 'none' }}" aria-hidden="true"/>
+                <span class="o_grx_mono fw-bold" t-out="b.box"/>
+                <span class="flex-grow-1">
+                    <span t-out="b.product or '—'"/>
+                    <span class="o_grx_muted d-block small">Ch. <t t-out="b.batch or '—'"/> · Verf. <t t-out="b.expiry or '—'"/> · <t t-out="b.state_label"/></span>
+                </span>
+                <span class="fw-bold"><t t-out="b.qty"/> Pkg.</span>
+            </div>
+            <div class="o_grx_muted small mt-2" t-out="this.packageTotal"/>
+        </div>
+    </t>
+
+    <t t-name="plcs_greenrx.ReceiptApp">
+        <div class="o_grx" t-att-class="{ 'o_grx_busy': this.state.busy }">
+            <header class="o_grx_top">
+                <div class="o_grx_top_left">
+                    <div class="o_grx_kicker">PLCS Lager<t t-if="this.state.home"> · <t t-out="this.state.home.today"/></t></div>
+                    <h1 class="o_grx_title">
+                        <t t-if="this.state.mode === 'vp'">Freigaben</t>
+                        <t t-elif="this.state.screen === 'home'">Meine Aufgaben</t>
+                        <t t-else="">GreenRX-Eingang</t>
+                    </h1>
+                </div>
+                <div class="o_grx_top_right">
+                    <button type="button" class="o_grx_btn o_grx_btn_ghost" t-if="this.state.mode !== 'vp' and this.state.screen !== 'home'" t-on-click="() => this.goHome()">Meine Aufgaben</button>
+                    <button type="button" class="o_grx_btn o_grx_btn_ghost" t-if="this.state.mode === 'vp' and this.state.screen === 'vp_detail'" t-on-click="() => this.openVp()">Zur Liste</button>
+                    <button type="button" class="o_grx_btn o_grx_btn_ghost" t-on-click="() => this.exitApp()">Odoo</button>
+                </div>
+            </header>
+
+            <!-- ============ Startseite ============ -->
+            <div class="o_grx_body o_grx_single" t-if="this.state.screen === 'home'">
+                <main class="o_grx_main">
+                    <t t-call="plcs_greenrx.Flash"/>
+                    <button type="button" class="o_grx_scanbig" t-on-click="() => this.startNew()">
+                        <span class="o_grx_scanbig_title">Scannen</span>
+                        <span class="o_grx_scanbig_sub">Paketetikett scannen oder Paket suchen – Odoo öffnet den passenden Schritt</span>
+                    </button>
+                    <button type="button" class="o_grx_btn o_grx_btn_ghost w-100 mt-2" t-if="this.cameraSupported" t-on-click="() => this.openCamera()">Mit Kamera scannen</button>
+
+                    <t t-if="this.state.home">
+                        <div class="o_grx_kicker mt-4">In Erfassung</div>
+                        <div class="o_grx_muted" t-if="!this.state.home.in_progress.length">Kein Paket in Erfassung.</div>
+                        <button type="button" class="o_grx_task" t-foreach="this.state.home.in_progress" t-as="t" t-key="t.id"
+                                t-att-class="{ 'o_grx_task_now': t.mine }" t-on-click="() => this.resumeTicket(t.id)">
+                            <span class="flex-grow-1">
+                                <span class="o_grx_kicker o_grx_blue" t-if="t.mine">Jetzt dran</span>
+                                <span class="d-block fw-bold">GreenRX-Eingang <span class="o_grx_mono" t-out="t.picking"/></span>
+                                <span class="d-block o_grx_muted">
+                                    <t t-out="t.sender"/> · Ticket <t t-out="t.name"/>
+                                    <t t-if="t.open_box"> · Box <t t-out="t.open_box"/> (<t t-out="t.open_box_state"/>)</t>
+                                    <t t-if="t.other_user"> · erfasst von <t t-out="t.other_user"/></t>
+                                </span>
+                            </span>
+                            <span class="o_grx_badge"><t t-out="t.boxes"/> Boxen</span>
+                        </button>
+                        <div class="o_grx_kicker mt-4">Danach</div>
+                        <div class="o_grx_task o_grx_task_static">
+                            <span class="flex-grow-1">
+                                <span class="d-block fw-bold">Weitere GreenRX-Pakete</span>
+                                <span class="d-block o_grx_muted">Tickets offen, warten auf Erfassung</span>
+                            </span>
+                            <span class="o_grx_badge" t-out="this.state.home.open_count"/>
+                        </div>
+                        <button type="button" class="o_grx_task" t-if="this.state.home.is_vp" t-on-click="() => this.openVp()">
+                            <span class="flex-grow-1">
+                                <span class="d-block fw-bold">VP-Freigabe</span>
+                                <span class="d-block o_grx_muted">Boxen, die auf deine Entscheidung warten (nicht deine eigenen)</span>
+                            </span>
+                            <span class="o_grx_badge" t-out="this.state.home.vp_count"/>
+                        </button>
+                    </t>
+                </main>
+            </div>
+
+            <!-- ============ Ablauf Wareneingang ============ -->
+            <div class="o_grx_body" t-if="this.state.screen === 'step'">
+                <main class="o_grx_main">
+                    <div class="o_grx_progress" t-if="this.state.step &lt;= 5">
+                        <div class="o_grx_bars">
+                            <span t-foreach="this.progress" t-as="p" t-key="p_index"
+                                  t-att-class="{ 'o_grx_bar': true, 'o_grx_bar_done': p.done or p.active }"/>
+                        </div>
+                        <div class="o_grx_steplabel"><b>Schritt <t t-out="this.stepNo"/> von 5:</b> <t t-out="this.stepLabel"/></div>
+                    </div>
+                    <t t-call="plcs_greenrx.Flash"/>
+
+                    <!-- Schritt 1 -->
+                    <t t-if="this.state.step === 1">
+                        <h2 class="o_grx_h2">Welches Paket liegt vor dir?</h2>
+                        <t t-if="!this.state.selected">
+                            <label class="o_grx_label" for="grx_search">Paketetikett scannen oder suchen</label>
+                            <input id="grx_search" type="search" class="o_grx_input" autocomplete="off"
+                                   placeholder="Apotheke, Kunden-, Referenz- oder Ticketnummer"
+                                   t-ref="this.searchInput"
+                                   t-att-value="this.state.query"
+                                   t-on-input="(ev) => this.onQueryInput(ev)"
+                                   t-on-keydown="(ev) => this.onQueryKeydown(ev)"/>
+                            <div class="o_grx_results" t-if="this.state.searched">
+                                <div class="o_grx_kicker"><t t-out="this.state.results.length"/> Treffer</div>
+                                <button type="button" class="o_grx_result" t-foreach="this.state.results" t-as="r" t-key="r.id"
+                                        t-on-click="() => this.selectTicket(r)">
+                                    <span class="d-flex justify-content-between gap-2">
+                                        <b t-out="r.sender or '—'"/>
+                                        <span class="o_grx_muted small" t-out="r.match"/>
+                                    </span>
+                                    <span class="d-block o_grx_mono small">Kd. <t t-out="r.customer_number or '—'"/> · Ref. <t t-out="r.reference or '—'"/> · Ticket <t t-out="r.name"/></span>
+                                    <span class="d-block small">
+                                        <t t-foreach="r.items" t-as="i" t-key="i_index"><t t-if="i_index"> · </t><t t-out="i.qty"/> × <t t-out="i.product"/></t>
+                                        <b class="ms-1">(<t t-out="r.total"/> Pkg.)</b>
+                                    </span>
+                                </button>
+                                <div class="o_grx_hint o_grx_hint_warn" t-if="!this.state.results.length">
+                                    Kein offenes Ticket gefunden. Schreibweise prüfen oder Lagerleitung fragen.
+                                    Ohne Ticket im GreenRX-ERP das Paket nicht annehmen.
+                                </div>
+                            </div>
+                        </t>
+                        <div class="o_grx_card o_grx_card_sel" t-if="this.state.selected">
+                            <div class="o_grx_pkg_name" t-out="this.state.selected.sender or '—'"/>
+                            <dl class="o_grx_kv">
+                                <div><dt>Kundennummer</dt><dd class="o_grx_mono" t-out="this.state.selected.customer_number or '—'"/></div>
+                                <div><dt>Referenz</dt><dd class="o_grx_mono" t-out="this.state.selected.reference or '—'"/></div>
+                                <div><dt>Ticket</dt><dd class="o_grx_mono" t-out="this.state.selected.name"/></div>
+                                <div><dt>Gutschrift</dt><dd class="o_grx_mono" t-out="this.state.selected.credit_note or '—'"/></div>
+                            </dl>
+                            <div class="o_grx_kicker">Laut Ticket im Paket</div>
+                            <div class="d-flex justify-content-between" t-foreach="this.state.selected.items" t-as="i" t-key="i_index">
+                                <span t-out="i.product"/><b><t t-out="i.qty"/> Pkg.</b>
+                            </div>
+                            <div class="d-flex justify-content-between border-top mt-1 pt-1"><span>Gesamt</span><b><t t-out="this.state.selected.total"/> Packungen</b></div>
+                            <div class="o_grx_hint mt-2">Alle Nummern sind aus dem Ticket übernommen. Bitte nur prüfen, ob es das richtige Paket ist.</div>
+                            <button type="button" class="o_grx_btn o_grx_btn_ghost mt-2" t-on-click="() => this.clearSelection()">Anderes Paket wählen</button>
+                        </div>
+                    </t>
+
+                    <!-- Schritt 2 -->
+                    <t t-if="this.state.step === 2">
+                        <h2 class="o_grx_h2">Leere Box nehmen und ihren QR-Code scannen</h2>
+                        <div class="o_grx_wait" t-if="!this.state.manual">
+                            <div class="o_grx_wait_ring" aria-hidden="true"/>
+                            <div>Warte auf Scan …</div>
+                            <div class="d-flex flex-wrap gap-2 justify-content-center mt-3">
+                                <button type="button" class="o_grx_btn o_grx_btn_ghost" t-if="this.cameraSupported" t-on-click="() => this.openCamera()">Mit Kamera scannen</button>
+                                <button type="button" class="o_grx_btn o_grx_btn_ghost" t-on-click="() => this.toggleManual(true)">Box-Nummer von Hand eingeben</button>
+                            </div>
+                        </div>
+                        <div class="o_grx_card" t-if="this.state.manual">
+                            <label class="o_grx_label" for="grx_manual">Box-Nummer</label>
+                            <input id="grx_manual" type="text" class="o_grx_input o_grx_mono" autocomplete="off" placeholder="z. B. GX012 oder 12"
+                                   t-ref="this.manualInput" t-att-value="this.state.manualValue"
+                                   t-on-input="(ev) => this.onManualInput(ev)" t-on-keydown="(ev) => this.onManualKeydown(ev)"/>
+                            <div class="o_grx_err" t-if="this.state.manualError" t-out="this.state.manualError"/>
+                            <div class="o_grx_hint mt-2">Nur nutzen, wenn der QR-Code nicht lesbar ist. Die Handeingabe wird im Verlauf vermerkt.</div>
+                            <div class="d-flex gap-2 mt-2">
+                                <button type="button" class="o_grx_btn o_grx_btn_ghost" t-on-click="() => this.toggleManual(false)">Abbrechen</button>
+                                <button type="button" class="o_grx_btn o_grx_btn_primary" t-on-click="() => this.confirmManual()">Übernehmen</button>
+                            </div>
+                        </div>
+                        <ul class="o_grx_rules">
+                            <li>Nur Boxen GX001 bis GX200</li>
+                            <li>Die Box muss leer sein</li>
+                            <li>Eine Box = ein Artikel + eine Charge</li>
+                        </ul>
+                    </t>
+
+                    <!-- Schritt 3 -->
+                    <t t-if="this.state.step === 3 and this.box">
+                        <h2 class="o_grx_h2">Jede Packung einzeln scannen und in Box <span class="o_grx_mono" t-out="this.box.box"/> legen</h2>
+                        <div class="o_grx_boxhead">
+                            <div>
+                                <div class="o_grx_kicker">In Box</div>
+                                <div class="o_grx_boxno o_grx_mono" t-out="this.box.box"/>
+                                <div class="o_grx_tag" t-if="this.box.box_manual">Box von Hand eingegeben</div>
+                            </div>
+                            <div class="o_grx_count"><t t-out="this.box.qty"/><span><t t-if="this.box.qty === 1">Packung</t><t t-else="">Packungen</t></span></div>
+                        </div>
+                        <div class="o_grx_card" t-if="this.box.product">
+                            <div class="o_grx_kicker">Artikel · Charge · Verfall (aus dem Scan)</div>
+                            <div class="fw-bold" t-out="this.box.product"/>
+                            <div class="o_grx_mono">Ch. <t t-out="this.box.batch"/> · Verf. <t t-out="this.box.expiry"/></div>
+                            <div class="o_grx_hint mt-1" t-out="this.expectedForBox"/>
+                        </div>
+                        <div class="o_grx_hint" t-if="!this.box.product">
+                            Der erste Scan legt Artikel, Charge und Verfall der Box fest. Alles wird aus dem securPharm-Code gelesen.
+                            Danach passen nur noch Packungen mit gleichem Artikel und gleicher Charge hinein.
+                        </div>
+                        <button type="button" class="o_grx_btn o_grx_btn_ghost w-100 my-2" t-if="this.cameraSupported" t-on-click="() => this.openCamera()">
+                            Mit Kamera scannen (fortlaufend)
+                        </button>
+                        <table class="o_grx_table" t-if="this.box.scans.length">
+                            <thead><tr><th>#</th><th>Seriennummer</th><th>Charge</th><th>Verfall</th><th>Zeit</th><th/></tr></thead>
+                            <tbody>
+                                <tr t-foreach="this.box.scans" t-as="s" t-key="s.id">
+                                    <td t-out="this.box.scans.length - s_index"/>
+                                    <td class="o_grx_mono" t-out="s.serial"/>
+                                    <td class="o_grx_mono" t-out="s.batch"/>
+                                    <td class="o_grx_mono" t-out="s.expiry"/>
+                                    <td class="o_grx_mono o_grx_muted" t-out="s.time"/>
+                                    <td><button type="button" class="o_grx_link" t-on-click="() => this.removeScan(s)" aria-label="Packung entfernen">entfernen</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="o_grx_hint">Jeder Scan speichert in Odoo: Seriennummer, Charge und Verfallsdatum aus dem securPharm-Code. Nichts davon wird getippt.</div>
+                    </t>
+
+                    <!-- Schritt 4 -->
+                    <t t-if="this.state.step === 4 and this.box">
+                        <h2 class="o_grx_h2">Vorprüfung Box <span class="o_grx_mono" t-out="this.box.box"/></h2>
+                        <div class="o_grx_muted mb-2">Deine Antworten werden direkt in die KabQ-Checkliste übernommen.</div>
+                        <div class="o_grx_card">
+                            <div class="o_grx_kicker">Vom System geprüft</div>
+                            <div class="o_grx_check" t-foreach="this.box.sys_checks" t-as="c" t-key="c_index" t-att-class="{ 'o_grx_check_bad': !c.ok }">
+                                <span class="o_grx_check_icon" aria-hidden="true"><t t-if="c.ok">✓</t><t t-else="">!</t></span>
+                                <span t-out="c.label"/>
+                            </div>
+                        </div>
+                        <div class="o_grx_card">
+                            <div class="o_grx_kicker">Deine Sichtprüfung</div>
+                            <div class="o_grx_q" t-foreach="this.box.questions" t-as="q" t-key="q.field">
+                                <div class="o_grx_q_text"><t t-out="q_index + 1"/>. <t t-out="q.text"/></div>
+                                <div class="o_grx_q_btns">
+                                    <button type="button" class="o_grx_yn" t-att-class="{ 'o_grx_yn_ja': q.value === 'ja' }" t-att-aria-pressed="q.value === 'ja' ? 'true' : 'false'" t-on-click="() => this.answer(q, 'ja')">Ja</button>
+                                    <button type="button" class="o_grx_yn" t-att-class="{ 'o_grx_yn_nein': q.value === 'nein' }" t-att-aria-pressed="q.value === 'nein' ? 'true' : 'false'" t-on-click="() => this.answer(q, 'nein')">Nein</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="o_grx_card">
+                            <div class="o_grx_kicker">Ergebnis: Ampel</div>
+                            <div class="o_grx_muted" t-if="!this.allAnswered">Erst alle Fragen beantworten – noch <t t-out="this.box.questions.length - this.answeredCount"/> offen.</div>
+                            <t t-else="">
+                                <div class="mb-2">Vorschlag aus deinen Antworten: <b t-out="this.box.suggest_label"/></div>
+                                <button type="button" t-foreach="this.lights" t-as="l" t-key="l.key"
+                                        t-att-disabled="l.blocked"
+                                        t-attf-class="o_grx_light o_grx_light_{{ l.key }} {{ l.selected ? 'o_grx_light_sel' : '' }}"
+                                        t-on-click="() => this.pickAmpel(l)">
+                                    <span t-attf-class="o_grx_dot o_grx_bg_{{ l.key }}" aria-hidden="true"/>
+                                    <span class="flex-grow-1">
+                                        <b t-out="l.label"/>
+                                        <span class="d-block small" t-if="!l.blocked" t-out="l.desc"/>
+                                        <span class="d-block small" t-if="l.blocked">Nicht möglich: milder als deine Antworten</span>
+                                    </span>
+                                    <span class="o_grx_tag" t-if="l.isSuggest">Vorschlag</span>
+                                </button>
+                                <div class="mt-2" t-if="this.box.reasons.length">
+                                    <div class="o_grx_kicker">Grund (aus deinen Antworten und dem System)</div>
+                                    <div t-foreach="this.box.reasons" t-as="r" t-key="r_index">– <t t-out="r"/></div>
+                                </div>
+                                <div class="mt-2" t-if="this.box.ampel === 'gelb' or this.box.ampel === 'rot'">
+                                    <label class="o_grx_label" for="grx_note">
+                                        <t t-if="this.noteRequired">Grund (Pflicht, weil strenger als der Vorschlag)</t>
+                                        <t t-else="">Bemerkung (optional)</t>
+                                    </label>
+                                    <textarea id="grx_note" class="o_grx_input" rows="2" t-att-value="this.state.noteDraft" t-on-input="(ev) => this.onNoteInput(ev)"/>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
+
+                    <!-- Schritt 5 -->
+                    <t t-if="this.state.step === 5 and this.box">
+                        <h2 class="o_grx_h2">Dokumente drucken und abschließen</h2>
+                        <div t-attf-class="o_grx_amp o_grx_bg_{{ this.box.ampel }}">
+                            <div class="o_grx_kicker">Vorprüfung</div>
+                            <b t-out="this.ampelOf(this.box.ampel).label"/>
+                            <div class="small" t-out="this.ampelOf(this.box.ampel).desc"/>
+                        </div>
+                        <div class="o_grx_card">
+                            <div class="o_grx_kicker">In Box <t t-out="this.box.box"/> liegen</div>
+                            <div class="fw-bold"><t t-out="this.box.qty"/> × <t t-out="this.box.product"/></div>
+                            <div class="o_grx_mono">Charge <t t-out="this.box.batch"/> · Verf. <t t-out="this.box.expiry"/></div>
+                        </div>
+                        <div class="o_grx_card">
+                            <div class="o_grx_kicker">Wird gedruckt – fertig ausgefüllt</div>
+                            <div class="o_grx_doc"><b>KabQ-Checkliste</b><span>Alle Ja/Nein-Kreuze, Charge, Menge, Verfall</span></div>
+                            <div class="o_grx_doc"><b>Anlage Box-Inhalt</b><span><t t-out="this.box.qty"/> Packungen mit Seriennummer und Charge</span></div>
+                            <div class="o_grx_doc o_grx_doc_red" t-if="this.box.ampel === 'rot'"><b>Rotes Sperrblatt</b><span>Gut sichtbar an die Box hängen</span></div>
+                        </div>
+                        <div t-if="this.box.printed_at" class="o_grx_card">
+                            <div class="o_grx_ok">Gedruckt um <t t-out="this.box.printed_at"/></div>
+                            <label class="o_grx_confirm">
+                                <input type="checkbox" t-att-checked="this.box.signed_confirmed" t-on-change="(ev) => this.toggleSigned(ev)"/>
+                                <span>
+                                    <t t-if="this.box.ampel === 'rot'">Ausdruck geprüft, unterschrieben und rotes Sperrblatt an die Box gehängt</t>
+                                    <t t-else="">Ausdruck geprüft und unterschrieben</t>
+                                </span>
+                            </label>
+                        </div>
+                        <div class="o_grx_hint" t-else="">Danach: Ausdruck kurz prüfen und unterschreiben. Die Unterschrift bleibt von Hand.</div>
+                    </t>
+
+                    <!-- Schritt 6: Box abgeschlossen -->
+                    <t t-if="this.state.step === 6">
+                        <div t-if="this.state.lastClosed" t-attf-class="o_grx_done {{ this.state.lastClosed.ampel === 'rot' ? 'o_grx_done_red' : '' }}">
+                            <h2 class="o_grx_h2 mb-1">
+                                <t t-if="this.state.lastClosed.ampel === 'rot'">Box <t t-out="this.state.lastClosed.box"/> ist gesperrt</t>
+                                <t t-else="">Box <t t-out="this.state.lastClosed.box"/> ist erfasst</t>
+                            </h2>
+                            <div t-if="this.state.lastClosed.ampel === 'rot'">Häng das rote Sperrblatt gut sichtbar an die Box und stell sie ins Sperrregal.</div>
+                            <div t-elif="this.state.lastClosed.ampel === 'gelb'">Stell die Box ins Quarantäne-Regal und leg die unterschriebene Checkliste dazu. Die Auffälligkeit ist vermerkt.</div>
+                            <div t-else="">Stell die Box ins Quarantäne-Regal und leg die unterschriebene Checkliste dazu.</div>
+                            <div class="o_grx_muted mt-1">
+                                <t t-if="this.state.lastClosed.ampel === 'rot'">Die VP sieht die Box als gesperrt und entscheidet über das weitere Vorgehen.</t>
+                                <t t-else="">Die VP bekommt die Box mit Ampel und Prüfergebnis zur Freigabe, sobald das Paket fertig ist.</t>
+                            </div>
+                        </div>
+                        <h2 class="o_grx_h2" t-else="">Nächste Box oder Paket fertig</h2>
+                        <div class="o_grx_hint">Nächste Box: einfach den Box-QR scannen oder unten tippen.</div>
+                        <div class="o_grx_card o_grx_card_warn" t-if="this.state.askDeviation">
+                            <div class="o_grx_kicker">Soll und Ist stimmen nicht überein</div>
+                            <t t-foreach="this.ticket.soll_ist" t-as="row" t-key="row_index">
+                                <div t-if="row.status !== 'ok'"><t t-out="row.product"/>: <b t-out="row.status_text"/></div>
+                            </t>
+                            <label class="o_grx_label mt-2" for="grx_dev">Begründung (Pflicht)</label>
+                            <textarea id="grx_dev" class="o_grx_input" rows="2" t-att-value="this.state.deviationNote" t-on-input="(ev) => this.onDeviationInput(ev)"/>
+                            <div class="d-flex gap-2 mt-2">
+                                <button type="button" class="o_grx_btn o_grx_btn_ghost" t-on-click="() => this.state.askDeviation = false">Zurück</button>
+                                <button type="button" class="o_grx_btn o_grx_btn_primary" t-on-click="() => this.finishPackage(true)">Mit Begründung abschließen</button>
+                            </div>
+                        </div>
+                        <div class="o_grx_only_mobile"><t t-call="plcs_greenrx.PackagePanel"/></div>
+                    </t>
+                </main>
+                <aside class="o_grx_side">
+                    <t t-call="plcs_greenrx.PackagePanel"/>
+                    <div class="o_grx_card o_grx_keys">
+                        <div class="o_grx_kicker">Tasten (PC)</div>
+                        <div><kbd>F8</kbd> Drucken</div>
+                        <div><kbd>F9</kbd> Weiter / Box abschließen</div>
+                        <div><kbd>Esc</kbd> Meldung schließen</div>
+                    </div>
+                </aside>
+            </div>
+
+            <!-- Aktionsleiste unten -->
+            <footer class="o_grx_actions" t-if="this.state.screen === 'step'">
+                <t t-if="this.state.step === 1">
+                    <button type="button" class="o_grx_btn o_grx_btn_primary o_grx_btn_big" t-att-disabled="!this.state.selected" t-on-click="() => this.confirmTicket()">
+                        <t t-if="this.state.selected">Richtig – weiter: Box scannen</t><t t-else="">Erst Paket auswählen</t>
+                    </button>
+                </t>
+                <t t-if="this.state.step === 2">
+                    <button type="button" class="o_grx_btn o_grx_btn_ghost o_grx_btn_big" t-on-click="() => this.goHome()">Zurück</button>
+                    <button type="button" class="o_grx_btn o_grx_btn_dark o_grx_btn_big" t-if="this.packageBoxes.length" t-on-click="() => this.finishPackage(false)">Paket fertig</button>
+                </t>
+                <t t-if="this.state.step === 3 and this.box">
+                    <button type="button" class="o_grx_btn o_grx_btn_ghost" t-on-click="() => this.cancelBox()">Box abbrechen</button>
+                    <button type="button" class="o_grx_btn o_grx_btn_primary o_grx_btn_big" t-att-disabled="!this.box.qty" t-on-click="() => this.toCheck()">
+                        <t t-if="this.box.qty">Box ist voll – weiter zur Vorprüfung (F9)</t><t t-else="">Erst mindestens 1 Packung scannen</t>
+                    </button>
+                </t>
+                <t t-if="this.state.step === 4 and this.box">
+                    <button type="button" class="o_grx_btn o_grx_btn_ghost" t-on-click="() => this.back()">Zurück</button>
+                    <button type="button" class="o_grx_btn o_grx_btn_primary o_grx_btn_big" t-att-disabled="!this.canProceedCheck" t-on-click="() => this.toPrint()">
+                        <t t-if="this.canProceedCheck">Weiter: Dokumente (F9)</t><t t-else="" t-out="this.proceedHint"/>
+                    </button>
+                </t>
+                <t t-if="this.state.step === 5 and this.box">
+                    <button type="button" class="o_grx_btn o_grx_btn_ghost" t-on-click="() => this.back()">Zurück</button>
+                    <button type="button" class="o_grx_btn o_grx_btn_dark o_grx_btn_big" t-if="!this.box.printed_at" t-on-click="() => this.printDocs()">
+                        <t t-if="this.box.ampel === 'rot'">Alle 3 Blätter drucken (F8)</t><t t-else="">Beide Blätter drucken (F8)</t>
+                    </button>
+                    <button type="button" class="o_grx_btn o_grx_btn_ghost" t-if="this.box.printed_at" t-on-click="() => this.printDocs()">Erneut drucken</button>
+                    <button type="button" class="o_grx_btn o_grx_btn_primary o_grx_btn_big" t-if="this.box.printed_at" t-att-disabled="!this.box.signed_confirmed" t-on-click="() => this.closeBox()">
+                        <t t-if="this.box.signed_confirmed">Box abschließen (F9)</t><t t-else="">Erst Ausdruck bestätigen</t>
+                    </button>
+                </t>
+                <t t-if="this.state.step === 6 and !this.state.askDeviation">
+                    <button type="button" class="o_grx_btn o_grx_btn_primary o_grx_btn_big" t-on-click="() => this.nextBox()">Nächste Box für dieses Paket</button>
+                    <button type="button" class="o_grx_btn o_grx_btn_dark o_grx_btn_big" t-on-click="() => this.finishPackage(false)">Paket fertig – zu Meine Aufgaben</button>
+                </t>
+            </footer>
+
+            <!-- ============ VP: Liste ============ -->
+            <div class="o_grx_body o_grx_single" t-if="this.state.screen === 'vp_list'">
+                <main class="o_grx_main">
+                    <t t-call="plcs_greenrx.Flash"/>
+                    <t t-if="this.state.vp">
+                        <div class="o_grx_hint o_grx_hint_warn" t-if="!this.state.vp.is_vp">Du bist nicht in der Gruppe „GreenRX: VP-Freigabe“. Freigeben ist nicht möglich.</div>
+                        <div class="mb-2"><b><t t-out="this.state.vp.boxes.length"/> <t t-if="this.state.vp.boxes.length === 1">Box wartet</t><t t-else="">Boxen warten</t></b> auf deine Entscheidung</div>
+                        <button type="button" class="o_grx_task" t-foreach="this.state.vp.boxes" t-as="b" t-key="b.id" t-on-click="() => this.openVpBox(b)">
+                            <span t-attf-class="o_grx_dot o_grx_bg_{{ b.ampel or 'none' }}" aria-hidden="true"/>
+                            <span class="o_grx_mono fw-bold fs-5" t-out="b.box"/>
+                            <span class="flex-grow-1">
+                                <span class="d-block fw-bold"><t t-out="b.ampel_short"/> · <t t-out="b.product"/> · <t t-out="b.qty"/> Pkg.</span>
+                                <span class="d-block o_grx_muted small">
+                                    <t t-out="b.ticket.sender"/> · Ticket <t t-out="b.ticket.name"/> · erfasst von <t t-out="b.user"/>
+                                    <t t-if="b.reasons.length"> · <t t-out="b.reasons.join(', ')"/></t>
+                                </span>
+                            </span>
+                            <span class="o_grx_badge" t-if="b.state === 'blocked'">gesperrt</span>
+                        </button>
+                        <div class="o_grx_muted small mt-2">Boxen, die du selbst erfasst hast, erscheinen hier nicht (4-Augen-Prinzip)<t t-if="this.state.vp.own_count">: <t t-out="this.state.vp.own_count"/> eigene Box(en) warten auf eine andere VP</t>.</div>
+                    </t>
+                </main>
+            </div>
+
+            <!-- ============ VP: Detail ============ -->
+            <div class="o_grx_body o_grx_single" t-if="this.state.screen === 'vp_detail' and this.state.vpBox">
+                <main class="o_grx_main">
+                    <t t-call="plcs_greenrx.Flash"/>
+                    <t t-set="b" t-value="this.state.vpBox"/>
+                    <div t-attf-class="o_grx_card o_grx_vp o_grx_border_{{ b.ampel }}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="o_grx_boxno o_grx_mono" t-out="b.box"/>
+                            <span t-attf-class="o_grx_amp_tag o_grx_bg_{{ b.ampel }}"><t t-out="this.ampelOf(b.ampel).label"/></span>
+                        </div>
+                        <dl class="o_grx_kv">
+                            <div><dt>Artikel</dt><dd t-out="b.product"/></div>
+                            <div><dt>Packungen</dt><dd t-out="b.qty"/></div>
+                            <div><dt>Charge</dt><dd class="o_grx_mono" t-out="b.batch"/></div>
+                            <div><dt>Verfall</dt><dd class="o_grx_mono" t-out="b.expiry"/></div>
+                            <div><dt>Eingang</dt><dd class="o_grx_mono" t-out="b.ticket.picking"/></div>
+                            <div><dt>Ticket</dt><dd class="o_grx_mono" t-out="b.ticket.name"/></div>
+                            <div><dt>Absender</dt><dd t-out="b.ticket.sender"/></div>
+                            <div><dt>Erfasst von</dt><dd><t t-out="b.user"/>, <t t-out="b.closed_at"/></dd></div>
+                            <div><dt>Lagerort</dt><dd t-out="b.location"/></div>
+                        </dl>
+                        <div class="o_grx_kicker">Geprüft (System und Lager)</div>
+                        <div class="o_grx_check" t-foreach="b.sys_checks" t-as="c" t-key="c_index" t-att-class="{ 'o_grx_check_bad': !c.ok }">
+                            <span class="o_grx_check_icon" aria-hidden="true"><t t-if="c.ok">✓</t><t t-else="">!</t></span><span t-out="c.label"/>
+                        </div>
+                        <div class="o_grx_check" t-foreach="b.questions" t-as="q" t-key="q.field" t-att-class="{ 'o_grx_check_bad': q.value !== 'ja' }">
+                            <span class="o_grx_check_icon" aria-hidden="true"><t t-if="q.value === 'ja'">✓</t><t t-else="">!</t></span>
+                            <span><t t-out="q.text"/> <b t-out="q.value === 'ja' ? 'Ja' : 'Nein'"/></span>
+                        </div>
+                        <div class="o_grx_hint mt-2" t-if="b.note">Bemerkung Lager: <t t-out="b.note"/></div>
+                        <button type="button" class="o_grx_btn o_grx_btn_ghost mt-2" t-on-click="() => this.printVpBox()">Dokumente ansehen</button>
+                        <div class="mt-3" t-if="this.state.vpAsk">
+                            <label class="o_grx_label" for="grx_vp_reason">
+                                <t t-if="this.state.vpAsk === 'block'">Grund der Sperre (Pflicht)</t>
+                                <t t-else="">Begründung für die Freigabe einer gesperrten Box (Pflicht)</t>
+                            </label>
+                            <textarea id="grx_vp_reason" class="o_grx_input" rows="2" t-att-value="this.state.vpReason" t-on-input="(ev) => this.onVpReason(ev)"/>
+                        </div>
+                        <div class="d-flex flex-column gap-2 mt-3">
+                            <button type="button" class="o_grx_btn o_grx_btn_green o_grx_btn_big" t-on-click="() => this.vpRelease()">Freigeben → GreenRX-Bestand</button>
+                            <button type="button" class="o_grx_btn o_grx_btn_redline o_grx_btn_big" t-on-click="() => this.vpBlock()">
+                                <t t-if="b.state === 'blocked'">Sperre bestätigen (mit Grund)</t><t t-else="">Sperren (mit Grund)</t>
+                            </button>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </t>
+</templates>

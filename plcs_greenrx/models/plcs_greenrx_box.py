@@ -106,6 +106,7 @@ class PlcsGreenrxBox(models.Model):
         for box in self:
             box.qty = len(box.scan_ids.filtered("accepted"))
 
+    @api.depends("package_id.quant_ids.location_id", "package_id.quant_ids.quantity")
     def _compute_location(self):
         for box in self:
             quants = box.package_id.sudo().quant_ids.filtered(lambda q: q.quantity > 0)
@@ -695,6 +696,9 @@ class PlcsGreenrxBox(models.Model):
                  for i, s in enumerate(scans)]
         row = next((r for r in ticket._grx_soll_ist() if r["product_id"] == self.product_id.id), None)
         soll = row["soll"] if row else 0
+        ist_total = row["ist"] if row else self.qty
+        # Menge: Ja nur bei vollständigem Abgleich, Nein bei Überschuss/fremdem Artikel, sonst offen
+        menge_value = "ja" if soll and ist_total == soll else ("nein" if ist_total > soll else "")
         sender_types = dict(ticket._fields["sender_type"].selection)
         temp = self.product_id.plcs_storage_temp
         sender_name = ticket.display_sender or ""
@@ -733,8 +737,9 @@ class PlcsGreenrxBox(models.Model):
             {"sub": True, "text": "– Verfallsdatum (mind. %s Monate)" % (self.company_id.plcs_grx_min_shelf_months or 0),
              "value": "ja" if exp_ok else "nein", "remark": "Scan: %s" % exp},
             {"sub": True, "text": "– Ware verifizierbar (RX-Arzneimittel)", "value": "", "remark": "securPharm-Status von Hand"},
-            {"sub": True, "text": "– Menge", "value": "ja" if soll == self.qty else "nein",
-             "remark": "Ticket %s · gescannt %s" % (soll, self.qty)},
+            {"sub": True, "text": "– Menge", "value": menge_value,
+             "remark": "Ticket %s · in dieser Box %s · im Paket bisher %s%s" % (
+                 soll, self.qty, ist_total, "" if menge_value else " (Abgleich beim Paketabschluss)")},
             {"text": "Verfügen alle Artikel des Auftrages über einen intakten Originalitätsverschluss?",
              "value": self.q_seal,
              "if_no": "Wenn nein: Ware ohne intakten OV: FB Gesperrt ausgefüllt / Ware mit intaktem OV: FB Zusatzblatt ausgefüllt"},

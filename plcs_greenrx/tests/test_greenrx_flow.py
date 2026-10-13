@@ -189,6 +189,20 @@ class TestGreenrxFlow(TransactionCase):
         self.assertEqual(quants.location_id, self.cfg.plcs_grx_stock_location_id)
         self.assertEqual(box.vp_user_id, self.vp1)
 
+    def test_two_boxes_one_package(self):
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 4}])
+        b1 = self._fill_box(ticket, "GX090", self.gtin_a, ["M1", "M2"], batch="L1")
+        b1.grx_to_check()
+        self._close(b1)
+        b2 = self._fill_box(ticket, "GX091", self.gtin_a, ["M3", "M4"], batch="L2")
+        b2.grx_to_check()
+        self._close(b2, ampel="rot", q_seal="nein")
+        ticket.with_user(self.lager).grx_finish()
+        self.assertEqual(ticket.state, "done")
+        self.assertEqual(ticket.picking_id.state, "done")
+        self.assertEqual(b1.location_id, self.cfg.plcs_grx_quarantine_location_id)
+        self.assertEqual(b2.location_id, self.cfg.plcs_grx_blocked_location_id)
+
     def test_four_eyes(self):
         ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 1}])
         box = self._fill_box(ticket, "GX010", self.gtin_a, ["V1"], user=self.vp1)

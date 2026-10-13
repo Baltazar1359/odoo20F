@@ -1,0 +1,223 @@
+// GreenRX-Eingang – Farben und Maße nach dem Entwurf "PLCS Lager-Oberfläche"
+$grx-ground: #F3F4F1;
+$grx-ink: #15181C;
+$grx-muted: #4B5563;
+$grx-line: #D5D8D2;
+$grx-blue: #1D4ED8;
+$grx-green: #1E7A46;
+$grx-yellow: #F2B705;
+$grx-red: #B42318;
+$grx-card: #FFFFFF;
+
+.o_grx {
+    background: $grx-ground;
+    color: $grx-ink;
+    min-height: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    font-size: 16px;
+    overflow: hidden;
+
+    &.o_grx_busy { cursor: progress; }
+
+    .o_grx_mono { font-family: "IBM Plex Mono", SFMono-Regular, Menlo, Consolas, monospace; }
+    .o_grx_muted { color: $grx-muted; }
+    .o_grx_blue { color: $grx-blue; }
+    .o_grx_kicker {
+        font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: $grx-muted;
+        margin-bottom: 6px; display: block;
+    }
+
+    .o_grx_top {
+        display: flex; justify-content: space-between; align-items: flex-end; gap: 12px;
+        padding: 18px 20px 10px;
+        .o_grx_title { margin: 0; font-size: 26px; font-weight: 700; }
+        .o_grx_top_right { display: flex; gap: 8px; flex-wrap: nowrap; justify-content: flex-end; }
+        @media (max-width: 600px) {
+            padding: 12px 16px 8px;
+            .o_grx_title { font-size: 21px; }
+            .o_grx_top_right .o_grx_btn { min-height: 40px; padding: 4px 10px; font-size: 14px; border-radius: 10px; }
+        }
+    }
+
+    .o_grx_body {
+        flex: 1 1 auto; min-height: 0; overflow-y: auto;
+        display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px;
+        padding: 0 20px 20px; max-width: 1440px; width: 100%; margin: 0 auto; align-content: start;
+        &.o_grx_single { max-width: 720px; }
+    }
+    .o_grx_side { display: none; }
+    @media (min-width: 992px) {
+        .o_grx_body:not(.o_grx_single) { grid-template-columns: minmax(0, 1fr) 400px; }
+        .o_grx_side { display: block; }
+        .o_grx_only_mobile { display: none; }
+    }
+
+    .o_grx_h2 { font-size: 22px; font-weight: 700; margin: 6px 0 14px; line-height: 1.25; }
+
+    .o_grx_card {
+        background: $grx-card; border-radius: 16px; padding: 16px; margin-bottom: 12px;
+        &.o_grx_card_sel { border: 2px solid $grx-blue; }
+        &.o_grx_card_warn { border: 2px solid $grx-yellow; }
+    }
+    .o_grx_pkg_name { font-size: 19px; font-weight: 700; }
+    .o_grx_kv {
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 10px 0;
+        dt { font-size: 13px; color: $grx-muted; font-weight: 400; }
+        dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+    }
+
+    .o_grx_progress { margin: 4px 0 12px; }
+    .o_grx_bars { display: flex; gap: 6px; margin-bottom: 8px; }
+    .o_grx_bar { flex: 1; height: 6px; border-radius: 3px; background: $grx-line; }
+    .o_grx_bar_done { background: $grx-blue; }
+
+    .o_grx_flash {
+        display: flex; gap: 12px; align-items: flex-start; border-radius: 14px; padding: 14px 16px; margin-bottom: 12px;
+        background: #E3F1E8; border: 2px solid $grx-green;
+        .o_grx_flash_text { flex: 1; }
+        .o_grx_flash_title { font-weight: 700; font-size: 17px; }
+        .o_grx_flash_msg { font-size: 15px; }
+        .o_grx_flash_close { border: none; background: transparent; font-size: 26px; line-height: 1; min-width: 44px; min-height: 44px; }
+    }
+    .o_grx_flash_warning { background: #FDF3D0; border-color: $grx-yellow; }
+    .o_grx_flash_info { background: #E8EDFB; border-color: $grx-blue; }
+    .o_grx_flash_error { background: $grx-red; border-color: $grx-red; color: #FFFFFF;
+        .o_grx_flash_close { color: #FFFFFF; }
+    }
+
+    .o_grx_scanbig {
+        width: 100%; min-height: 84px; border: none; border-radius: 18px; background: $grx-ink; color: #FFFFFF;
+        display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: 14px 20px; text-align: left;
+        .o_grx_scanbig_title { font-size: 21px; font-weight: 700; }
+        .o_grx_scanbig_sub { font-size: 14px; color: #D1D5DB; }
+    }
+
+    .o_grx_task {
+        width: 100%; min-height: 72px; background: $grx-card; border: 2px solid transparent; border-radius: 14px; padding: 12px 14px;
+        display: flex; align-items: center; gap: 12px; text-align: left; margin-bottom: 8px; color: $grx-ink;
+        &.o_grx_task_now { border-color: $grx-blue; }
+        &.o_grx_task_static { cursor: default; }
+    }
+    .o_grx_badge {
+        min-width: 32px; height: 32px; padding: 0 10px; border-radius: 16px; background: $grx-ink; color: #FFFFFF;
+        display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .o_grx_tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 8px; background: #FCEFD9; color: #78350F; }
+
+    .o_grx_label { font-weight: 600; margin-bottom: 4px; display: block; }
+    .o_grx_input {
+        width: 100%; min-height: 52px; border: 2px solid $grx-line; border-radius: 12px; padding: 10px 14px; font-size: 17px; background: #FFFFFF;
+        &:focus { outline: none; border-color: $grx-blue; }
+    }
+    textarea.o_grx_input { min-height: 64px; }
+    .o_grx_err { color: $grx-red; font-weight: 600; margin-top: 6px; }
+
+    .o_grx_results { margin-top: 12px; }
+    .o_grx_result {
+        width: 100%; background: $grx-card; border: 2px solid transparent; border-radius: 14px; padding: 12px 14px;
+        text-align: left; margin-bottom: 8px; color: $grx-ink;
+        &:hover, &:focus { border-color: $grx-blue; }
+    }
+    .o_grx_hint { font-size: 14px; color: #374151; line-height: 1.45; }
+    .o_grx_hint_warn { background: #FDF3D0; border-radius: 12px; padding: 10px 12px; color: #78350F; }
+
+    .o_grx_wait {
+        background: $grx-card; border-radius: 18px; padding: 28px 16px; text-align: center; font-size: 18px; font-weight: 600; margin-bottom: 12px;
+    }
+    .o_grx_wait_ring {
+        width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 50%;
+        border: 6px solid $grx-line; border-top-color: $grx-blue; animation: o_grx_spin 1.4s linear infinite;
+    }
+    @keyframes o_grx_spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .o_grx_wait_ring { animation: none; } }
+    .o_grx_rules { color: $grx-muted; font-size: 15px; padding-left: 18px; }
+
+    .o_grx_boxhead {
+        display: flex; justify-content: space-between; align-items: center; background: $grx-card; border-radius: 16px; padding: 14px 16px; margin-bottom: 12px;
+        .o_grx_count { font-size: 44px; font-weight: 700; line-height: 1; text-align: right;
+            span { display: block; font-size: 14px; font-weight: 600; color: $grx-muted; }
+        }
+    }
+    .o_grx_boxno { font-size: 34px; font-weight: 600; line-height: 1.1; }
+
+    .o_grx_table {
+        width: 100%; border-collapse: collapse; background: $grx-card; border-radius: 12px; overflow: hidden; margin-bottom: 10px; font-size: 14px;
+        th { background: #E5E7EB; font-weight: 700; padding: 6px 8px; text-align: left; }
+        td { padding: 6px 8px; border-top: 1px solid #E5E7EB; }
+    }
+    .o_grx_status { font-weight: 700; font-size: 13px; white-space: nowrap; }
+    .o_grx_status_ok { color: $grx-green; }
+    .o_grx_status_open, .o_grx_status_over, .o_grx_status_extra { color: #92400E; }
+    .o_grx_link { border: none; background: transparent; color: $grx-blue; text-decoration: underline; padding: 4px; min-height: 32px; }
+
+    .o_grx_boxrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid #E5E7EB; }
+    .o_grx_dot { width: 14px; height: 14px; border-radius: 7px; flex-shrink: 0; display: inline-block; }
+    .o_grx_bg_gruen { background: $grx-green; color: #FFFFFF; }
+    .o_grx_bg_gelb { background: $grx-yellow; color: $grx-ink; }
+    .o_grx_bg_rot { background: $grx-red; color: #FFFFFF; }
+    .o_grx_bg_none { background: $grx-line; }
+
+    .o_grx_check {
+        display: flex; gap: 10px; align-items: flex-start; padding: 5px 0; font-size: 15px;
+        .o_grx_check_icon { width: 22px; height: 22px; border-radius: 11px; background: $grx-green; color: #FFFFFF; font-weight: 700;
+            display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; }
+        &.o_grx_check_bad .o_grx_check_icon { background: $grx-red; }
+    }
+    .o_grx_q {
+        padding: 10px 0; border-top: 1px solid #E5E7EB;
+        &:first-of-type { border-top: none; }
+        .o_grx_q_text { font-size: 16px; margin-bottom: 8px; }
+        .o_grx_q_btns { display: flex; gap: 8px; }
+    }
+    .o_grx_yn {
+        flex: 1; min-height: 48px; border-radius: 12px; border: 2px solid $grx-line; background: #FFFFFF; font-weight: 700; font-size: 17px; color: $grx-ink;
+        &.o_grx_yn_ja { background: $grx-green; border-color: $grx-green; color: #FFFFFF; }
+        &.o_grx_yn_nein { background: $grx-red; border-color: $grx-red; color: #FFFFFF; }
+    }
+    .o_grx_light {
+        width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; min-height: 60px; padding: 10px 14px; margin-bottom: 8px;
+        border-radius: 14px; border: 2px solid $grx-line; background: #FFFFFF; color: $grx-ink;
+        &[disabled] { opacity: .45; cursor: not-allowed; }
+        &.o_grx_light_sel.o_grx_light_gruen { border-color: $grx-green; box-shadow: inset 0 0 0 2px $grx-green; }
+        &.o_grx_light_sel.o_grx_light_gelb { border-color: $grx-yellow; box-shadow: inset 0 0 0 2px $grx-yellow; }
+        &.o_grx_light_sel.o_grx_light_rot { border-color: $grx-red; box-shadow: inset 0 0 0 2px $grx-red; }
+    }
+    .o_grx_amp { border-radius: 14px; padding: 12px 16px; margin-bottom: 12px;
+        .o_grx_kicker { color: inherit; opacity: .85; }
+    }
+    .o_grx_amp_tag { font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 8px; }
+    .o_grx_doc { display: flex; flex-direction: column; padding: 8px 0; border-top: 1px solid #E5E7EB;
+        &:first-of-type { border-top: none; }
+        span { color: $grx-muted; font-size: 14px; }
+        &.o_grx_doc_red b { color: $grx-red; }
+    }
+    .o_grx_ok { color: $grx-green; font-weight: 700; margin-bottom: 8px; }
+    .o_grx_confirm { display: flex; gap: 12px; align-items: flex-start; font-size: 16px; font-weight: 600; cursor: pointer;
+        input { width: 26px; height: 26px; flex-shrink: 0; margin-top: 1px; }
+    }
+    .o_grx_done { background: #E3F1E8; border: 2px solid $grx-green; border-radius: 16px; padding: 16px; margin-bottom: 12px;
+        &.o_grx_done_red { background: #FCE4E2; border-color: $grx-red; }
+    }
+    .o_grx_vp { &.o_grx_border_gruen { border: 2px solid $grx-green; } &.o_grx_border_gelb { border: 2px solid $grx-yellow; } &.o_grx_border_rot { border: 2px solid $grx-red; } }
+    .o_grx_keys { font-size: 14px; kbd { background: $grx-ink; color: #FFFFFF; border-radius: 4px; padding: 1px 6px; margin-right: 6px; } }
+
+    .o_grx_actions {
+        flex: 0 0 auto; display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;
+        padding: 12px 20px 16px; border-top: 1px solid #E5E7EB; background: #FFFFFF;
+        .o_grx_btn_big { flex: 1 1 260px; }
+    }
+
+    .o_grx_btn {
+        min-height: 44px; border-radius: 14px; padding: 8px 16px; font-weight: 700; font-size: 16px; border: 2px solid transparent;
+        &[disabled] { opacity: .5; cursor: not-allowed; }
+    }
+    .o_grx_btn_big { min-height: 58px; font-size: 18px; }
+    .o_grx_btn_primary { background: $grx-blue; color: #FFFFFF; }
+    .o_grx_btn_dark { background: $grx-ink; color: #FFFFFF; }
+    .o_grx_btn_green { background: $grx-green; color: #FFFFFF; }
+    .o_grx_btn_redline { background: #FFFFFF; color: $grx-red; border-color: $grx-red; }
+    .o_grx_btn_ghost { background: #FFFFFF; color: $grx-ink; border-color: $grx-line; }
+}
