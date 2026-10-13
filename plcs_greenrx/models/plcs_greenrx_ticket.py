@@ -362,7 +362,7 @@ class PlcsGreenrxTicket(models.Model):
         if is_vp:
             vp_count = Box.search_count([
                 ("state", "in", ("to_release", "blocked")), ("vp_user_id", "=", False),
-                ("ticket_id.picking_id.state", "=", "done"), ("user_id", "!=", user.id)])
+                ("ticket_id.state", "=", "done"), ("picking_id.state", "=", "done"), ("user_id", "!=", user.id)])
         return {
             "user": user.name,
             "initials": "".join(p[:1] for p in (user.name or "?").split()[:2]).upper(),
@@ -386,23 +386,50 @@ class PlcsGreenrxTicket(models.Model):
         self.ensure_one()
         if self.state not in ("open", "in_progress"):
             raise UserError(self.env._("Vorgang %s ist nicht mehr offen.", self.name))
-        config = self.company_id._plcs_grx_config()
         if not self.picking_id:
-            picking_type = config.plcs_grx_receipt_type_id
-            src = picking_type.default_location_src_id or self.env.ref("stock.stock_location_customers")
-            picking = self.env["stock.picking"].create({
-                "picking_type_id": picking_type.id,
-                "partner_id": self.partner_id.id,
-                "origin": self.name,
-                "location_id": src.id,
-                "location_dest_id": config.plcs_grx_quarantine_location_id.id,
-                "plcs_grx_ticket_id": self.id,
-                "company_id": self.company_id.id,
-            })
-            self.sudo().picking_id = picking
+            self.sudo().picking_id = self._grx_create_receipt(self.name)
         if self.state == "open":
             self.sudo().state = "in_progress"
         return self._grx_ui_data()
+
+    def _grx_create_receipt(self, origin):
+        self.ensure_one()
+        config = self.company_id._plcs_grx_config()
+        picking_type = config.plcs_grx_receipt_type_id
+        src = picking_type.default_location_src_id or self.env.ref("stock.stock_location_customers")
+        return self.env["stock.picking"].create({
+            "picking_type_id": picking_type.id,
+            "partner_id": self.partner_id.id,
+            "origin": origin,
+            "location_id": src.id,
+            "location_dest_id": config.plcs_grx_quarantine_location_id.id,
+            "plcs_grx_ticket_id": self.id,
+            "company_id": self.company_id.id,
+        })
+
+    def _grx_receipts(self):
+        """Alle Eingänge des Vorgangs: der erste (picking_id) und ggf. Nachträge."""
+        self.ensure_one()
+        return self.picking_id | self.env["stock.picking"].search([
+            ("plcs_grx_ticket_id", "=", self.id),
+            ("picking_type_id", "=", self.company_id.plcs_grx_receipt_type_id.id),
+        ])
+
+    def _grx_open_receipt(self):
+        """Eingang für die nächste abgeschlossene Box.
+
+        Ist der Eingang schon gebucht (vor 1.3.2 ließ er sich außerhalb von „Paket fertig“
+        buchen), kommt die Box in einen Nachtrags-Eingang, der mit „Paket fertig“ gebucht wird.
+        """
+        self.ensure_one()
+        receipt = self._grx_receipts().filtered(lambda p: p.state not in ("done", "cancel"))[:1]
+        if receipt:
+            return receipt
+        receipt = self._grx_create_receipt(self.env._("%s (Nachtrag)", self.name))
+        self.sudo().message_post(body=self.env._(
+            "Eingang %(old)s war schon gebucht. Weitere Boxen kommen in den Nachtrags-Eingang %(new)s.",
+            old=self.picking_id.name, new=receipt.name))
+        return receipt
 
     def grx_data(self):
         self.ensure_one()
@@ -429,15 +456,19 @@ class PlcsGreenrxTicket(models.Model):
             raise UserError(self.env._(
                 "Soll und Ist stimmen nicht überein (%s). Bitte eine Begründung angeben.",
                 "; ".join(self._grx_row_label(r) for r in deviations)))
-        picking = self.picking_id
-        if picking.state not in ("done", "cancel"):
+        receipts = self._grx_receipts()
+        for picking in receipts.filtered(lambda p: p.state not in ("done", "cancel")):
+            if not picking.move_ids:
+                picking.action_cancel()
+                continue
             if picking.state == "draft":
                 picking.action_confirm()
             for move in picking.move_ids:
                 move.picked = True
-            picking.with_context(skip_backorder=True, cancel_backorder=True).button_validate()
+            picking.with_context(plcs_grx_finish=True, skip_backorder=True, cancel_backorder=True).button_validate()
             if picking.state != "done":
                 raise UserError(self.env._("Eingang %s konnte nicht gebucht werden.", picking.name))
+        picking_names = ", ".join(receipts.filtered(lambda p: p.state == "done").mapped("name"))
         vals = {"state": "done"}
         if deviations:
             vals["deviation_note"] = deviation_note
@@ -446,7 +477,7 @@ class PlcsGreenrxTicket(models.Model):
                 dev="; ".join(self._grx_row_label(r) for r in deviations), note=deviation_note))
         self.sudo().write(vals)
         for box in boxes.filtered(lambda b: b.state in ("to_release", "blocked")):
-            box.sudo().message_post(body=self.env._("Eingang %s gebucht. Box wartet auf die VP.", picking.name))
+            box.sudo().message_post(body=self.env._("Eingang %s gebucht. Box wartet auf die VP.", picking_names))
         return self._grx_ui_data()
 
     @staticmethod

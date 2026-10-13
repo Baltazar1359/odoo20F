@@ -11,7 +11,7 @@
 
 ### Eingerichtet
 
-- Modul `plcs_greenrx` (Version 20.0.1.3.1) installiert, mit Lagerorten **GreenRX/Quarantäne, /Bestand, /Sperrlager**, Vorgangstypen **GRXIN, GRXFRG, GRXSPR** und Boxen **GX001–GX200**.
+- Modul `plcs_greenrx` (Version 20.0.1.3.2) installiert, mit Lagerorten **GreenRX/Quarantäne, /Bestand, /Sperrlager**, Vorgangstypen **GRXIN, GRXFRG, GRXSPR** und Boxen **GX001–GX200**.
 - **30 Artikel** mit PZN, GTIN-Barcode, Chargenverfolgung und Ablaufdatum (`import/greenrx_artikel_pzn.csv`).
 - **100 Retourenvorgänge** mit 101 Tickets und 287 angemeldeten Packungen aus dem GreenRX-ERP (`import/greenrx_vorgaenge_letzte100.csv`). Alle Tickets sind einem Artikel zugeordnet.
 - Benutzer:
@@ -62,6 +62,7 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
 - **GreenRX › Übersicht › Box-Erfassungen:** je Box Status, aktueller Lagerort, VP und Begründung.
 - **GreenRX › Übersicht › Seriennummern:** Jede Packung ist mit Charge, Verfall, Box und Ticket gespeichert.
 - **Sperre gegen Umgehung:** Versuch, Ware per normalem Transfer aus GreenRX/Quarantäne umzulagern. Erwartet: Odoo lehnt das ab.
+- **Eingang nur über „Paket fertig“:** Den GreenRX-Eingang (GRXIN…) eines Pakets in Erfassung unter Lager › Transfers öffnen und „Bestätigen“ klicken. Erwartet: Odoo lehnt das ab und verweist auf „Paket fertig“.
 - **Suche:** Auf der Startseite nach Apotheke, Ticket-, Reklamations-, Gutschrift- oder Kundennummer oder nach dem Artikel suchen. Die Suche läuft über alle offenen Vorgänge (auch bei mehr als 1.000); Leerzeichen und Bindestriche sind egal (z. B. „k 10234“ findet „K-10234“).
 - **Box-Erfassungen › Box öffnen › Verlauf:** Jeder Druck ist mit Nummer vermerkt, ein ungültig gewordener Ausdruck ebenfalls.
 

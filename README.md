@@ -53,6 +53,8 @@ Odoo kennt je Packung nur ein „Los/Seriennummer“-Feld. Das Modul speichert d
   - es sind mehr Packungen als angemeldet.
 - Soll/Ist wird je Ticket geführt.
 - Eine Box kann nur eine Person befüllen.
+- Der GreenRX-Eingang (GRXIN) wird **nur** mit „Paket fertig“ gebucht, nicht über Lager › Transfers oder die Barcode-App. Wurde ein Eingang früher schon vorzeitig gebucht, kommen weitere Boxen automatisch in einen **Nachtrags-Eingang**, den „Paket fertig“ mitbucht.
+- Die VP sieht eine Box erst, wenn das ganze Paket fertig ist.
 - Ware verlässt Quarantäne und Sperrlager **nur** über die VP-Freigabe. Andere Wege werden abgelehnt: Transfer, Barcode-App, Inventur oder Ausschuss.
 - Status und Ergebnisse lassen sich nicht direkt per API ändern. Alle Änderungen laufen über die geprüften Funktionen.
 
@@ -101,7 +103,7 @@ Danach:
 odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --stop-after-init
 ```
 
-45 automatische Tests decken ab:
+47 automatische Tests decken ab:
 
 - den GS1/IFA-Parser und den Retourenschein-QR (auch zerteilt durch den Handscanner),
 - den ganzen Ablauf von Ticket bis VP-Freigabe,
@@ -115,7 +117,9 @@ odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --st
 - ungültigen Ausdruck nach Änderungen, Neuausdruck und Abschluss-Sperre,
 - die Suche über mehr als 1.000 offene Vorgänge,
 - 5 Scans direkt hintereinander in der Scan-Oberfläche (Browser-Test, `TestGreenrxScanQueue`; braucht Chrome),
-- 
+- „Paket fertig“ mit offener Box einer anderen Person und mit Soll/Ist-Abweichung aus Schritt 2 (Browser-Test, `TestGreenrxPackageFinish`),
+- das Update auf 1.3.1: alte Ausdrucke offener Boxen werden ungültig,
+- die Sperre gegen vorzeitiges Buchen des Eingangs und den Nachtrags-Eingang (1.3.2).
 
 Zusätzlich prüft `e2e/playwright_scan_queue.py` mit Playwright gegen einen laufenden Server, dass 5 schnelle Scans alle ankommen:
 

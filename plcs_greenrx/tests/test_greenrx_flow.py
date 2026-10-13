@@ -572,6 +572,62 @@ class TestGreenrxFlow(TransactionCase):
         self.assertEqual(ticket.state, "in_progress")
 
     # ------------------------------------------------------------------
+    # Eingang nur über „Paket fertig“ (1.3.2)
+    # ------------------------------------------------------------------
+    def test_receipt_only_booked_by_finish(self):
+        """Der GreenRX-Eingang lässt sich nicht an „Paket fertig“ vorbei buchen."""
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 1}])
+        box = self._fill_box(ticket, "GX128", self.gtin_a, ["E1"])
+        box.grx_to_check()
+        self._close(box)
+        picking = ticket.picking_id
+        picking.move_ids.picked = True
+        with self.assertRaises(UserError):
+            picking.with_context(skip_backorder=True, cancel_backorder=True).button_validate()
+        with self.assertRaises(UserError):
+            picking.with_user(self.lager).with_context(skip_backorder=True).button_validate()
+        self.assertNotEqual(picking.state, "done")
+        ticket.with_user(self.lager).grx_finish()
+        self.assertEqual((ticket.state, picking.state), ("done", "done"))
+
+    def test_box_after_early_booking_goes_to_supplement(self):
+        """Eingang schon gebucht (vor 1.3.2 möglich): weitere Boxen kommen in einen Nachtrags-Eingang."""
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 2}])
+        box1 = self._fill_box(ticket, "GX129", self.gtin_a, ["N1"])
+        box1.grx_to_check()
+        self._close(box1)
+        first = ticket.picking_id
+        first.move_ids.picked = True
+        # wie damals über Lager › Transfers gebucht, während noch eine Box erfasst wird
+        first.with_context(plcs_grx_finish=True, skip_backorder=True, cancel_backorder=True).button_validate()
+        self.assertEqual((first.state, ticket.state), ("done", "in_progress"))
+        VP = self.env["plcs.greenrx.box"].with_user(self.vp1)
+        self.assertNotIn(box1.id, [b["id"] for b in VP.grx_vp_list()["boxes"]], "VP erst nach Paket fertig")
+        with self.assertRaises(UserError):
+            box1.with_user(self.vp1).grx_vp_release()
+
+        box2 = self._fill_box(ticket, "GX130", self.gtin_a, ["N2"])
+        box2.grx_to_check()
+        self._close(box2)
+        supplement = box2.picking_id
+        self.assertNotEqual(supplement, first)
+        self.assertEqual(box1.picking_id, first)
+        self.assertIn("Nachtrag", supplement.origin)
+        self.assertEqual(supplement.plcs_grx_ticket_id, ticket)
+        self.assertEqual(ticket._grx_receipts(), first | supplement)
+        with self.assertRaises(UserError):
+            supplement.with_context(skip_backorder=True).button_validate()
+
+        ticket.with_user(self.lager).grx_finish()
+        self.assertEqual((ticket.state, supplement.state), ("done", "done"))
+        self.assertEqual(box2.location_id, self.cfg.plcs_grx_quarantine_location_id)
+        listed = [b["id"] for b in VP.grx_vp_list()["boxes"]]
+        self.assertIn(box1.id, listed)
+        self.assertIn(box2.id, listed)
+        box2.with_user(self.vp1).grx_vp_release()
+        self.assertEqual(box2.location_id, self.cfg.plcs_grx_stock_location_id)
+
+    # ------------------------------------------------------------------
     # Suche (Review-Befund 3)
     # ------------------------------------------------------------------
     def test_search_beyond_1000_open(self):

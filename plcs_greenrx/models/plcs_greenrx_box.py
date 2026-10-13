@@ -42,7 +42,8 @@ class PlcsGreenrxBox(models.Model):
 
     name = fields.Char("Bezeichnung", compute="_compute_name", store=True)
     ticket_id = fields.Many2one("plcs.greenrx.ticket", "Ticket", required=True, index=True, readonly=True)
-    picking_id = fields.Many2one(related="ticket_id.picking_id", string="Eingang", store=True)
+    picking_id = fields.Many2one("stock.picking", "Eingang", compute="_compute_picking_id", store=True, index=True,
+                                 help="Eingang, in dem die Box gebucht wird (Vorgang oder Nachtrag).")
     company_id = fields.Many2one(related="ticket_id.company_id", store=True)
     package_id = fields.Many2one("stock.package", "Box", required=True, index=True, readonly=True,
                                  domain=[("plcs_is_grx_box", "=", True)])
@@ -110,6 +111,11 @@ class PlcsGreenrxBox(models.Model):
     def _compute_name(self):
         for box in self:
             box.name = "%s · %s" % (box.ticket_id.name or "?", box.package_id.name or "?")
+
+    @api.depends("move_id.picking_id", "ticket_id.picking_id")
+    def _compute_picking_id(self):
+        for box in self:
+            box.picking_id = box.move_id.picking_id or box.ticket_id.picking_id
 
     @api.depends("scan_ids.accepted")
     def _compute_qty(self):
@@ -528,11 +534,9 @@ class PlcsGreenrxBox(models.Model):
         if reason:
             raise UserError(self.env._("Box %(box)s ist nicht mehr leer: %(r)s", box=self.package_id.name, r=reason))
         config = self.company_id._plcs_grx_config()
-        picking = self.ticket_id.picking_id
-        if not picking:
+        if not self.ticket_id.picking_id:
             raise UserError(self.env._("Zum Ticket gibt es keinen Eingang."))
-        if picking.state == "done":
-            raise UserError(self.env._("Eingang %s ist schon gebucht. Bitte ein neues Ticket anlegen lassen.", picking.name))
+        picking = self.ticket_id._grx_open_receipt()
         if picking.state == "draft":
             picking.action_confirm()
         dest = config.plcs_grx_blocked_location_id if self.ampel == "rot" else config.plcs_grx_quarantine_location_id
@@ -603,7 +607,7 @@ class PlcsGreenrxBox(models.Model):
                 raise AccessError(self.env._(
                     "4-Augen-Prinzip: Box %s hast du selbst erfasst. Eine andere VP muss entscheiden.",
                     box.package_id.name))
-            if box.ticket_id.picking_id.state != "done":
+            if box.ticket_id.state != "done" or box.picking_id.state != "done":
                 raise UserError(self.env._(
                     "Das Paket %s ist noch nicht abgeschlossen (Eingang nicht gebucht).", box.ticket_id.name))
 
@@ -611,7 +615,8 @@ class PlcsGreenrxBox(models.Model):
     def grx_vp_list(self):
         boxes = self.search([
             ("state", "in", ("to_release", "blocked")),
-            ("ticket_id.picking_id.state", "=", "done"),
+            ("ticket_id.state", "=", "done"),
+            ("picking_id.state", "=", "done"),
             ("vp_user_id", "=", False),
         ])
         own = boxes.filtered(lambda b: b.user_id == self.env.user)
