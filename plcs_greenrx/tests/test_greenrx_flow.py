@@ -204,6 +204,24 @@ class TestGreenrxFlow(TransactionCase):
         self.assertEqual(b1.location_id, self.cfg.plcs_grx_quarantine_location_id)
         self.assertEqual(b2.location_id, self.cfg.plcs_grx_blocked_location_id)
 
+    def test_two_boxes_same_product_same_destination(self):
+        """Zwei Boxen mit gleichem Artikel in die Quarantäne: keine Zusammenführung der Bewegungen."""
+        ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 4}])
+        b1 = self._fill_box(ticket, "GX092", self.gtin_a, ["S1", "S2"], batch="L1")
+        b1.grx_to_check()
+        self._close(b1)
+        b2 = self._fill_box(ticket, "GX093", self.gtin_a, ["S3", "S4"], batch="L1")
+        b2.grx_to_check()
+        self._close(b2)
+        self.assertTrue(b1.move_id.exists() and b2.move_id.exists())
+        self.assertNotEqual(b1.move_id, b2.move_id)
+        ticket.with_user(self.lager).grx_finish()
+        self.assertEqual(ticket.picking_id.state, "done")
+        self.assertEqual(b1.location_id, self.cfg.plcs_grx_quarantine_location_id)
+        self.assertEqual(b2.location_id, self.cfg.plcs_grx_quarantine_location_id)
+        self.assertEqual(len(b1.package_id.quant_ids.filtered(lambda q: q.quantity > 0)), 2)
+        self.assertEqual(len(b2.package_id.quant_ids.filtered(lambda q: q.quantity > 0)), 2)
+
     def test_four_eyes(self):
         ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 1}])
         box = self._fill_box(ticket, "GX010", self.gtin_a, ["V1"], user=self.vp1)

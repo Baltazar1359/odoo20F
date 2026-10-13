@@ -516,7 +516,9 @@ class PlcsGreenrxBox(models.Model):
                 "picking_id": picking.id,
             }) for lot in lots],
         })
-        move._action_confirm()
+        # Nicht mit anderen Boxen desselben Artikels zusammenführen: je Box eine eigene Bewegung
+        # (sonst löscht Odoo die neue Bewegung beim Zusammenführen → „Datensatz existiert nicht“).
+        move = move._action_confirm(merge=False)
         move.picked = True
         state = "blocked" if self.ampel == "rot" else "to_release"
         self.sudo().write({"state": state, "closed_at": fields.Datetime.now(), "move_id": move.id})
