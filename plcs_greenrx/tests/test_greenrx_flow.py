@@ -94,10 +94,13 @@ class TestGreenrxFlow(TransactionCase):
         self.assertEqual(T.grx_search("T-0826")[0]["match"], "Treffer: Referenz")
         self.assertEqual(T.grx_search("S-T-0826")[0]["match"], "Treffer: Reklamation")
         self.assertEqual(T.grx_search("byetta")[0]["match"], "Treffer: Medikament")
-        # Update vor Beginn ersetzt Positionen, danach nur Kopfdaten
+        # Update vor Beginn aktualisiert Positionen, löscht aber keine (Review-Punkt 1:
+        # ein inkrementeller Abruf liefert nicht unbedingt alle Positionen eines Vorgangs)
         self.env["plcs.greenrx.ticket"].api_upsert([{"external_id": "T-0826", "name": "T-0826",
                                                     "lines": [{"pzn": "12345678", "qty": 4}]}])
-        self.assertEqual(ticket.qty_expected_total, 4)
+        self.assertEqual(ticket.line_ids.filtered(lambda l: l.product_id == self.prod_a).qty_expected, 4)
+        self.assertEqual(ticket.qty_expected_total, 6)
+        self.assertIn("bleiben stehen", ticket.message_ids[0].body)
 
     def test_full_flow_green_release(self):
         ticket = self._ticket(lines=[{"pzn": "12345678", "qty": 3}])

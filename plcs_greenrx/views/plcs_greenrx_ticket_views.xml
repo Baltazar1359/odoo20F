@@ -4,7 +4,7 @@
         <field name="name">plcs.greenrx.ticket.list</field>
         <field name="model">plcs.greenrx.ticket</field>
         <field name="arch" type="xml">
-            <list string="GreenRX-Retourenvorgänge" decoration-muted="state in ('done', 'cancel')" decoration-info="state == 'in_progress'">
+            <list string="GreenRX-Retourenvorgänge" decoration-muted="state in ('done', 'cancel', 'closed')" decoration-info="state == 'in_progress'">
                 <field name="date_ticket"/>
                 <field name="name"/>
                 <field name="complaint_number" optional="show"/>
@@ -17,6 +17,8 @@
                 <field name="has_deviation" optional="show" widget="boolean"/>
                 <field name="picking_id" optional="show"/>
                 <field name="source" optional="hide"/>
+                <field name="ativ_status" optional="show" widget="badge" decoration-success="ativ_status == 'expected'"
+                       decoration-danger="ativ_status == 'cancel'"/>
                 <field name="state" widget="badge" decoration-info="state == 'in_progress'" decoration-success="state == 'done'"/>
             </list>
         </field>
@@ -30,9 +32,25 @@
                 <header>
                     <button name="action_cancel" type="object" string="Stornieren" invisible="state not in ('open', 'in_progress')"
                             confirm="Ticket wirklich stornieren?"/>
+                    <button name="action_ativ_override" type="object" string="Trotzdem erwarten" class="btn-primary"
+                            invisible="state not in ('closed', 'cancel') or not ativ_status" groups="stock.group_stock_manager"
+                            confirm="Vorgang trotz ATIV-Status als erwartet öffnen? Die Synchronisierung ändert den Status danach nicht mehr."/>
+                    <button name="action_ativ_release_override" type="object" string="Status wieder aus ATIV"
+                            invisible="not ativ_override" groups="stock.group_stock_manager"/>
+                    <button name="action_ativ_refresh" type="object" string="Mit ATIV abgleichen"
+                            invisible="not ativ_connector_id" groups="stock.group_stock_manager"/>
                     <field name="state" widget="statusbar" statusbar_visible="open,in_progress,done"/>
                 </header>
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_ativ_documents" type="object" class="oe_stat_button" icon="fa-paperclip"
+                                invisible="not ativ_document_count">
+                            <field name="ativ_document_count" widget="statinfo" string="ATIV-Dokumente"/>
+                        </button>
+                    </div>
+                    <div class="alert alert-warning" role="status" invisible="state != 'closed'">
+                        Laut ATIV nicht erwartet: <field name="ativ_status_reason" class="d-inline"/>
+                    </div>
                     <div class="oe_title">
                         <label for="name"/>
                         <h1><field name="name" readonly="state != 'open'"/></h1>
@@ -57,7 +75,7 @@
                     <notebook>
                         <page string="Angemeldete Produkte (Tickets)" name="lines">
                             <field name="line_ids" readonly="state != 'open'">
-                                <list editable="bottom">
+                                <list editable="bottom" decoration-muted="ativ_removed">
                                     <field name="ticket_number"/>
                                     <field name="product_id"/>
                                     <field name="product_name" optional="show"/>
@@ -66,6 +84,7 @@
                                     <field name="batch_expected"/>
                                     <field name="credit_note" optional="hide"/>
                                     <field name="qty_expected" sum="Summe"/>
+                                    <field name="ativ_removed" optional="show"/>
                                 </list>
                             </field>
                             <div class="alert alert-warning" role="status" invisible="not slip_note">
@@ -81,6 +100,59 @@
                                     <field name="deviation_note" invisible="not deviation_note"/>
                                 </group>
                             </group>
+                        </page>
+                        <page string="ATIV (Quelle)" name="ativ" invisible="not ativ_connector_id">
+                            <group>
+                                <group>
+                                    <field name="ativ_status" widget="badge"/>
+                                    <field name="ativ_status_reason"/>
+                                    <field name="ativ_pickup_date"/>
+                                </group>
+                                <group>
+                                    <field name="ativ_override"/>
+                                    <field name="ativ_last_sync"/>
+                                    <field name="ativ_connector_id"/>
+                                </group>
+                            </group>
+                            <separator string="Gutschriften"/>
+                            <field name="ativ_credit_note_ids">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="date_order"/>
+                                    <field name="source_state_label"/>
+                                    <field name="pickup_date"/>
+                                    <field name="pickup_done"/>
+                                    <field name="ativ_receipt_done" optional="show"/>
+                                    <field name="status_category" widget="badge"/>
+                                    <field name="amount_total" optional="hide"/>
+                                    <field name="source_missing" optional="show"/>
+                                </list>
+                            </field>
+                            <separator string="Tickets"/>
+                            <field name="ativ_ticket_ids">
+                                <list>
+                                    <field name="ticket_number"/>
+                                    <field name="title"/>
+                                    <field name="stage_name"/>
+                                    <field name="product_name"/>
+                                    <field name="batch"/>
+                                    <field name="expiry_date"/>
+                                    <field name="qty"/>
+                                    <field name="return_reason" optional="show"/>
+                                    <field name="storage_conditions" optional="show"/>
+                                </list>
+                            </field>
+                            <separator string="Dokumente und Fotos"/>
+                            <field name="ativ_document_ids">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="ativ_ticket_id"/>
+                                    <field name="mimetype" optional="hide"/>
+                                    <field name="source_create_date"/>
+                                    <field name="state" widget="badge"/>
+                                    <button name="action_open" type="object" string="Öffnen" icon="fa-external-link"/>
+                                </list>
+                            </field>
                         </page>
                         <page string="Boxen" name="boxes">
                             <field name="box_ids">
@@ -109,16 +181,19 @@
         <field name="model">plcs.greenrx.ticket</field>
         <field name="arch" type="xml">
             <search>
-                <field name="name" filter_domain="['|', '|', '|', '|', ('name', 'ilike', self), ('complaint_number', 'ilike', self), ('ticket_numbers', 'ilike', self), ('credit_note', 'ilike', self), ('customer_number', 'ilike', self)]" string="Nummer"/>
+                <field name="name" filter_domain="['|', '|', '|', '|', '|', ('name', 'ilike', self), ('complaint_number', 'ilike', self), ('ticket_numbers', 'ilike', self), ('credit_note', 'ilike', self), ('customer_number', 'ilike', self), ('partner_name', 'ilike', self)]" string="Nummer oder Kunde"/>
                 <field name="partner_id"/>
                 <field name="partner_name"/>
                 <filter name="open" string="Offen / in Erfassung" domain="[('state', 'in', ('open', 'in_progress'))]"/>
                 <filter name="done" string="Erfasst" domain="[('state', '=', 'done')]"/>
+                <filter name="closed" string="Nicht erwartet" domain="[('state', '=', 'closed')]"/>
+                <filter name="ativ" string="Aus ATIV" domain="[('ativ_connector_id', '!=', False)]"/>
                 <separator/>
                 <filter name="deviation" string="Soll/Ist-Abweichung" domain="[('deviation_note', '!=', False)]"/>
                 <group>
                     <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
                     <filter name="group_source" string="Herkunft" context="{'group_by': 'source'}"/>
+                    <filter name="group_ativ" string="Status laut ATIV" context="{'group_by': 'ativ_status'}"/>
                 </group>
             </search>
         </field>

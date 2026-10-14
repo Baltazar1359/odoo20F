@@ -9,3 +9,13 @@ access_grx_connector_manager,grx.connector.manager,plcs.greenrx.connector,stock.
 rule_grx_ticket_company,GreenRX-Ticket: Firma,plcs.greenrx.ticket,,crud,"[('company_id', 'in', company_ids)]"
 rule_grx_box_company,GreenRX-Box: Firma,plcs.greenrx.box,,crud,"[('company_id', 'in', company_ids)]"
 rule_grx_connector_company,GreenRX-Schnittstelle: Firma,plcs.greenrx.connector,,crud,"[('company_id', 'in', company_ids)]"
+access_ativ_cn_user,ativ.credit.note.user,plcs.ativ.credit.note,stock.group_stock_user,r,
+access_ativ_cn_line_user,ativ.credit.note.line.user,plcs.ativ.credit.note.line,stock.group_stock_user,r,
+access_ativ_ticket_user,ativ.ticket.user,plcs.ativ.ticket,stock.group_stock_user,r,
+access_ativ_message_user,ativ.message.user,plcs.ativ.message,stock.group_stock_user,r,
+access_ativ_document_user,ativ.document.user,plcs.ativ.document,stock.group_stock_user,r,
+access_ativ_run_manager,ativ.run.manager,plcs.ativ.run,stock.group_stock_manager,r,
+access_ativ_queue_manager,ativ.queue.manager,plcs.ativ.queue,stock.group_stock_manager,r,
+rule_ativ_cn_company,ATIV-Gutschrift: Firma,plcs.ativ.credit.note,,crud,"[('company_id', 'in', company_ids)]"
+rule_ativ_ticket_company,ATIV-Ticket: Firma,plcs.ativ.ticket,,crud,"[('company_id', 'in', company_ids)]"
+rule_ativ_document_company,ATIV-Dokument: Firma,plcs.ativ.document,,crud,"[('company_id', 'in', company_ids)]"

@@ -342,7 +342,7 @@ export class GreenRxReceiptApp extends Component {
     }
 
     async confirmTicket() {
-        if (!this.state.selected) {
+        if (!this.state.selected || this.state.selected.startable === false) {
             return;
         }
         await this.run(async () => {

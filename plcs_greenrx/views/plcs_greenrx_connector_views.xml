@@ -6,9 +6,11 @@
         <field name="arch" type="xml">
             <list>
                 <field name="name"/>
+                <field name="mode"/>
                 <field name="url"/>
                 <field name="sync_enabled"/>
-                <field name="last_sync"/>
+                <field name="last_success_date"/>
+                <field name="run_state" widget="badge"/>
             </list>
         </field>
     </record>
@@ -20,28 +22,99 @@
             <form string="Schnittstelle GreenRX-ERP">
                 <header>
                     <button name="action_test" type="object" string="Verbindung testen" class="btn-secondary"/>
-                    <button name="action_sync" type="object" string="Jetzt abrufen" class="btn-primary"/>
+                    <button name="action_ativ_sync" type="object" string="ATIV-Daten synchronisieren" class="btn-primary"
+                            invisible="mode != 'ativ'"/>
+                    <button name="action_ativ_full" type="object" string="Vollabgleich" class="btn-secondary"
+                            invisible="mode != 'ativ'"
+                            confirm="Alle Gutschriften des Filters erneut prüfen? Das läuft im Hintergrund und kann einige Minuten dauern."/>
+                    <button name="action_ativ_retry" type="object" string="Fehler wiederholen" class="btn-secondary"
+                            invisible="mode != 'ativ' or not queue_failed"/>
+                    <button name="action_ativ_disable" type="object" string="Integration ausschalten" class="btn-secondary"
+                            invisible="mode != 'ativ' or (not sync_enabled and not webhook_enabled)"/>
+                    <button name="action_sync" type="object" string="Jetzt abrufen" class="btn-primary"
+                            invisible="mode != 'legacy'"/>
                 </header>
                 <sheet>
+                    <div class="oe_button_box" name="button_box" invisible="mode != 'ativ'">
+                        <button name="action_open_credit_notes" type="object" class="oe_stat_button" icon="fa-file-text-o">
+                            <field name="credit_note_count" widget="statinfo" string="Gutschriften"/>
+                        </button>
+                        <button name="action_open_runs" type="object" class="oe_stat_button" icon="fa-history" string="Läufe"/>
+                        <button name="action_open_queue" type="object" class="oe_stat_button" icon="fa-tasks">
+                            <field name="queue_pending" widget="statinfo" string="Offene Schritte"/>
+                        </button>
+                    </div>
                     <div class="oe_title"><h1><field name="name"/></h1></div>
                     <group>
                         <group string="Zugang">
-                            <field name="url" placeholder="https://greenrx.example.de"/>
+                            <field name="mode"/>
+                            <field name="url" placeholder="https://ativ-service.odoo.com"/>
                             <field name="db"/>
                             <field name="login"/>
                             <field name="api_key" password="True"/>
-                            <field name="sync_enabled"/>
+                            <field name="protocol" invisible="mode != 'ativ'"/>
+                            <field name="timeout" invisible="mode != 'ativ'"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>
-                        <group string="Letzter Abruf">
+                        <group string="Stand" invisible="mode != 'ativ'">
+                            <field name="sync_enabled" string="Automatisch alle 12 Stunden"/>
+                            <field name="last_success_date"/>
+                            <field name="current_run_id"/>
+                            <field name="run_state" widget="badge" decoration-success="run_state == 'done'"
+                                   decoration-info="run_state == 'running'" decoration-warning="run_state == 'partial'"
+                                   decoration-danger="run_state == 'failed'"/>
+                            <field name="queue_failed" decoration-danger="queue_failed &gt; 0"/>
+                            <field name="ativ_cursor"/>
+                            <field name="last_result"/>
+                            <field name="tracking_readable"/>
+                        </group>
+                        <group string="Letzter Abruf" invisible="mode != 'legacy'">
+                            <field name="sync_enabled"/>
                             <field name="last_sync"/>
                             <field name="last_result"/>
                         </group>
                     </group>
-                    <group string="Feldzuordnung im GreenRX-ERP">
+                    <notebook invisible="mode != 'ativ'">
+                        <page string="Umfang und Status" name="ativ_scope">
+                            <group>
+                                <group string="Welche Daten">
+                                    <field name="source_code" placeholder="leer = Datenbankname"/>
+                                    <field name="ativ_base_domain"/>
+                                    <field name="doc_copy"/>
+                                    <field name="batch_size"/>
+                                    <field name="max_attempts"/>
+                                </group>
+                                <group string="Wann gilt ein Paket als erwartet?">
+                                    <field name="stages_expected"/>
+                                    <field name="stages_announced"/>
+                                    <field name="stages_closed"/>
+                                    <field name="stages_cancel"/>
+                                    <field name="expected_since"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Webhook" name="ativ_webhook">
+                            <group>
+                                <group>
+                                    <field name="webhook_enabled"/>
+                                    <field name="webhook_url"/>
+                                    <button name="action_generate_webhook_token" type="object" string="Neuen Webhook-Schlüssel erzeugen"
+                                            class="btn-secondary" colspan="2"
+                                            confirm="Ein vorhandener Schlüssel wird ungültig. Die neue Adresse muss in ATIV eingetragen werden. Weiter?"/>
+                                </group>
+                                <group>
+                                    <div class="text-muted" colspan="2">
+                                        Der Webhook meldet PLCS nur, dass sich bei ATIV etwas geändert hat. Die Daten liest PLCS danach
+                                        über die API. Ohne Webhook kommen Änderungen mit dem nächsten 12-Stunden-Lauf oder per Knopf.
+                                    </div>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                    <group string="Feldzuordnung im GreenRX-ERP (alt)" invisible="mode != 'legacy'">
                         <div class="alert alert-info" role="status" colspan="2">
-                            Vorbelegt nach dem Datenstand des GreenRX-ERP von 06/2025 (Helpdesk-Ticket mit Studio-Feldern).
-                            Vor dem ersten Abruf mit dem aktuellen GreenRX-ERP abgleichen.
+                            Alte Feldzuordnung (Helpdesk-Ticket mit Studio-Feldern, Stand 06/2025).
+                            Für ATIV die Art „ATIV-Gutschriften“ verwenden.
                         </div>
                         <group>
                             <field name="remote_model"/>
