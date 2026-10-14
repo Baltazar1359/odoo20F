@@ -81,6 +81,7 @@
                                     <field name="source_code" placeholder="leer = Datenbankname"/>
                                     <field name="ativ_base_domain"/>
                                     <field name="doc_copy"/>
+                                    <field name="ativ_create_products"/>
                                     <field name="batch_size"/>
                                     <field name="max_attempts"/>
                                 </group>

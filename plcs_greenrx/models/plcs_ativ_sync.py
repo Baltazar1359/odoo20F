@@ -155,6 +155,11 @@ class PlcsGreenrxConnector(models.Model):
     expected_since = fields.Date("Erwartet erst ab Gutschrift-Datum",
                                  help="Gutschriften vor diesem Datum gelten als bereits eingegangen, auch wenn ATIV "
                                       "sie noch als erwartet führt. Leer = kein Stichtag.")
+    ativ_create_products = fields.Boolean(
+        "Fehlende Artikel anlegen", default=True,
+        help="Gibt es zur PZN einer ATIV-Position noch keinen Artikel, legt die Synchronisierung ihn an "
+             "(Bezeichnung, PZN, GTIN, Charge und Verfall Pflicht, Lagertemperatur aus ATIV). "
+             "Aus: Position bleibt ohne Artikel, Packungen werden als „Artikel unbekannt“ abgelehnt.")
     doc_copy = fields.Selection([
         ("expected", "Dateien erwarteter Vorgänge kopieren, übrige bei Bedarf"),
         ("all", "Alle Dateien kopieren"),

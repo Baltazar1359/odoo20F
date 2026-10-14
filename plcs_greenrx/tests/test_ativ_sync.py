@@ -401,6 +401,41 @@ class TestAtivSync(AtivCase):
                        .mapped("qty_expected"))
         self.assertEqual(plcs_qty, source_qty)
 
+    def test_18_missing_products_created(self):
+        """1.7.3: Fehlt der Artikel zur PZN, legt die Synchronisierung ihn an – genau einmal."""
+        (self.prod_byetta | self.prod_brilique).write({"plcs_pzn": False})
+        self.prod_byetta.plcs_pzn = "99999998"
+        self.prod_brilique.plcs_pzn = "99999997"
+        self.sync()
+        lines = self.grx("V900").line_ids
+        byetta = lines.filtered(lambda l: l.pzn == "12345678").product_id
+        brilique = lines.filtered(lambda l: l.pzn == "07560038").product_id
+        self.assertTrue(byetta and brilique, "alle Positionen haben einen Artikel")
+        self.assertNotIn(byetta, self.prod_byetta | self.prod_brilique)
+        self.assertEqual(byetta.plcs_pzn, "12345678")
+        self.assertEqual(byetta.barcode, "04150123456782")
+        self.assertEqual(byetta.tracking, "lot")
+        self.assertTrue(byetta.use_expiration_date)
+        self.assertEqual(byetta.plcs_storage_temp, "cool", "„2–8 °C“ bei ATIV → kühl")
+        self.assertEqual(brilique.plcs_pzn, "07560038")
+        self.assertEqual(brilique.plcs_storage_temp, "ambient")
+        # Zweiter Lauf und Scan-Suche finden denselben Artikel, kein Duplikat
+        self.later()
+        self.fake.touch("purchase.order.line", 301, product_qty=7)
+        self.sync()
+        Product = self.env["product.product"]
+        self.assertEqual(Product.search_count([("plcs_pzn", "=", "12345678")]), 1)
+        self.assertEqual(Product._plcs_find_by_code(gtin="04150123456782"), byetta)
+
+    def test_19_missing_products_option_off(self):
+        """Option aus: keine Artikelanlage, Position bleibt ohne Artikel."""
+        self.connector.ativ_create_products = False
+        self.prod_brilique.plcs_pzn = "99999997"
+        self.sync()
+        line = self.grx("V900").line_ids.filtered(lambda l: l.pzn == "07560038")
+        self.assertFalse(line.product_id)
+        self.assertFalse(self.env["product.product"].search([("plcs_pzn", "=", "07560038")]))
+
 
 class _Resp:
     def __init__(self, status, data):

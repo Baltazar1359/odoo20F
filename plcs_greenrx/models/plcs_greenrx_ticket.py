@@ -766,6 +766,11 @@ class PlcsGreenrxTicket(models.Model):
                 if line:
                     unlinked -= line
                     line.ativ_line_key = sl.source_key
+            if self.ativ_connector_id.ativ_create_products and not (line and line.product_id):
+                product = self.env["product.product"]._plcs_ensure_from_ativ(
+                    vals["pzn"], vals["gtin"], vals["product_name"], sl.storage_conditions)
+                if product:
+                    vals["product_id"] = product.id
             label = "Ticket %s / %s" % (vals["ticket_number"] or "-", vals["product_name"] or vals["pzn"] or "?")
             if self.state == "done":
                 if not line:
