@@ -546,11 +546,20 @@ class PlcsGreenrxConnector(models.Model):
         if cron:
             cron.sudo()._trigger()
 
-    def _ativ_commit(self, processed=0):
-        """Zwischenstand speichern. Rückgabe: verbleibende Zeit des Cron-Laufs in Sekunden."""
+    def _ativ_commit(self, processed=0, remaining=None):
+        """Zwischenstand speichern. Rückgabe: verbleibende Zeit des Cron-Laufs in Sekunden.
+
+        ``remaining`` (offene Schritte) meldet dem Cron-Rahmen, dass noch Arbeit ansteht. Odoo ruft
+        den Job dann im selben Lauf erneut auf, statt auf den nächsten Anstoß zu warten.
+        """
         if odoo_module.current_test:
             return float("inf")
-        return self.env["ir.cron"]._commit_progress(processed)
+        return self.env["ir.cron"]._commit_progress(processed, remaining=remaining)
+
+    def _ativ_pending_count(self):
+        return self.env["plcs.ativ.queue"].sudo().search_count([
+            ("connector_id", "=", self.id), ("state", "=", "pending"),
+            "|", ("next_try", "=", False), ("next_try", "<=", fields.Datetime.now())])
 
     @api.model
     def _cron_ativ_schedule(self):
@@ -601,8 +610,8 @@ class PlcsGreenrxConnector(models.Model):
                 handler = getattr(self, "_ativ_process_%s" % kind)
                 handler(client, items)
                 batches += 1
-                remaining = self._ativ_commit(len(items))
-                if remaining < 120:
+                remaining = self._ativ_commit(len(items), remaining=self._ativ_pending_count())
+                if remaining < 20:
                     # Zeitlimit des Cron-Laufs naht: Stand sichern und gleich weitermachen
                     self._ativ_finalize_runs()
                     self._ativ_commit()
