@@ -42,7 +42,8 @@ class TestConnector(TransactionCase):
         product = self.env["product.product"].create({
             "name": "BYETTA", "is_storable": True, "tracking": "lot", "barcode": gs1.pzn_to_gtin("12345678")})
         connector = self.env["plcs.greenrx.connector"].create({
-            "name": "Test", "url": "https://greenrx.test", "db": "x", "login": "api", "api_key": "secret",
+            "name": "Test", "mode": "legacy", "url": "https://greenrx.test", "db": "x", "login": "api",
+            "api_key": "secret",
             "f_reference": "x_ref",
         })
         with patch.object(type(connector), "_proxy", lambda self, endpoint: FakeProxy(endpoint)):

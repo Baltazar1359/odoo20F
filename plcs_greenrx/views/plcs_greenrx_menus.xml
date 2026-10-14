@@ -23,7 +23,11 @@
     <menuitem id="menu_grx_serials" name="Seriennummern" parent="menu_grx_data" sequence="3" action="action_grx_serials"/>
     <menuitem id="menu_grx_scans" name="Scan-Protokoll" parent="menu_grx_data" sequence="4" action="action_grx_scans"/>
     <menuitem id="menu_grx_packages" name="Boxen GX" parent="menu_grx_data" sequence="5" action="action_grx_packages"/>
+    <menuitem id="menu_ativ_credit_notes" name="ATIV-Gutschriften" parent="menu_grx_data" sequence="6"
+              action="action_ativ_credit_notes"/>
 
     <menuitem id="menu_grx_config" name="Konfiguration" parent="menu_grx_root" sequence="90" groups="stock.group_stock_manager"/>
     <menuitem id="menu_grx_connector" name="Schnittstelle GreenRX-ERP" parent="menu_grx_config" sequence="1" action="action_grx_connector"/>
+    <menuitem id="menu_ativ_runs" name="ATIV-Läufe" parent="menu_grx_config" sequence="2" action="action_ativ_runs"/>
+    <menuitem id="menu_ativ_queue" name="ATIV-Warteschlange" parent="menu_grx_config" sequence="3" action="action_ativ_queue"/>
 </odoo>

@@ -160,19 +160,26 @@
                             <div class="o_grx_results" t-if="this.state.searched">
                                 <div class="o_grx_kicker"><t t-out="this.state.results.length"/> Treffer</div>
                                 <button type="button" class="o_grx_result" t-foreach="this.state.results" t-as="r" t-key="r.id"
+                                        t-att-class="{'o_grx_result_inactive': r.startable === false}"
                                         t-on-click="() => this.selectTicket(r)">
                                     <span class="d-flex justify-content-between gap-2">
                                         <b t-out="r.sender or ('Vorgang ' + r.name)"/>
                                         <span class="o_grx_muted small" t-out="r.match"/>
                                     </span>
-                                    <span class="d-block o_grx_mono small">Ref. <t t-out="r.name"/> · Rekl. <t t-out="r.complaint_number or '—'"/> · Kd. <t t-out="r.customer_number or '—'"/></span>
+                                    <span class="d-block small o_grx_err" t-if="r.startable === false">
+                                        <t t-out="r.state_label"/><t t-if="r.ativ_reason"> · <t t-out="r.ativ_reason"/></t>
+                                    </span>
+                                    <span class="d-block o_grx_mono small">Ref. <t t-out="r.name"/> · Rekl. <t t-out="r.complaint_number or '—'"/> · Kd. <t t-out="r.customer_number or '—'"/> · GS <t t-out="r.credit_note or '—'"/></span>
+                                    <span class="d-block small o_grx_muted" t-if="r.date or r.city or r.ativ_stages">
+                                        <t t-if="r.date">Datum <t t-out="r.date"/></t><t t-if="r.city"> · <t t-out="r.city"/></t><t t-if="r.ativ_stages"> · ATIV: <t t-out="r.ativ_stages"/></t><t t-if="r.pickup"> · Abholung <t t-out="r.pickup"/></t>
+                                    </span>
                                     <span class="d-block small">
                                         <t t-foreach="r.items" t-as="i" t-key="i_index"><t t-if="i_index"> · </t><t t-out="i.qty"/> × <t t-out="i.product"/> (Ticket <t t-out="i.ticket or '—'"/>)</t>
                                         <b class="ms-1">(<t t-out="r.total"/> Pkg.)</b>
                                     </span>
                                 </button>
                                 <div class="o_grx_hint o_grx_hint_warn" t-if="!this.state.results.length">
-                                    Kein offenes Ticket gefunden. Schreibweise prüfen oder Lagerleitung fragen.
+                                    Kein Vorgang gefunden. Schreibweise prüfen oder Lagerleitung fragen.
                                     Ohne Ticket im GreenRX-ERP das Paket nicht annehmen.
                                 </div>
                             </div>
@@ -184,7 +191,19 @@
                                 <div><dt>Reklamation</dt><dd class="o_grx_mono" t-out="this.state.selected.complaint_number or '—'"/></div>
                                 <div><dt>Kundennummer</dt><dd class="o_grx_mono" t-out="this.state.selected.customer_number or '—'"/></div>
                                 <div><dt>Gutschrift</dt><dd class="o_grx_mono" t-out="this.state.selected.credit_note or '—'"/></div>
+                                <div t-if="this.state.selected.ativ_stages"><dt>Status ATIV</dt><dd t-out="this.state.selected.ativ_stages"/></div>
+                                <div t-if="this.state.selected.pickup"><dt>Abholung</dt><dd t-out="this.state.selected.pickup"/></div>
                             </dl>
+                            <div class="o_grx_hint o_grx_hint_warn mb-2" t-if="this.state.selected.startable === false">
+                                <b><t t-out="this.state.selected.state_label"/>.</b>
+                                <t t-if="this.state.selected.ativ_reason"> <t t-out="this.state.selected.ativ_reason"/>.</t>
+                                Diesen Vorgang nicht erfassen. Paket zur Seite legen und Lagerleitung fragen.
+                            </div>
+                            <div class="mb-2" t-if="this.state.selected.documents">
+                                <a t-att-href="'/odoo/action-plcs_greenrx.action_grx_tickets/' + this.state.selected.id" target="_blank">
+                                    <t t-out="this.state.selected.documents"/> Dokumente und Fotos von ATIV ansehen
+                                </a>
+                            </div>
                             <div class="o_grx_kicker">Angemeldete Produkte</div>
                             <div class="o_grx_slipline" t-foreach="this.state.selected.items" t-as="i" t-key="i_index">
                                 <div class="d-flex justify-content-between gap-2">
@@ -448,7 +467,7 @@
             <!-- Aktionsleiste unten -->
             <footer class="o_grx_actions" t-if="this.state.screen === 'step'">
                 <t t-if="this.state.step === 1">
-                    <button type="button" class="o_grx_btn o_grx_btn_primary o_grx_btn_big" t-att-disabled="!this.state.selected" t-on-click="() => this.confirmTicket()">
+                    <button type="button" class="o_grx_btn o_grx_btn_primary o_grx_btn_big" t-att-disabled="!this.state.selected or this.state.selected.startable === false" t-on-click="() => this.confirmTicket()">
                         <t t-if="this.state.selected">Richtig – weiter: Box scannen</t><t t-else="">Erst Paket auswählen</t>
                     </button>
                 </t>

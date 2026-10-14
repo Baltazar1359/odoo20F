@@ -10,3 +10,5 @@ from . import plcs_greenrx_ticket
 from . import plcs_greenrx_box
 from . import plcs_greenrx_scan
 from . import plcs_greenrx_connector
+from . import plcs_ativ_mirror
+from . import plcs_ativ_sync

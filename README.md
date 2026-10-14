@@ -77,11 +77,15 @@ Ein Paket ist ein **Vorgang** (Referenznummer V…). Er enthält je Produkt ein 
 
 Handscanner im Tastaturmodus müssen beim Retourenschein-QR die **Zeilenumbrüche** mitsenden. Sonst lässt sich der Code nicht eindeutig lesen, und Odoo meldet das. Mit der Handykamera funktioniert es immer.
 
-- **Schnittstelle:** GreenRX › Konfiguration › Schnittstelle GreenRX-ERP (URL, Datenbank, Benutzer, API-Schlüssel, Feldzuordnung). Der Abruf läuft auf Knopfdruck oder alle 15 Minuten.
-  - Die Feldzuordnung ist nach dem Datenstand 06/2025 vorbelegt: `helpdesk.ticket`, `ticket_ref`, `x_studio_credit_note`, `x_studio_product`, `x_studio_product_number`, `x_studio_batch_number`.
-  - Mit dem Feld „Referenznummer (Vorgang)“ werden die Tickets eines Vorgangs zu einem Paket zusammengefasst.
-  - **Vor dem ersten Abruf mit dem aktuellen GreenRX-ERP abgleichen.**
-  - Sammelretouren mit mehreren Positionen lassen sich über „Positions-Modell“ abbilden.
+- **ATIV-Schnittstelle (ab 1.6.0):** GreenRX › Konfiguration › Schnittstelle GreenRX-ERP, Art „ATIV-Gutschriften“.
+  PLCS liest die ATIV-Gutschriften (`purchase.order`) mit Vorgang, Positionen, Tickets, Kunde, Verlauf und Dokumenten
+  über die JSON-2-API (nur lesend). Abruf alle 12 Stunden, per Knopf „ATIV-Daten synchronisieren“ oder sofort nach
+  einem Webhook aus ATIV. Die Daten liegen getrennt im Menü „ATIV-Gutschriften“ und füllen das Soll des
+  Retourenvorgangs. Boxen, Scans, Ist und Eingänge bleiben unberührt. Laut ATIV nicht erwartete Vorgänge stehen auf
+  „Nicht erwartet“; die Lagerleitung kann sie mit „Trotzdem erwarten“ öffnen.
+  Einzelheiten, Feldzuordnung und Datenvertrag: [`docs/ATIV_SCHNITTSTELLE.md`](docs/ATIV_SCHNITTSTELLE.md).
+- **Alte Feldzuordnung** (Art „Helpdesk-Tickets“, Stand 06/2025): Abruf auf Knopfdruck oder alle 15 Minuten.
+  Vorhandene Schnittstellen behalten diese Art beim Update.
 - **Import:** GreenRX › Übersicht › Tickets › Zahnrad › Datensätze importieren. Eine Vorlage liegt dort bei.
 - **Gegenrichtung:** Das GreenRX-ERP kann Tickets auch selbst anlegen, über `plcs.greenrx.ticket.api_upsert(tickets)` (externe API).
 
@@ -107,7 +111,7 @@ Danach:
 odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --stop-after-init
 ```
 
-65 automatische Tests decken ab (davon 4 Browser-Tests, die Chrome brauchen):
+Die automatischen Tests (davon 4 Browser-Tests, die Chrome brauchen) decken ab:
 
 - den GS1/IFA-Parser und den Retourenschein-QR (auch zerteilt durch den Handscanner),
 - den ganzen Ablauf von Ticket bis VP-Freigabe,
@@ -127,6 +131,10 @@ odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --st
 - die Sperre gegen vorzeitiges Buchen des Eingangs und den Nachtrags-Eingang (1.3.2),
 - die Handeingabe einer Packung: Prüfziffer, gleiche Regeln wie beim Scan, Kennzeichnung, Rechte, Hinweis ohne Ampel-Wirkung (1.5.0, `TestManualParser`, `TestManualPack`),
 - Handeingabe, Scan in ein Eingabefeld und Sicherheitsabfrage beim Entfernen in der Oberfläche (Browser-Test, `TestGreenrxManualPackUi`).
+- die ATIV-Schnittstelle mit simuliertem ATIV (1.6.0): Erstübernahme, Dokumente, alle Suchmerkmale, keine Duplikate,
+  Änderungen nur an Position/Ticket/Anhang/Nachricht, Schutz lokaler Wareneingangsdaten, vorübergehende und
+  dauerhafte Fehler mit Wiederholung, überlappende Läufe, Statuswechsel, Stichtag, fehlende Gutschriften,
+  nur lesende Aufrufe, Webhook (auch über HTTP) und Mengen-/Referenzabgleich.
 
 Zusätzlich prüft `e2e/playwright_scan_queue.py` mit Playwright gegen einen laufenden Server, dass 5 schnelle Scans alle ankommen:
 
@@ -138,6 +146,6 @@ ODOO_PASSWORD=… python e2e/playwright_scan_queue.py --url http://127.0.0.1:806
 
 - Die Druckvorlagen sind eine Nachbildung der KabQ-Checkliste. Abgleich mit dem Word-Formblatt und Freigabe durch die QMB stehen aus. Das gilt auch für die Anlage und das Sperrblatt als neue Formblätter.
 - Der Test mit echten Packungen und dem echten Handscanner steht aus (GS1 und IFA).
-- Die Feldzuordnung zum aktuellen GreenRX-ERP und ein API-Benutzer bei ATIV fehlen noch.
+- ATIV-Schnittstelle: API-Benutzer bei ATIV, Stichtag für alte „Picked Up“-Tickets und Test mit echten Daten stehen aus.
 - Validierung über Change Control (Validierungsplan und -bericht) vor dem Produktivstart.
 - Verkauf aus GreenRX/Bestand und Vernichtung gesperrter Ware sind noch nicht Teil des Moduls.

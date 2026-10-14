@@ -1,0 +1,429 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ATIV-Gutschriften -->
+    <record id="view_ativ_cn_list" model="ir.ui.view">
+        <field name="name">plcs.ativ.credit.note.list</field>
+        <field name="model">plcs.ativ.credit.note</field>
+        <field name="arch" type="xml">
+            <list string="ATIV-Gutschriften" create="0" edit="0" delete="0"
+                  decoration-muted="status_category in ('closed', 'cancel')" decoration-danger="source_missing">
+                <field name="date_order"/>
+                <field name="name"/>
+                <field name="vorgang_name"/>
+                <field name="complaint_number" optional="show"/>
+                <field name="ticket_numbers" optional="show"/>
+                <field name="customer_number"/>
+                <field name="partner_name"/>
+                <field name="partner_city" optional="show"/>
+                <field name="pickup_date" optional="show"/>
+                <field name="pickup_done" optional="hide"/>
+                <field name="source_state_label" optional="hide"/>
+                <field name="status_category" widget="badge" decoration-success="status_category == 'expected'"
+                       decoration-danger="status_category == 'cancel'"/>
+                <field name="grx_ticket_id" optional="show"/>
+                <field name="amount_total" optional="hide"/>
+                <field name="last_sync" optional="hide"/>
+                <field name="source_missing" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_ativ_cn_form" model="ir.ui.view">
+        <field name="name">plcs.ativ.credit.note.form</field>
+        <field name="model">plcs.ativ.credit.note</field>
+        <field name="arch" type="xml">
+            <form string="ATIV-Gutschrift" create="0" edit="0" delete="0">
+                <sheet>
+                    <div class="alert alert-danger" role="alert" invisible="not source_missing">
+                        Diese Gutschrift wurde beim letzten Vollabgleich bei ATIV nicht mehr gefunden. Sie bleibt zur Nachverfolgung erhalten.
+                    </div>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Vorgang">
+                            <field name="vorgang_name"/>
+                            <field name="grx_ticket_id"/>
+                            <field name="complaint_number"/>
+                            <field name="ticket_numbers"/>
+                            <field name="status_category" widget="badge"/>
+                            <field name="status_reason"/>
+                        </group>
+                        <group string="Kunde">
+                            <field name="customer_number"/>
+                            <field name="partner_name"/>
+                            <field name="partner_address"/>
+                            <field name="partner_email" widget="email"/>
+                            <field name="partner_phone" widget="phone"/>
+                        </group>
+                        <group string="Abholung">
+                            <field name="pickup_address"/>
+                            <field name="pickup_date"/>
+                            <field name="pickup_done"/>
+                        </group>
+                        <group string="Status bei ATIV">
+                            <field name="source_state_label"/>
+                            <field name="date_order"/>
+                            <field name="date_approve"/>
+                            <field name="receipt_status"/>
+                            <field name="ativ_receipt_done"/>
+                            <field name="quarantine_reason"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Positionen" name="lines">
+                            <field name="line_ids">
+                                <list decoration-muted="removed">
+                                    <field name="ticket_number"/>
+                                    <field name="product_code"/>
+                                    <field name="product_name"/>
+                                    <field name="batch"/>
+                                    <field name="expiry_date"/>
+                                    <field name="qty" sum="Summe"/>
+                                    <field name="uom" optional="hide"/>
+                                    <field name="storage_conditions" optional="show"/>
+                                    <field name="price_unit" optional="hide"/>
+                                    <field name="taxes" optional="hide"/>
+                                    <field name="price_subtotal" optional="hide" sum="Netto"/>
+                                    <field name="price_total" optional="hide" sum="Brutto"/>
+                                    <field name="condition_note" optional="hide"/>
+                                    <field name="qty_sellable" optional="hide"/>
+                                    <field name="qty_quarantine" optional="hide"/>
+                                    <field name="qty_blocked" optional="hide"/>
+                                    <field name="qty_destroyed" optional="hide"/>
+                                    <field name="removed" optional="show"/>
+                                    <field name="grx_line_id" optional="hide"/>
+                                </list>
+                            </field>
+                            <group>
+                                <group>
+                                    <field name="amount_untaxed"/>
+                                    <field name="amount_tax"/>
+                                    <field name="amount_total"/>
+                                    <field name="currency_name"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Tickets" name="tickets">
+                            <field name="ativ_ticket_ids">
+                                <list>
+                                    <field name="ticket_number"/>
+                                    <field name="title"/>
+                                    <field name="stage_name"/>
+                                    <field name="product_name"/>
+                                    <field name="batch"/>
+                                    <field name="qty"/>
+                                    <field name="return_reason" optional="show"/>
+                                    <field name="pickup_done" optional="show"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Herkunft" name="origin">
+                            <group>
+                                <group>
+                                    <field name="source_key"/>
+                                    <field name="source_id"/>
+                                    <field name="vorgang_key"/>
+                                    <field name="vorgang_source"/>
+                                    <field name="connector_id"/>
+                                </group>
+                                <group>
+                                    <field name="created_by"/>
+                                    <field name="buyer"/>
+                                    <field name="source_create_date"/>
+                                    <field name="source_write_date"/>
+                                    <field name="last_sync"/>
+                                    <field name="contract_version"/>
+                                    <field name="payload_hash"/>
+                                </group>
+                            </group>
+                            <field name="payload_json" groups="stock.group_stock_manager"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_ativ_cn_search" model="ir.ui.view">
+        <field name="name">plcs.ativ.credit.note.search</field>
+        <field name="model">plcs.ativ.credit.note</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name" string="Nummer" filter_domain="['|', '|', '|', '|', '|', ('name', 'ilike', self), ('vorgang_name', 'ilike', self), ('complaint_number', 'ilike', self), ('ticket_numbers', 'ilike', self), ('customer_number', 'ilike', self), ('partner_name', 'ilike', self)]"/>
+                <field name="partner_name"/>
+                <field name="customer_number"/>
+                <filter name="expected" string="Erwartet" domain="[('status_category', 'in', ('expected', 'unknown'))]"/>
+                <filter name="not_expected" string="Nicht erwartet" domain="[('status_category', 'not in', ('expected', 'unknown'))]"/>
+                <filter name="missing" string="Bei ATIV nicht mehr vorhanden" domain="[('source_missing', '=', True)]"/>
+                <group>
+                    <filter name="group_status" string="Einordnung" context="{'group_by': 'status_category'}"/>
+                    <filter name="group_customer" string="Kunde" context="{'group_by': 'partner_name'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_ativ_credit_notes" model="ir.actions.act_window">
+        <field name="name">ATIV-Gutschriften</field>
+        <field name="res_model">plcs.ativ.credit.note</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Noch keine Gutschriften von ATIV</p>
+            <p>Die Daten kommen über GreenRX › Konfiguration › Schnittstelle GreenRX-ERP › „ATIV-Daten synchronisieren“.</p>
+        </field>
+    </record>
+
+    <!-- ATIV-Tickets -->
+    <record id="view_ativ_ticket_form" model="ir.ui.view">
+        <field name="name">plcs.ativ.ticket.form</field>
+        <field name="model">plcs.ativ.ticket</field>
+        <field name="arch" type="xml">
+            <form string="ATIV-Ticket" create="0" edit="0" delete="0">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="ticket_number"/>
+                        <h1><field name="ticket_number"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="title"/>
+                            <field name="stage_name"/>
+                            <field name="stage_category" widget="badge"/>
+                            <field name="vorgang_name"/>
+                            <field name="complaint_number"/>
+                            <field name="return_reason"/>
+                            <field name="gdp_confirmation"/>
+                            <field name="rejection_reason" invisible="not rejection_reason"/>
+                        </group>
+                        <group>
+                            <field name="product_name"/>
+                            <field name="pzn"/>
+                            <field name="batch"/>
+                            <field name="expiry_date"/>
+                            <field name="qty"/>
+                            <field name="price"/>
+                            <field name="storage_conditions"/>
+                        </group>
+                        <group string="Kunde und Abholung">
+                            <field name="partner_name"/>
+                            <field name="partner_email" widget="email"/>
+                            <field name="partner_phone" widget="phone"/>
+                            <field name="address"/>
+                            <field name="alt_pickup_address" invisible="not alt_pickup_address"/>
+                            <field name="pickup_done"/>
+                        </group>
+                        <group string="Herkunft (ATIV)">
+                            <field name="assigned_user"/>
+                            <field name="created_by"/>
+                            <field name="source_create_date"/>
+                            <field name="source_write_date"/>
+                            <field name="close_date"/>
+                            <field name="source_key"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Beschreibung" name="description">
+                            <field name="description"/>
+                        </page>
+                        <page string="Verlauf" name="history">
+                            <field name="message_ids">
+                                <list>
+                                    <field name="date"/>
+                                    <field name="author"/>
+                                    <field name="kind"/>
+                                    <field name="subtype" optional="hide"/>
+                                    <field name="body"/>
+                                    <field name="tracking"/>
+                                    <field name="attachment_names" optional="show"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Dokumente" name="documents">
+                            <field name="document_ids">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="mimetype"/>
+                                    <field name="file_size"/>
+                                    <field name="source_create_date"/>
+                                    <field name="author"/>
+                                    <field name="state" widget="badge"/>
+                                    <button name="action_open" type="object" string="Öffnen" icon="fa-external-link"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Gutschriften" name="credit_notes">
+                            <field name="credit_note_ids"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Dokumente -->
+    <record id="view_ativ_document_list" model="ir.ui.view">
+        <field name="name">plcs.ativ.document.list</field>
+        <field name="model">plcs.ativ.document</field>
+        <field name="arch" type="xml">
+            <list string="ATIV-Dokumente" create="0" edit="0" delete="0">
+                <field name="name"/>
+                <field name="ativ_ticket_id"/>
+                <field name="mimetype" optional="show"/>
+                <field name="file_size" optional="show"/>
+                <field name="source_create_date"/>
+                <field name="author" optional="show"/>
+                <field name="state" widget="badge" decoration-success="state == 'copied'" decoration-danger="state == 'error'"/>
+                <button name="action_open" type="object" string="Öffnen" icon="fa-external-link"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_ativ_document_kanban" model="ir.ui.view">
+        <field name="name">plcs.ativ.document.kanban</field>
+        <field name="model">plcs.ativ.document</field>
+        <field name="arch" type="xml">
+            <kanban create="0" edit="0" delete="0">
+                <field name="attachment_id"/>
+                <field name="is_image"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="d-flex flex-column gap-1">
+                            <img t-if="record.is_image.raw_value and record.attachment_id.raw_value"
+                                 t-att-src="'/web/image/' + record.attachment_id.raw_value + '/300x200'"
+                                 class="img-fluid" style="max-height: 160px; object-fit: contain;" alt="Foto"/>
+                            <field name="name" class="fw-bold text-break"/>
+                            <span class="small text-muted"><field name="ativ_ticket_id"/> · <field name="source_create_date"/></span>
+                            <field name="state" widget="badge"/>
+                            <button name="action_open" type="object" class="btn btn-sm btn-secondary">Öffnen</button>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- Läufe und Warteschlange -->
+    <record id="view_ativ_run_list" model="ir.ui.view">
+        <field name="name">plcs.ativ.run.list</field>
+        <field name="model">plcs.ativ.run</field>
+        <field name="arch" type="xml">
+            <list string="ATIV-Läufe" create="0" edit="0" delete="0"
+                  decoration-success="state == 'done'" decoration-warning="state == 'partial'" decoration-danger="state == 'failed'">
+                <field name="started"/>
+                <field name="finished"/>
+                <field name="mode"/>
+                <field name="trigger"/>
+                <field name="user_id" optional="hide"/>
+                <field name="count_planned"/>
+                <field name="count_created"/>
+                <field name="count_updated"/>
+                <field name="count_unchanged" optional="show"/>
+                <field name="count_failed"/>
+                <field name="count_documents" optional="show"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_ativ_run_form" model="ir.ui.view">
+        <field name="name">plcs.ativ.run.form</field>
+        <field name="model">plcs.ativ.run</field>
+        <field name="arch" type="xml">
+            <form string="ATIV-Lauf" create="0" edit="0" delete="0">
+                <header>
+                    <button name="action_retry_failed" type="object" string="Fehlgeschlagene wiederholen"
+                            class="btn-primary" invisible="failed_count == 0"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="mode"/>
+                            <field name="trigger"/>
+                            <field name="user_id"/>
+                            <field name="started"/>
+                            <field name="finished"/>
+                            <field name="cursor_from"/>
+                            <field name="cursor_candidate"/>
+                        </group>
+                        <group>
+                            <field name="count_planned"/>
+                            <field name="count_cn_created"/>
+                            <field name="count_cn_updated"/>
+                            <field name="count_unchanged"/>
+                            <field name="count_created"/>
+                            <field name="count_updated"/>
+                            <field name="count_failed"/>
+                            <field name="count_missing"/>
+                            <field name="count_documents"/>
+                            <field name="pending_count"/>
+                            <field name="failed_count"/>
+                        </group>
+                    </group>
+                    <field name="message"/>
+                    <field name="queue_ids" domain="[('state', '!=', 'done')]">
+                        <list>
+                            <field name="kind"/>
+                            <field name="res_model"/>
+                            <field name="res_id"/>
+                            <field name="state" widget="badge"/>
+                            <field name="attempts"/>
+                            <field name="next_try"/>
+                            <field name="error"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_ativ_queue_list" model="ir.ui.view">
+        <field name="name">plcs.ativ.queue.list</field>
+        <field name="model">plcs.ativ.queue</field>
+        <field name="arch" type="xml">
+            <list string="ATIV-Warteschlange" create="0" edit="0" delete="0"
+                  decoration-danger="state == 'failed'" decoration-muted="state == 'done'">
+                <field name="id"/>
+                <field name="run_id"/>
+                <field name="kind"/>
+                <field name="res_model"/>
+                <field name="res_id"/>
+                <field name="state" widget="badge"/>
+                <field name="attempts"/>
+                <field name="next_try"/>
+                <field name="error"/>
+                <button name="action_retry" type="object" string="Wiederholen" icon="fa-repeat" invisible="state != 'failed'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_ativ_queue_search" model="ir.ui.view">
+        <field name="name">plcs.ativ.queue.search</field>
+        <field name="model">plcs.ativ.queue</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="res_id"/>
+                <filter name="not_done" string="Offen oder fehlgeschlagen" domain="[('state', '!=', 'done')]"/>
+                <filter name="failed" string="Fehlgeschlagen" domain="[('state', '=', 'failed')]"/>
+                <group>
+                    <filter name="group_kind" string="Art" context="{'group_by': 'kind'}"/>
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_ativ_runs" model="ir.actions.act_window">
+        <field name="name">ATIV-Läufe</field>
+        <field name="res_model">plcs.ativ.run</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <record id="action_ativ_queue" model="ir.actions.act_window">
+        <field name="name">ATIV-Warteschlange</field>
+        <field name="res_model">plcs.ativ.queue</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_not_done': 1}</field>
+    </record>
+</odoo>

@@ -246,3 +246,8 @@ $grx-card: #FFFFFF;
     .o_grx_btn_redline { background: #FFFFFF; color: $grx-red; border-color: $grx-red; }
     .o_grx_btn_ghost { background: #FFFFFF; color: $grx-ink; border-color: $grx-line; }
 }
+
+.o_grx_result.o_grx_result_inactive {
+    opacity: 0.7;
+    border-style: dashed;
+}

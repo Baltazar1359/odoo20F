@@ -4,3 +4,4 @@ from . import test_four_eyes_access
 from . import test_connector
 from . import test_receipt_ui
 from . import test_manual_pack
+from . import test_ativ_sync
