@@ -141,7 +141,7 @@
                     </table>
                     <div style="font-weight:bold;font-size:10.5px;margin:8px 0 3px;">PACKUNGEN IN DER BOX</div>
                     <table class="grid">
-                        <tr><th style="width:34px;">Nr.</th><th>Seriennummer</th><th style="width:90px;">PZN</th><th style="width:95px;">Charge (Scan)</th><th style="width:85px;">Verfall (Scan)</th></tr>
+                        <tr><th style="width:34px;">Nr.</th><th>Seriennummer</th><th style="width:90px;">PZN</th><th style="width:95px;">Charge (Scan)</th><th style="width:85px;">Verfall (Scan)</th><th style="width:40px;">Hand</th></tr>
                         <t t-foreach="v['packs']" t-as="p">
                             <tr class="mono">
                                 <td><t t-out="p['n']"/></td>
@@ -149,10 +149,12 @@
                                 <td class="odoo"><t t-out="p['pzn']"/></td>
                                 <td class="odoo"><t t-out="p['batch']"/></td>
                                 <td class="odoo"><t t-out="p['expiry']"/></td>
+                                <td class="odoo" style="text-align:center;"><t t-if="p['manual']">H</t></td>
                             </tr>
                         </t>
-                        <tr><td colspan="4">Summe</td><td class="odoo"><t t-out="o.qty"/> Packungen</td></tr>
+                        <tr><td colspan="4">Summe</td><td class="odoo" colspan="2"><t t-out="o.qty"/> Packungen<t t-if="v['manual_qty']">, davon <t t-out="v['manual_qty']"/> von Hand</t></td></tr>
                     </table>
+                    <div t-if="v['manual_qty']" style="font-size:9px;margin-top:2px;">H = Packungsdaten von Hand eingegeben, weil der Code nicht lesbar war. Seriennummer bei der Eingabe zweimal erfasst.</div>
                     <table style="width:100%;margin-top:18px;">
                         <tr>
                             <td style="width:50%;padding-right:12px;">Erfasst von: <span class="odoo" t-out="v['checked_by']"/>
@@ -214,7 +216,7 @@
                             <div style="margin-top:10px;font-size:10.5px;font-weight:bold;">SERIENNUMMERN IN DIESER BOX (<t t-out="o.qty"/>)</div>
                             <table style="width:100%;font-size:11px;" class="mono">
                                 <t t-foreach="v['pack_pairs']" t-as="pair">
-                                    <tr><t t-foreach="pair" t-as="p"><td style="width:50%;"><t t-out="p['n']"/> · <t t-out="p['serial']"/></td></t></tr>
+                                    <tr><t t-foreach="pair" t-as="p"><td style="width:50%;"><t t-out="p['n']"/> · <t t-out="p['serial']"/><t t-if="p['manual']"> (H)</t></td></t></tr>
                                 </t>
                             </table>
                             <div style="margin-top:8px;font-size:12px;"><b>Lagerort:</b> <t t-out="v['blocked_location']"/></div>

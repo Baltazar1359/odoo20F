@@ -52,6 +52,7 @@
                             <field name="batch"/>
                             <field name="expiry_date"/>
                             <field name="qty"/>
+                            <field name="manual_qty" invisible="not manual_qty"/>
                         </group>
                     </group>
                     <group>
@@ -97,6 +98,7 @@
                                     <field name="batch"/>
                                     <field name="expiry_date"/>
                                     <field name="pzn"/>
+                                    <field name="manual"/>
                                     <field name="lot_id"/>
                                     <field name="create_date" string="Zeit"/>
                                 </list>
@@ -111,6 +113,7 @@
                                     <field name="serial"/>
                                     <field name="batch"/>
                                     <field name="message"/>
+                                    <field name="manual" optional="show"/>
                                     <field name="raw" optional="hide"/>
                                     <field name="accepted"/>
                                 </list>

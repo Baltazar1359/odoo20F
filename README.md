@@ -27,6 +27,9 @@ Umgesetzt nach dem Entwurf „PLCS Lager-Oberfläche“ (Handy und PC mit Handsc
    - Scans kommen in eine **Warteschlange** und werden der Reihe nach verarbeitet. Auch sehr schnelle Scans hintereinander gehen nicht verloren.
    - Jeder Scan bekommt eine eigene Rückmeldung: Ton (ok bzw. Fehler), Meldung oben und ein Eintrag unter **„Letzte Scans“**.
    - Die **Zahl der Packungen in der Box** steht groß oben rechts, darunter die angemeldete Anzahl.
+   - **Packung von Hand eingeben** (1.5.0), wenn der Code nicht lesbar ist: PZN (oder GTIN), Charge, Verfall (MM/JJJJ) und die Seriennummer **zweimal**. Odoo prüft die Prüfziffer der PZN/GTIN und dass beide Seriennummern gleich sind (Einfügen ist im Wiederholungsfeld gesperrt). Danach gelten dieselben Regeln wie beim Scan. Die Maske bleibt offen: PZN, Charge und Verfall stehen für die nächste Packung schon da, nur die Seriennummer wird neu getippt. Tippt der Handscanner versehentlich in ein Feld der Maske, wird das als normaler Scan verarbeitet.
+   - Die Handeingabe ist gekennzeichnet: „Hand“ in der Liste der Box, Vermerk im Verlauf, „H“ auf der Anlage Box-Inhalt, Feld „Von Hand eingegeben“ an der Seriennummer. In der Vorprüfung und bei der VP erscheint der Hinweis „x von y Packungen von Hand eingegeben“. Er hat **keinen Einfluss auf die Ampel** (Entscheidung 14.10.2026).
+   - **Entfernen** einer Packung fragt vorher nach („Ja, entfernen“ / „Nein, behalten“).
 4. **Vorprüfung:** 6 Sichtprüfungen (Ja/Nein) und die Prüfungen des Systems ergeben einen Ampel-Vorschlag. Eine mildere Ampel als der Vorschlag ist nicht möglich. Wer strenger wählt, gibt einen Grund an.
 5. **Drucken:** KabQ-Checkliste und Anlage Box-Inhalt, bei Rot zusätzlich das Sperrblatt. Danach Ausdruck bestätigen und Box abschließen.
    - **Jede Änderung nach dem Druck macht den Ausdruck ungültig** (Zurück, Antworten, Ampel, Bemerkung, Packungen scannen oder entfernen). Dann ist ein neuer Druck Pflicht, und die Bestätigung muss neu gesetzt werden.
@@ -104,7 +107,7 @@ Danach:
 odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --stop-after-init
 ```
 
-56 automatische Tests decken ab (davon 3 Browser-Tests, die Chrome brauchen):
+65 automatische Tests decken ab (davon 4 Browser-Tests, die Chrome brauchen):
 
 - den GS1/IFA-Parser und den Retourenschein-QR (auch zerteilt durch den Handscanner),
 - den ganzen Ablauf von Ticket bis VP-Freigabe,
@@ -121,7 +124,9 @@ odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --st
 - 5 Scans direkt hintereinander in der Scan-Oberfläche (Browser-Test, `TestGreenrxScanQueue`; braucht Chrome),
 - „Paket fertig“ mit offener Box einer anderen Person und mit Soll/Ist-Abweichung aus Schritt 2 (Browser-Test, `TestGreenrxPackageFinish`),
 - das Update auf 1.3.1: alte Ausdrucke offener Boxen werden ungültig,
-- die Sperre gegen vorzeitiges Buchen des Eingangs und den Nachtrags-Eingang (1.3.2).
+- die Sperre gegen vorzeitiges Buchen des Eingangs und den Nachtrags-Eingang (1.3.2),
+- die Handeingabe einer Packung: Prüfziffer, Seriennummer zweimal, gleiche Regeln wie beim Scan, Kennzeichnung, Rechte, Hinweis ohne Ampel-Wirkung (1.5.0, `TestManualParser`, `TestManualPack`),
+- Handeingabe, Scan in ein Eingabefeld und Sicherheitsabfrage beim Entfernen in der Oberfläche (Browser-Test, `TestGreenrxManualPackUi`).
 
 Zusätzlich prüft `e2e/playwright_scan_queue.py` mit Playwright gegen einen laufenden Server, dass 5 schnelle Scans alle ankommen:
 

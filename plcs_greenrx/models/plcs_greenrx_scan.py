@@ -12,7 +12,9 @@ class PlcsGreenrxScan(models.Model):
     ticket_id = fields.Many2one(related="box_id.ticket_id", store=True, string="Ticket")
     user_id = fields.Many2one("res.users", "Benutzer", default=lambda self: self.env.user, readonly=True)
     raw = fields.Char("Rohdaten", readonly=True)
-    code_format = fields.Selection([("gs1", "GS1"), ("ifa", "IFA")], "Format", readonly=True)
+    code_format = fields.Selection([("gs1", "GS1"), ("ifa", "IFA"), ("manual", "Handeingabe")], "Format", readonly=True)
+    manual = fields.Boolean("Von Hand eingegeben", readonly=True, index=True,
+                            help="Packungsdaten getippt, weil der Code nicht lesbar war.")
     gtin = fields.Char("GTIN", readonly=True)
     pzn = fields.Char("PZN", readonly=True)
     serial = fields.Char("Seriennummer", readonly=True, index=True)

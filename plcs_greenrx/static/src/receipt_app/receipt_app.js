@@ -7,6 +7,7 @@ import { scanBarcode } from "@web/core/barcode/barcode_dialog";
 import { isBarcodeScannerSupported } from "@web/core/barcode/barcode_video_scanner";
 import { standardActionServiceProps } from "@web/webclient/actions/action_plugin";
 import { BarcodePlugin } from "@barcodes/barcode_plugin";
+import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 
 const STEP_LABELS = ["Paket wählen", "Box scannen", "Packungen scannen", "Vorprüfung", "Drucken"];
 const AMPEL = {
@@ -15,6 +16,18 @@ const AMPEL = {
     rot: { label: "Rot – sperren", short: "Rot", desc: "Rotes Sperrblatt an die Box, ins Sperrregal, VP informiert" },
 };
 const RANK = { gruen: 0, gelb: 1, rot: 2 };
+// Felder der Handeingabe einer Packung, in Eingabereihenfolge (Enter springt weiter)
+const PACK_FIELDS = ["code", "batch", "expiry", "serial", "serial2"];
+
+function emptyPack() {
+    return { code: "", batch: "", expiry: "", serial: "", serial2: "" };
+}
+
+/** Sieht die Eingabe wie ein gescannter Packungscode aus (Scanner tippt in ein Eingabefeld)? */
+function looksLikeScan(value) {
+    const v = String(value || "").trim();
+    return v.length > 20 || /[\x1d\x1e]|^\]d2|^\[\)>|^\(01\)/.test(v) || /^01\d{14}21/.test(v);
+}
 
 function errorMessage(error) {
     return error?.data?.message || error?.message || String(error);
@@ -35,6 +48,7 @@ export class GreenRxReceiptApp extends Component {
         this.orm = useService("orm");
         this.action = useService("action");
         this.notification = useService("notification");
+        this.dialog = useService("dialog");
         this.cameraSupported = isBarcodeScannerSupported();
         this.stepLabels = STEP_LABELS;
         this.ampelMeta = AMPEL;
@@ -66,6 +80,10 @@ export class GreenRxReceiptApp extends Component {
             vpAsk: false,
             scanLog: [],
             pendingScans: 0,
+            // Handeingabe einer Packung (Code nicht lesbar)
+            packManual: false,
+            pack: emptyPack(),
+            packError: "",
         });
         // Warteschlange: Scans werden der Reihe nach verarbeitet, keiner geht verloren
         this.scanQueue = Promise.resolve();
@@ -485,6 +503,7 @@ export class GreenRxReceiptApp extends Component {
     applyBox(box) {
         if (this.state.box?.id !== box.id) {
             this.state.scanLog = [];
+            this.closePackManual();
         }
         this.state.box = box;
         this.state.noteDraft = box.note || "";
@@ -590,11 +609,138 @@ export class GreenRxReceiptApp extends Component {
         this.scrollTop();
     }
 
-    async removeScan(scan) {
+    removeScan(scan) {
+        this.dialog.add(ConfirmationDialog, {
+            title: _t("Packung entfernen?"),
+            body: _t("Packung SN %(sn)s (Charge %(ch)s) aus Box %(box)s nehmen? Die Packung zählt dann nicht mehr zur Box.", {
+                sn: scan.serial,
+                ch: scan.batch || "—",
+                box: this.state.box?.box || "",
+            }),
+            confirmLabel: _t("Ja, entfernen"),
+            confirmClass: "btn-danger",
+            cancelLabel: _t("Nein, behalten"),
+            confirm: () => this.doRemoveScan(scan),
+            cancel: () => {},
+        });
+    }
+
+    async doRemoveScan(scan) {
         await this.run(async () => {
             this.state.box = await this.call("plcs.greenrx.box", "grx_remove_scan", [[this.state.box.id], scan.id]);
             this.state.flash = { status: "info", title: _t("Packung entfernt"), message: _t("SN %s wieder aus der Box genommen.", scan.serial) };
         });
+    }
+
+    // ------------------------------------------------------------------
+    // Schritt 3: Packung von Hand eingeben (Code nicht lesbar)
+    // ------------------------------------------------------------------
+    openPackManual() {
+        this.state.packManual = true;
+        this.state.packError = "";
+        this.focusPackField(this.state.pack.code ? "serial" : "code");
+    }
+
+    closePackManual() {
+        this.state.packManual = false;
+        this.state.pack = emptyPack();
+        this.state.packError = "";
+    }
+
+    focusPackField(name) {
+        setTimeout(() => document.getElementById(`grx_pk_${name}`)?.focus(), 50);
+    }
+
+    onPackInput(name, ev) {
+        this.state.pack[name] = ev.target.value;
+        this.state.packError = "";
+    }
+
+    onPackPaste(ev) {
+        // Seriennummer muss zweimal getippt werden – Einfügen würde den Schutz aushebeln
+        ev.preventDefault();
+        this.state.packError = _t("Die Wiederholung bitte von der Packung abtippen, nicht einfügen.");
+    }
+
+    async onPackKeydown(name, ev) {
+        if (ev.key !== "Enter") {
+            return;
+        }
+        ev.preventDefault();
+        const value = ev.target.value;
+        if (looksLikeScan(value)) {
+            // Der Scanner hat in das Eingabefeld getippt: als normalen Scan verarbeiten
+            this.state.pack[name] = "";
+            ev.target.value = "";
+            this.state.packError = "";
+            await this.onScan(value);
+            this.focusPackField(name);
+            return;
+        }
+        const next = PACK_FIELDS[PACK_FIELDS.indexOf(name) + 1];
+        if (next) {
+            this.focusPackField(next);
+        } else {
+            await this.submitPackManual();
+        }
+    }
+
+    async submitPackManual() {
+        const box = this.state.box;
+        const p = this.state.pack;
+        if (!box) {
+            return;
+        }
+        const missing = [];
+        if (!p.code.trim()) missing.push(_t("PZN"));
+        if (!p.batch.trim()) missing.push(_t("Charge"));
+        if (!p.expiry.trim()) missing.push(_t("Verfall"));
+        if (!p.serial.trim()) missing.push(_t("Seriennummer"));
+        if (!p.serial2.trim()) missing.push(_t("Seriennummer (Wiederholung)"));
+        if (missing.length) {
+            this.state.packError = _t("Bitte ausfüllen: %s", missing.join(", "));
+            this.play("error");
+            return;
+        }
+        if (p.serial.trim() !== p.serial2.trim()) {
+            this.state.packError = _t("Die beiden Seriennummern stimmen nicht überein. Bitte beide noch einmal von der Packung ablesen.");
+            this.state.pack.serial2 = "";
+            this.play("error");
+            this.focusPackField("serial2");
+            return;
+        }
+        // Über die Warteschlange, damit sich Handeingabe und Scans nicht überholen
+        this.state.pendingScans++;
+        const done = this.scanQueue
+            .then(async () => {
+                let res;
+                try {
+                    res = await this.call("plcs.greenrx.box", "grx_scan_manual", [[box.id], p.code, p.serial, p.serial2, p.batch, p.expiry]);
+                } catch (error) {
+                    // Eingabe unvollständig oder ungültig: Maske bleibt offen, nichts erfasst
+                    this.state.packError = errorMessage(error);
+                    this.play("error");
+                    return;
+                }
+                this.state.box = res.box;
+                const entry = this.packageBoxes.find((b) => b.id === res.box.id);
+                if (entry) {
+                    entry.qty = res.box.qty;
+                }
+                this.confirmScan(res.status, res.title, res.message);
+                if (res.scan_id) {
+                    // Nächste Packung: PZN, Charge und Verfall stehen lassen, Seriennummer neu
+                    this.state.pack.serial = "";
+                    this.state.pack.serial2 = "";
+                    this.focusPackField("serial");
+                } else {
+                    this.state.packError = res.message;
+                }
+            })
+            .catch((error) => this.showError(error))
+            .finally(() => this.state.pendingScans--);
+        this.scanQueue = done;
+        return done;
     }
 
     async toCheck() {

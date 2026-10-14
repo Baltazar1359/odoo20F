@@ -43,6 +43,8 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
    - Einen Code zweimal scannen: wird als Doppelscan erkannt und nicht doppelt gezählt.
    - „Fehlerfall: andere Charge" in dieser Box scannen: wird abgelehnt (eine Box = ein Artikel, eine Charge).
    - **Schnell scannen:** Die Packungen so schnell wie möglich nacheinander scannen. Erwartet: Jeder Scan piept und erscheint unter „Letzte Scans“, keiner geht verloren. Die große Zahl oben rechts zeigt die Packungen in der Box.
+   - **Handeingabe (1.5.0):** Eine Packung nicht scannen, sondern „Packung von Hand eingeben“: PZN, Charge, Verfall (MM/JJJJ) und Seriennummer vom Testbogen abtippen, die Seriennummer im zweiten Feld absichtlich falsch. Erwartet: „stimmt (noch) nicht überein“, nichts erfasst. Richtig wiederholen und Enter: Packung erfasst und mit „Hand“ markiert. Eine bereits erfasste Seriennummer von Hand eingeben: wird wie beim Scan abgelehnt.
+   - **Entfernen:** Bei einer Packung „entfernen“ tippen. Erwartet: Sicherheitsabfrage mit Seriennummer. „Nein, behalten“ lässt die Packung in der Box.
 4. **Vorprüfung:** 6 Fragen beantworten. Bei unauffälligen Antworten erwartet: Vorschlag Grün. Eine mildere Ampel als der Vorschlag ist nicht wählbar.
 5. **Drucken (F8):** KabQ-Checkliste und Anlage Box-Inhalt erscheinen als PDF. Ausdruck bestätigen, **Box abschließen (F9)**.
    - **Änderung nach dem Druck (einmal bei GX001 prüfen):** Nach dem Druck **Zurück**, eine Antwort ändern, wieder weiter. Erwartet: Hinweis „Der letzte Ausdruck … ist ungültig“, die Bestätigung ist weg, Abschließen geht erst nach neuem Druck. Der neue Ausdruck trägt oben rechts **„Neuausdruck Nr. 1“** mit Uhrzeit. Den alten Ausdruck vernichten.
@@ -55,6 +57,7 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
 1. **GreenRX › VP-Freigabe** öffnen. Die Boxen erscheinen, Rot zuerst. Boxen, an denen man selbst beteiligt war, stehen am Ende mit „nur sperren“: freigeben muss eine andere VP (4-Augen-Prinzip).
 2. **GX001 freigeben.** Die Ware wird nach GreenRX/Bestand gebucht. Bei einer **gelben** oder **roten** Box verlangt Odoo eine Begründung.
 3. **GX003 sperren** (Grund angeben). Die Ware bleibt im Sperrlager.
+4. Bei einer Box mit Handeingabe steht in der Liste „Hand: n“ und in der Detailansicht der gelbe Hinweis „n von m Packungen von Hand eingegeben“. Die Ampel ist dadurch nicht verändert.
 
 ### C. Kontrollen
 

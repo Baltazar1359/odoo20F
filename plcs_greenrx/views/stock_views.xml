@@ -9,7 +9,9 @@
                 <div invisible="not plcs_is_grx_serial" class="text-muted">
                     GreenRX-Packung: Seriennummer · Charge <field name="plcs_batch" class="fw-bold"/>
                     · <field name="plcs_grx_box_id"/>
+                    <span invisible="not plcs_grx_manual" class="badge text-bg-warning ms-1">von Hand eingegeben</span>
                     <field name="plcs_is_grx_serial" invisible="1"/>
+                    <field name="plcs_grx_manual" invisible="1"/>
                 </div>
             </xpath>
         </field>
@@ -25,6 +27,7 @@
                 <field name="expiration_date" optional="show"/>
                 <field name="plcs_grx_box_id" optional="show"/>
                 <field name="plcs_grx_ticket_id" optional="hide"/>
+                <field name="plcs_grx_manual" optional="hide"/>
             </field>
         </field>
     </record>

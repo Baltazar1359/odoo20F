@@ -334,3 +334,116 @@ def parse_box_code(raw, prefix="GX", digits=3, allow_number_only=False):
     if allow_number_only and code.isdigit() and 1 <= len(code) <= digits:
         return prefix + code.zfill(digits)
     return False
+
+
+# ----------------------------------------------------------------------
+# Handeingabe einer Packung (Code nicht lesbar)
+# ----------------------------------------------------------------------
+# GS1-Zeichensatz 82 (für Seriennummer und Charge), ohne Leerzeichen
+_GS1_CS82 = re.compile(r"^[A-Za-z0-9!\"%&'()*+,\-./:;<=>?_]{1,20}$")
+_EXPIRY_MONTH_RE = re.compile(r"^(\d{1,2})\s*[./-]\s*(\d{2}|\d{4})$")
+_EXPIRY_DAY_RE = re.compile(r"^(\d{1,2})\s*\.\s*(\d{1,2})\s*\.\s*(\d{2}|\d{4})$")
+
+
+def _year(value):
+    year = int(value)
+    return 2000 + year if year < 100 else year
+
+
+def parse_manual_expiry(value):
+    """Verfall von Hand: MM/JJJJ, MM/JJ, MM.JJJJ oder TT.MM.JJJJ.
+
+    Rückgabe: (datetime.date, nur_monat). Ohne Tag gilt der letzte Tag des Monats
+    (wie Tag 00 im GS1-Code).
+    """
+    text = (value or "").strip()
+    if not text:
+        raise Gs1Error("Verfall fehlt (Format MM/JJJJ).")
+    match = _EXPIRY_DAY_RE.match(text)
+    if match:
+        day, month, year = int(match.group(1)), int(match.group(2)), _year(match.group(3))
+        try:
+            return datetime.date(year, month, day), False
+        except ValueError as e:
+            raise Gs1Error("Verfall %s ist kein gültiges Datum." % text) from e
+    match = _EXPIRY_MONTH_RE.match(text)
+    if match:
+        month, year = int(match.group(1)), _year(match.group(2))
+        if not 1 <= month <= 12:
+            raise Gs1Error("Monat %02d im Verfall %s ist ungültig." % (month, text))
+        return datetime.date(year, month, calendar.monthrange(year, month)[1]), True
+    raise Gs1Error("Verfall %s nicht lesbar. Bitte als MM/JJJJ eingeben, z. B. 05/2028." % text)
+
+
+def parse_manual(code, serial, serial_repeat, batch, expiry):
+    """Packungsdaten von Hand prüfen und wie einen Scan zurückgeben.
+
+    code: PZN (8-stellig, auch mit "PZN"/Leerzeichen/Bindestrich) oder GTIN (13/14 Stellen).
+    serial, serial_repeat: Seriennummer zweimal (Schutz gegen Tippfehler). Groß-/Kleinschreibung zählt.
+    Rückgabe: dict wie parse() mit format 'manual'; zusätzlich expiry_month_only.
+    """
+    errors = []
+    gtin = pzn = False
+    digits = re.sub(r"[\s\-]", "", (code or "").strip())
+    if digits.upper().startswith("PZN"):
+        digits = digits[3:]
+    if not digits:
+        errors.append("PZN fehlt.")
+    elif not digits.isdigit():
+        errors.append("PZN darf nur Ziffern enthalten.")
+    elif len(digits) in (13, 14):
+        gtin = digits.zfill(14)
+        if not gtin_check_digit_ok(gtin):
+            errors.append("GTIN %s: Prüfziffer stimmt nicht. Bitte noch einmal ablesen." % digits)
+        else:
+            pzn = gtin_to_pzn(gtin)
+    elif len(digits) <= 8:
+        pzn = digits.zfill(8)
+        gtin = pzn_to_gtin(pzn)
+        if not _pzn_check_ok(pzn):
+            errors.append("PZN %s: Prüfziffer stimmt nicht. Bitte noch einmal ablesen." % pzn)
+    else:
+        errors.append("PZN hat 8 Stellen, GTIN 13 oder 14 Stellen.")
+
+    serial = (serial or "").strip()
+    serial_repeat = (serial_repeat or "").strip()
+    if not serial:
+        errors.append("Seriennummer fehlt.")
+    elif not _GS1_CS82.match(serial):
+        errors.append("Seriennummer: höchstens 20 Zeichen, nur Buchstaben, Ziffern und - . / ohne Leerzeichen.")
+    elif serial != serial_repeat:
+        errors.append("Die beiden Seriennummern stimmen nicht überein. Bitte beide noch einmal von der Packung ablesen.")
+
+    batch = (batch or "").strip()
+    if not batch:
+        errors.append("Charge fehlt.")
+    elif not _GS1_CS82.match(batch):
+        errors.append("Charge: höchstens 20 Zeichen, ohne Leerzeichen.")
+
+    exp_date, month_only = False, False
+    try:
+        exp_date, month_only = parse_manual_expiry(expiry)
+    except Gs1Error as e:
+        errors.append(str(e))
+
+    if errors:
+        raise Gs1Error(" ".join(errors))
+    return {
+        "format": "manual",
+        "heuristic": False,
+        "gtin": gtin,
+        "pzn": pzn,
+        "serial": serial,
+        "batch": batch,
+        "expiry": exp_date,
+        "expiry_month_only": month_only,
+    }
+
+
+def _pzn_check_ok(pzn):
+    """PZN-8: Prüfziffer = Summe(Ziffer_i * (i+1)) mod 11 über die ersten 7 Stellen; 10 ist ungültig."""
+    if not (pzn and len(pzn) == 8 and pzn.isdigit()):
+        return False
+    total = sum(int(c) * (i + 1) for i, c in enumerate(pzn[:7]))
+    check = total % 11
+    return check != 10 and check == int(pzn[7])

@@ -105,9 +105,17 @@ $grx-card: #FFFFFF;
         display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; white-space: nowrap;
         flex-shrink: 0;
     }
+    .o_grx_badge_hint { background: $grx-yellow; color: $grx-ink; }
     .o_grx_tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 8px; background: #FCEFD9; color: #78350F; }
 
     .o_grx_label { font-weight: 600; margin-bottom: 4px; display: block; }
+
+    // Handeingabe einer Packung: am Handy untereinander, am PC zwei Spalten
+    .o_grx_pk { border-color: $grx-yellow; }
+    .o_grx_pk_grid {
+        display: grid; gap: 10px; grid-template-columns: 1fr;
+        @media (min-width: 768px) { grid-template-columns: 1fr 1fr; }
+    }
     .o_grx_input {
         width: 100%; min-height: 52px; border: 2px solid $grx-line; border-radius: 12px; padding: 10px 14px; font-size: 17px; background: #FFFFFF;
         &:focus { outline: none; border-color: $grx-blue; }
@@ -181,6 +189,7 @@ $grx-card: #FFFFFF;
         .o_grx_check_icon { width: 22px; height: 22px; border-radius: 11px; background: $grx-green; color: #FFFFFF; font-weight: 700;
             display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; }
         &.o_grx_check_bad .o_grx_check_icon { background: $grx-red; }
+        &.o_grx_check_hint .o_grx_check_icon { background: $grx-yellow; color: $grx-ink; }
     }
     .o_grx_q {
         padding: 10px 0; border-top: 1px solid #E5E7EB;

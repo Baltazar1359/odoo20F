@@ -100,3 +100,32 @@ class TestGreenrxPackageFinish(GreenrxUiCase):
         self.assertEqual(ticket.state, "done")
         self.assertEqual(ticket.deviation_note, "Eine Packung mehr im Paket als angemeldet")
         self.assertEqual(ticket.picking_id.state, "done")
+
+
+@tagged("post_install", "-at_install", "plcs_greenrx")
+class TestGreenrxManualPackUi(GreenrxUiCase):
+    """Handeingabe einer Packung in der Oberfläche, Scan in ein Eingabefeld, Sicherheitsabfrage (1.5.0)."""
+
+    def test_manual_pack_in_browser(self):
+        product = self.env["product.product"].create({
+            "name": "Handeingabe-Testartikel", "is_storable": True, "tracking": "lot", "use_expiration_date": True,
+            "barcode": gs1.pzn_to_gtin("12345678"), "plcs_pzn": "12345678",
+        })
+        res = self.env["plcs.greenrx.ticket"].api_upsert([{
+            "name": "V-HAND-1", "partner_name": "Hand-Apotheke",
+            "lines": [{"ticket_number": "9600001", "pzn": "12345678", "batch": "MLOT", "qty": 2}],
+        }])
+        self.assertFalse(res["errors"], res)
+        ticket = self.env["plcs.greenrx.ticket"].search([("name", "=", "V-HAND-1")])
+        Box = self.env["plcs.greenrx.box"].with_user(self.admin)
+        box = Box.browse(Box.grx_open_box(ticket.id, "GX160")["id"])
+
+        self.start_tour("/odoo/action-plcs_greenrx.action_grx_app", "plcs_greenrx_manual_pack", login="admin")
+
+        box.invalidate_recordset()
+        self.assertEqual(box.product_id, product)
+        self.assertEqual(box.scan_ids.filtered("accepted").mapped("serial"), ["SCANIN1"])
+        man = box.scan_ids.filtered(lambda s: s.serial == "MAN1")
+        self.assertEqual(man.mapped("manual"), [True])
+        self.assertEqual(man.result, "removed")
+        self.assertFalse(box.scan_ids.filtered(lambda s: s.serial == "MAN2"), "Tippfehler wird nicht erfasst")

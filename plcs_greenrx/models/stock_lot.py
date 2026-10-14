@@ -9,6 +9,9 @@ class StockLot(models.Model):
         help="Dieser Datensatz steht für eine einzelne Packung (securPharm-Seriennummer). "
              "Die Charge steht im Feld Charge.")
     plcs_batch = fields.Char("Charge", readonly=True, index=True)
+    plcs_grx_manual = fields.Boolean(
+        "Von Hand eingegeben", readonly=True,
+        help="Seriennummer, Charge und Verfall wurden beim GreenRX-Eingang getippt (Code nicht lesbar).")
     plcs_grx_box_id = fields.Many2one("plcs.greenrx.box", "Box-Erfassung", readonly=True, index="btree_not_null")
     plcs_grx_ticket_id = fields.Many2one(
         related="plcs_grx_box_id.ticket_id", string="GreenRX-Ticket", store=True)

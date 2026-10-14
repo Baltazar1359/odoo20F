@@ -73,6 +73,7 @@ class PlcsGreenrxBox(models.Model):
     accepted_scan_ids = fields.One2many("plcs.greenrx.scan", "box_id", "Packungen in der Box",
                                         domain=[("accepted", "=", True)], readonly=True)
     qty = fields.Integer("Packungen", compute="_compute_qty", store=True)
+    manual_qty = fields.Integer("Davon von Hand eingegeben", compute="_compute_qty", store=True)
     lot_ids = fields.One2many("stock.lot", "plcs_grx_box_id", "Seriennummern", readonly=True)
 
     # Vorprüfung
@@ -124,10 +125,12 @@ class PlcsGreenrxBox(models.Model):
         for box in self:
             box.picking_id = box.move_id.picking_id or box.ticket_id.picking_id
 
-    @api.depends("scan_ids.accepted")
+    @api.depends("scan_ids.accepted", "scan_ids.manual")
     def _compute_qty(self):
         for box in self:
-            box.qty = len(box.scan_ids.filtered("accepted"))
+            accepted = box.scan_ids.filtered("accepted")
+            box.qty = len(accepted)
+            box.manual_qty = len(accepted.filtered("manual"))
 
     @api.depends("package_id.quant_ids.location_id", "package_id.quant_ids.quantity")
     def _compute_location(self):
@@ -158,6 +161,11 @@ class PlcsGreenrxBox(models.Model):
             checks.append({"label": self.env._("Absender laut GreenRX-ERP angemeldet (Vorgang %s)", ticket.name),
                            "ok": True})
         checks.append({"label": self.env._("Seriennummern neu, keine doppelt"), "ok": True})
+        if self.manual_qty:
+            # Nur Hinweis für Lager und VP, ohne Einfluss auf die Ampel (Entscheidung 14.10.2026)
+            checks.append({"label": self.env._("%(n)s von %(q)s Packungen von Hand eingegeben (Code nicht gescannt)",
+                                               n=self.manual_qty, q=self.qty),
+                           "ok": False, "hint": True})
         checks.append({"label": self.env._("Ein Artikel, eine Charge (%s)", self.batch or "—"), "ok": True})
         if self.expiry_date:
             minimum = company.plcs_grx_min_shelf_months or 0
@@ -191,7 +199,8 @@ class PlcsGreenrxBox(models.Model):
                                                    t=row["ticket"] or "-", ist=row["ist"], soll=row["soll"]), "ok": True})
         return checks
 
-    @api.depends(lambda self: [q[0] for q in QUESTIONS] + ["expiry_date", "product_id", "qty", "batch", "slip_match"])
+    @api.depends(lambda self: [q[0] for q in QUESTIONS] + ["expiry_date", "product_id", "qty", "batch", "slip_match",
+                                                          "manual_qty"])
     def _compute_suggestion(self):
         for box in self:
             level, reasons = box._grx_suggestion()
@@ -204,7 +213,7 @@ class PlcsGreenrxBox(models.Model):
         level = "gruen"
         reasons = []
         for check in self._grx_system_checks():
-            if not check["ok"]:
+            if not check["ok"] and not check.get("hint"):
                 reasons.append(check["reason"])
                 if AMPEL_RANK[check["level"]] > AMPEL_RANK[level]:
                     level = check["level"]
@@ -339,22 +348,60 @@ class PlcsGreenrxBox(models.Model):
         self._grx_check_user()
         self._grx_check_state("scan")
         self._grx_check_owner()
-        Scan = self.env["plcs.greenrx.scan"]
         log = {"box_id": self.id, "raw": (raw or "")[:500]}
         company = self.company_id
         prefix = company.plcs_grx_box_prefix or "GX"
-
-        def reject(result, title, message, level="error"):
-            Scan.sudo().create(dict(log, result=result, message=message, accepted=False))
-            return {"status": level, "title": title, "message": message, "box": self._grx_ui_data()}
-
         if gs1.parse_box_code(raw, prefix=prefix):
-            return reject("box_code", self.env._("Das ist ein Box-Code"),
-                          self.env._("Erst diese Box abschließen. Danach die nächste Box scannen."))
+            return self._grx_reject(log, "box_code", self.env._("Das ist ein Box-Code"),
+                                    self.env._("Erst diese Box abschließen. Danach die nächste Box scannen."))
         try:
             parsed = gs1.parse(raw)
         except gs1.Gs1Error as e:
-            return reject("parse_error", self.env._("Code nicht lesbar"), str(e))
+            return self._grx_reject(log, "parse_error", self.env._("Code nicht lesbar"), str(e))
+        if parsed.get("heuristic") and not company.plcs_grx_allow_heuristic:
+            self._grx_log_parsed(log, parsed)
+            return self._grx_reject(log, "parse_error", self.env._("Trennzeichen fehlen"), self.env._(
+                "Der Scanner sendet keine GS-Trennzeichen. Seriennummer und Charge sind nicht sicher "
+                "getrennt. Scanner auf GS1-Ausgabe (FNC1) einstellen oder Kamera nutzen."))
+        return self._grx_add_pack(parsed, log)
+
+    def grx_scan_manual(self, code, serial, serial_repeat, batch, expiry):
+        """Packung von Hand eingeben, wenn der Code nicht lesbar ist.
+
+        Die Seriennummer wird zweimal verlangt (Schutz gegen Tippfehler). Danach gelten
+        dieselben Regeln wie beim Scan. Die Packung wird als Handeingabe gekennzeichnet
+        und im Verlauf vermerkt; die VP sieht den Hinweis bei der Freigabe.
+        """
+        self.ensure_one()
+        self._grx_check_user()
+        self._grx_check_state("scan")
+        self._grx_check_owner()
+        raw = "HAND PZN/GTIN=%s SN=%s CH=%s VERF=%s" % (code or "", serial or "", batch or "", expiry or "")
+        log = {"box_id": self.id, "raw": raw[:500], "manual": True, "code_format": "manual"}
+        try:
+            parsed = gs1.parse_manual(code, serial, serial_repeat, batch, expiry)
+        except gs1.Gs1Error as e:
+            # Eingabefehler werden nicht protokolliert: es wurde nichts erfasst, die Maske bleibt offen
+            raise UserError(str(e)) from e
+        # Ohne Tag eingegeben: gleicher Monat wie die Box = Verfall der Box
+        if parsed.get("expiry_month_only") and self.expiry_date and \
+                (parsed["expiry"].year, parsed["expiry"].month) == (self.expiry_date.year, self.expiry_date.month):
+            parsed["expiry"] = self.expiry_date
+        result = self._grx_add_pack(parsed, log)
+        if result.get("scan_id"):
+            self.sudo().message_post(body=self.env._(
+                "Packung von Hand eingegeben (Code nicht gescannt): SN %(sn)s · Ch. %(ch)s · Verf. %(exp)s · PZN %(pzn)s.",
+                sn=parsed["serial"], ch=parsed["batch"], exp=parsed["expiry"].strftime("%m/%Y"),
+                pzn=parsed.get("pzn") or parsed.get("gtin") or "-"))
+            result["title"] = self.env._("Packung von Hand erfasst")
+        return result
+
+    def _grx_reject(self, log, result, title, message, level="error"):
+        self.env["plcs.greenrx.scan"].sudo().create(dict(log, result=result, message=message, accepted=False))
+        return {"status": level, "title": title, "message": message, "box": self._grx_ui_data()}
+
+    @staticmethod
+    def _grx_log_parsed(log, parsed):
         log.update({
             "gtin": parsed.get("gtin") or False,
             "pzn": parsed.get("pzn") or False,
@@ -363,10 +410,12 @@ class PlcsGreenrxBox(models.Model):
             "expiry_date": parsed.get("expiry") or False,
             "code_format": parsed.get("format"),
         })
-        if parsed.get("heuristic") and not company.plcs_grx_allow_heuristic:
-            return reject("parse_error", self.env._("Trennzeichen fehlen"), self.env._(
-                "Der Scanner sendet keine GS-Trennzeichen. Seriennummer und Charge sind nicht sicher "
-                "getrennt. Scanner auf GS1-Ausgabe (FNC1) einstellen oder Kamera nutzen."))
+
+    def _grx_add_pack(self, parsed, log):
+        """Gelesene Packung (Scan oder Handeingabe) prüfen und in die Box legen."""
+        Scan = self.env["plcs.greenrx.scan"]
+        reject = lambda *args, **kw: self._grx_reject(log, *args, **kw)  # noqa: E731
+        self._grx_log_parsed(log, parsed)
         missing = [label for key, label in (("serial", "Seriennummer"), ("batch", "Charge"),
                                              ("expiry", "Verfall")) if not parsed.get(key)]
         if not (parsed.get("gtin") or parsed.get("pzn")):
@@ -438,7 +487,7 @@ class PlcsGreenrxBox(models.Model):
                   "message": self.env._("SN %(sn)s · Ch. %(ch)s · Verf. %(exp)s",
                                         sn=serial, ch=parsed["batch"], exp=parsed["expiry"].strftime("%m/%Y")),
                   "scan_id": scan.id}
-        warnings = [c["label"] for c in self._grx_system_checks() if not c["ok"]]
+        warnings = [c["label"] for c in self._grx_system_checks() if not c["ok"] and not c.get("hint")]
         if warnings:
             result["status"] = "warning"
             result["message"] += " — " + "; ".join(warnings)
@@ -616,6 +665,7 @@ class PlcsGreenrxBox(models.Model):
             "plcs_is_grx_serial": True,
             "plcs_batch": self.batch,
             "plcs_grx_box_id": self.id,
+            "plcs_grx_manual": s.manual,
             "expiration_date": exp_dt,
         } for s in scans])
         for scan, lot in zip(scans, lots):
@@ -845,6 +895,7 @@ class PlcsGreenrxBox(models.Model):
             "batch": self.batch or "",
             "expiry": self.expiry_date.strftime("%m/%Y") if self.expiry_date else "",
             "qty": self.qty,
+            "manual_qty": self.manual_qty,
             "user": self.user_id.name,
             "state": self.state,
             "state_label": dict(self._fields["state"].selection)[self.state],
@@ -863,11 +914,12 @@ class PlcsGreenrxBox(models.Model):
             "user": self.user_id.name,
             "user_id": self.user_id.id,
             "scans": [{
-                "id": s.id, "serial": s.serial, "batch": s.batch,
+                "id": s.id, "serial": s.serial, "batch": s.batch, "manual": s.manual,
                 "expiry": s.expiry_date.strftime("%m/%Y") if s.expiry_date else "",
                 "time": fields.Datetime.context_timestamp(self, s.create_date).strftime("%H:%M:%S"),
             } for s in self.scan_ids.filtered("accepted").sorted("id", reverse=True)],
-            "sys_checks": [{"label": c["label"], "ok": c["ok"]} for c in self._grx_system_checks()],
+            "sys_checks": [{"label": c["label"], "ok": c["ok"], "hint": bool(c.get("hint"))}
+                           for c in self._grx_system_checks()],
             "questions": [{"field": f, "text": t, "value": self[f] or ""} for f, t, *_r in QUESTIONS],
             "suggest": level,
             "suggest_label": AMPEL_SHORT[level],
@@ -896,7 +948,7 @@ class PlcsGreenrxBox(models.Model):
         exp = self.expiry_date.strftime("%m/%Y") if self.expiry_date else ""
         pzn = self.product_id.plcs_pzn or gs1.gtin_to_pzn(self.product_id.barcode or "") or ""
         scans = self.scan_ids.filtered("accepted").sorted("id")
-        packs = [{"n": i + 1, "serial": s.serial, "pzn": s.pzn or pzn, "batch": s.batch,
+        packs = [{"n": i + 1, "serial": s.serial, "pzn": s.pzn or pzn, "batch": s.batch, "manual": s.manual,
                   "expiry": s.expiry_date.strftime("%m/%Y") if s.expiry_date else ""}
                  for i, s in enumerate(scans)]
         row = next((r for r in ticket._grx_soll_ist() if self.line_id and r["line_id"] == self.line_id.id), None)
@@ -977,6 +1029,7 @@ class PlcsGreenrxBox(models.Model):
             "pages": 3 if self.ampel == "rot" else 2,
             "batch_exp": "%s · %s" % (self.batch or "", exp),
             "packs": packs,
+            "manual_qty": self.manual_qty,
             "pack_pairs": pairs,
             "pzn": pzn,
             "expiry": exp,

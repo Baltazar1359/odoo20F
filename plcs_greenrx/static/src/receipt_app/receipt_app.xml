@@ -267,23 +267,70 @@
                             Der erste Scan legt Artikel, Charge und Verfall der Box fest. Alles wird aus dem securPharm-Code gelesen.
                             Danach passen nur noch Packungen mit gleichem Artikel und gleicher Charge hinein.
                         </div>
-                        <button type="button" class="o_grx_btn o_grx_btn_ghost w-100 my-2" t-if="this.cameraSupported" t-on-click="() => this.openCamera()">
-                            Mit Kamera scannen (fortlaufend)
-                        </button>
+                        <div class="d-flex flex-wrap gap-2 my-2" t-if="!this.state.packManual">
+                            <button type="button" class="o_grx_btn o_grx_btn_ghost flex-grow-1" t-if="this.cameraSupported" t-on-click="() => this.openCamera()">
+                                Mit Kamera scannen (fortlaufend)
+                            </button>
+                            <button type="button" class="o_grx_btn o_grx_btn_ghost flex-grow-1 o_grx_pk_open" t-on-click="() => this.openPackManual()">
+                                Packung von Hand eingeben
+                            </button>
+                        </div>
+                        <div class="o_grx_card o_grx_pk" t-if="this.state.packManual">
+                            <div class="o_grx_kicker">Packung von Hand eingeben</div>
+                            <div class="o_grx_hint mb-2">Nur wenn der Code nicht lesbar ist. Die Daten stehen als Klartext neben dem Code auf der Packung. Groß- und Kleinschreibung genau übernehmen.</div>
+                            <div class="o_grx_pk_grid">
+                                <div>
+                                    <label class="o_grx_label" for="grx_pk_code">PZN</label>
+                                    <input id="grx_pk_code" type="text" inputmode="numeric" class="o_grx_input o_grx_mono" autocomplete="off" placeholder="8 Ziffern"
+                                           t-att-value="this.state.pack.code" t-on-input="(ev) => this.onPackInput('code', ev)" t-on-keydown="(ev) => this.onPackKeydown('code', ev)"/>
+                                </div>
+                                <div>
+                                    <label class="o_grx_label" for="grx_pk_batch">Charge (Ch.-B. / LOT)</label>
+                                    <input id="grx_pk_batch" type="text" class="o_grx_input o_grx_mono" autocomplete="off" autocapitalize="off" spellcheck="false"
+                                           t-att-value="this.state.pack.batch" t-on-input="(ev) => this.onPackInput('batch', ev)" t-on-keydown="(ev) => this.onPackKeydown('batch', ev)"/>
+                                </div>
+                                <div>
+                                    <label class="o_grx_label" for="grx_pk_expiry">Verfall</label>
+                                    <input id="grx_pk_expiry" type="text" class="o_grx_input o_grx_mono" autocomplete="off" placeholder="MM/JJJJ"
+                                           t-att-value="this.state.pack.expiry" t-on-input="(ev) => this.onPackInput('expiry', ev)" t-on-keydown="(ev) => this.onPackKeydown('expiry', ev)"/>
+                                </div>
+                                <div>
+                                    <label class="o_grx_label" for="grx_pk_serial">Seriennummer (SN)</label>
+                                    <input id="grx_pk_serial" type="text" class="o_grx_input o_grx_mono" autocomplete="off" autocapitalize="off" spellcheck="false"
+                                           t-att-value="this.state.pack.serial" t-on-input="(ev) => this.onPackInput('serial', ev)" t-on-keydown="(ev) => this.onPackKeydown('serial', ev)"/>
+                                </div>
+                                <div>
+                                    <label class="o_grx_label" for="grx_pk_serial2">Seriennummer wiederholen</label>
+                                    <input id="grx_pk_serial2" type="text" class="o_grx_input o_grx_mono" autocomplete="off" autocapitalize="off" spellcheck="false"
+                                           t-att-value="this.state.pack.serial2" t-on-input="(ev) => this.onPackInput('serial2', ev)" t-on-keydown="(ev) => this.onPackKeydown('serial2', ev)"
+                                           t-on-paste="(ev) => this.onPackPaste(ev)"/>
+                                    <div class="small mt-1" t-if="this.state.pack.serial2">
+                                        <span class="o_grx_ok" t-if="this.state.pack.serial2 === this.state.pack.serial">✓ stimmt überein</span>
+                                        <span class="o_grx_err" t-else="">stimmt (noch) nicht überein</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="o_grx_err mt-2" role="alert" t-if="this.state.packError" t-out="this.state.packError"/>
+                            <div class="d-flex gap-2 mt-2">
+                                <button type="button" class="o_grx_btn o_grx_btn_ghost" t-on-click="() => this.closePackManual()">Schließen</button>
+                                <button type="button" class="o_grx_btn o_grx_btn_primary flex-grow-1 o_grx_pk_submit" t-on-click="() => this.submitPackManual()">Packung übernehmen</button>
+                            </div>
+                            <div class="o_grx_muted small mt-2">Scannen geht weiterhin. Die Handeingabe wird an der Packung, im Verlauf und auf der Anlage „Box-Inhalt“ vermerkt.</div>
+                        </div>
                         <table class="o_grx_table" t-if="this.box.scans.length">
                             <thead><tr><th>#</th><th>Seriennummer</th><th>Charge</th><th>Verfall</th><th>Zeit</th><th/></tr></thead>
                             <tbody>
                                 <tr t-foreach="this.box.scans" t-as="s" t-key="s.id">
                                     <td t-out="this.box.scans.length - s_index"/>
-                                    <td class="o_grx_mono" t-out="s.serial"/>
+                                    <td class="o_grx_mono"><t t-out="s.serial"/> <span class="o_grx_tag" t-if="s.manual" title="Von Hand eingegeben">Hand</span></td>
                                     <td class="o_grx_mono" t-out="s.batch"/>
                                     <td class="o_grx_mono" t-out="s.expiry"/>
                                     <td class="o_grx_mono o_grx_muted" t-out="s.time"/>
-                                    <td><button type="button" class="o_grx_link" t-on-click="() => this.removeScan(s)" aria-label="Packung entfernen">entfernen</button></td>
+                                    <td><button type="button" class="o_grx_link o_grx_rm" t-on-click="() => this.removeScan(s)" t-att-aria-label="'Packung ' + s.serial + ' entfernen'">entfernen</button></td>
                                 </tr>
                             </tbody>
                         </table>
-                        <div class="o_grx_hint">Jeder Scan speichert in Odoo: Seriennummer, Charge und Verfallsdatum aus dem securPharm-Code. Nichts davon wird getippt.</div>
+                        <div class="o_grx_hint">Jeder Scan speichert in Odoo: Seriennummer, Charge und Verfallsdatum aus dem securPharm-Code. Ist ein Code nicht lesbar: „Packung von Hand eingeben“.</div>
                     </t>
 
                     <!-- Schritt 4 -->
@@ -292,7 +339,7 @@
                         <div class="o_grx_muted mb-2">Deine Antworten werden direkt in die KabQ-Checkliste übernommen.</div>
                         <div class="o_grx_card">
                             <div class="o_grx_kicker">Vom System geprüft</div>
-                            <div class="o_grx_check" t-foreach="this.box.sys_checks" t-as="c" t-key="c_index" t-att-class="{ 'o_grx_check_bad': !c.ok }">
+                            <div class="o_grx_check" t-foreach="this.box.sys_checks" t-as="c" t-key="c_index" t-att-class="{ 'o_grx_check_bad': !c.ok and !c.hint, 'o_grx_check_hint': c.hint }">
                                 <span class="o_grx_check_icon" aria-hidden="true"><t t-if="c.ok">✓</t><t t-else="">!</t></span>
                                 <span t-out="c.label"/>
                             </div>
@@ -351,6 +398,7 @@
                             <div class="o_grx_kicker">In Box <t t-out="this.box.box"/> liegen</div>
                             <div class="fw-bold"><t t-out="this.box.qty"/> × <t t-out="this.box.product"/></div>
                             <div class="o_grx_mono">Charge <t t-out="this.box.batch"/> · Verf. <t t-out="this.box.expiry"/></div>
+                            <div class="o_grx_tag mt-1" t-if="this.box.manual_qty">davon <t t-out="this.box.manual_qty"/> von Hand eingegeben</div>
                         </div>
                         <div class="o_grx_card">
                             <div class="o_grx_kicker">Wird gedruckt – fertig ausgefüllt</div>
@@ -464,6 +512,7 @@
                                 </span>
                             </span>
                             <span class="o_grx_badge" t-if="b.state === 'blocked'">gesperrt</span>
+                            <span class="o_grx_badge o_grx_badge_hint" t-if="b.manual_qty" title="Packungen von Hand eingegeben">Hand: <t t-out="b.manual_qty"/></span>
                             <span class="o_grx_badge" t-if="!b.can_release" title="Du warst an dieser Box beteiligt (4-Augen-Prinzip)">nur sperren</span>
                         </button>
                         <div class="o_grx_muted small mt-2">4-Augen-Prinzip: Boxen, an denen du beteiligt warst (erfasst, gescannt, geprüft oder abgeschlossen), kannst du nur sperren. Freigeben muss eine andere VP<t t-if="this.state.vp.own_count"> (<t t-out="this.state.vp.own_count"/> Box(en) betroffen, am Ende der Liste)</t>.</div>
@@ -483,7 +532,7 @@
                         </div>
                         <dl class="o_grx_kv">
                             <div><dt>Artikel</dt><dd t-out="b.product"/></div>
-                            <div><dt>Packungen</dt><dd t-out="b.qty"/></div>
+                            <div><dt>Packungen</dt><dd><t t-out="b.qty"/><t t-if="b.manual_qty"> (davon <t t-out="b.manual_qty"/> von Hand eingegeben)</t></dd></div>
                             <div><dt>Charge</dt><dd class="o_grx_mono" t-out="b.batch"/></div>
                             <div><dt>Verfall</dt><dd class="o_grx_mono" t-out="b.expiry"/></div>
                             <div><dt>Eingang</dt><dd class="o_grx_mono" t-out="b.ticket.picking"/></div>
@@ -493,7 +542,7 @@
                             <div><dt>Lagerort</dt><dd t-out="b.location"/></div>
                         </dl>
                         <div class="o_grx_kicker">Geprüft (System und Lager)</div>
-                        <div class="o_grx_check" t-foreach="b.sys_checks" t-as="c" t-key="c_index" t-att-class="{ 'o_grx_check_bad': !c.ok }">
+                        <div class="o_grx_check" t-foreach="b.sys_checks" t-as="c" t-key="c_index" t-att-class="{ 'o_grx_check_bad': !c.ok and !c.hint, 'o_grx_check_hint': c.hint }">
                             <span class="o_grx_check_icon" aria-hidden="true"><t t-if="c.ok">✓</t><t t-else="">!</t></span><span t-out="c.label"/>
                         </div>
                         <div class="o_grx_check" t-foreach="b.questions" t-as="q" t-key="q.field" t-att-class="{ 'o_grx_check_bad': q.value !== 'ja' }">
