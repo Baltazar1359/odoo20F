@@ -157,6 +157,8 @@
                                    t-att-value="this.state.query"
                                    t-on-input="(ev) => this.onQueryInput(ev)"
                                    t-on-keydown="(ev) => this.onQueryKeydown(ev)"/>
+                            <button type="button" class="o_grx_btn o_grx_btn_ghost w-100 mt-2" t-if="this.cameraSupported"
+                                    t-on-click="() => this.openCamera()">Retourenschein mit Kamera scannen</button>
                             <div class="o_grx_results" t-if="this.state.searched">
                                 <div class="o_grx_kicker"><t t-out="this.state.results.length"/> Treffer</div>
                                 <button type="button" class="o_grx_result" t-foreach="this.state.results" t-as="r" t-key="r.id"
