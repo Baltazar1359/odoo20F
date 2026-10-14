@@ -4,6 +4,7 @@ from unittest.mock import patch
 from odoo import fields
 from odoo.exceptions import UserError
 from odoo.tests import HttpCase, TransactionCase, new_test_user, tagged
+from odoo.tools import mute_logger
 
 from ..models.plcs_ativ_sync import CONTRACT_VERSION, PlcsGreenrxConnector
 from ..tools.ativ_client import READ_METHODS, AtivClient, AtivError
@@ -264,6 +265,7 @@ class TestAtivSync(AtivCase):
         self.assertEqual(self.connector.ativ_cursor, run.cursor_candidate)
         self.assertEqual(self.grx("V900").line_ids.filtered(lambda l: l.ticket_number == "4712").qty_expected, 3)
 
+    @mute_logger("odoo.addons.plcs_greenrx.models.plcs_ativ_sync")
     def test_08_permanent_error_retry_button(self):
         self.fake.db["x_vorgang"][101]["x_name"] = False
         run = self.sync()
