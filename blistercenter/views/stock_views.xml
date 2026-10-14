@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Lager und Versand: Standard-Transfers, gefiltert -->
+    <record id="action_bc_receipts" model="ir.actions.act_window">
+        <field name="name">Wareneingänge</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_type_code', '=', 'incoming'), ('purchase_id.bc_is_collective', '=', True)]</field>
+        <field name="context">{'search_default_available': 1, 'create': False}</field>
+        <field name="help" type="html">
+            <p>Wareneingänge aus Bestellungen beim Hersteller, die aus Sammelbestellungen entstanden sind.</p>
+        </field>
+    </record>
+
+    <record id="action_bc_picking" model="ir.actions.act_window">
+        <field name="name">Kommissionierung</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_type_code', '=', 'internal'), ('bc_is_blistercenter', '=', True), ('state', 'not in', ('done', 'cancel'))]</field>
+        <field name="context">{'create': False}</field>
+        <field name="help" type="html">
+            <p>Kommissionieraufträge für Blistercenter (nur bei mehrstufigem Warenausgang).</p>
+        </field>
+    </record>
+
+    <record id="action_bc_deliveries" model="ir.actions.act_window">
+        <field name="name">Lieferungen</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_type_code', '=', 'outgoing'), ('bc_is_blistercenter', '=', True)]</field>
+        <field name="context">{'create': False}</field>
+    </record>
+
+    <record id="action_bc_partial" model="ir.actions.act_window">
+        <field name="name">Teillieferungen</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_type_code', '=', 'outgoing'), ('bc_is_blistercenter', '=', True), ('backorder_id', '!=', False)]</field>
+        <field name="context">{'create': False}</field>
+        <field name="help" type="html">
+            <p>Rücklieferungen offener Restmengen (Lieferungen, die aus einer Teillieferung entstanden sind).</p>
+        </field>
+    </record>
+
+    <record id="action_bc_release" model="ir.actions.act_window">
+        <field name="name">Versandfreigaben</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_type_code', '=', 'outgoing'), ('bc_is_blistercenter', '=', True), ('state', '=', 'assigned')]</field>
+        <field name="context">{'create': False}</field>
+        <field name="help" type="html">
+            <p>Lieferungen, deren Ware reserviert ist. Beim Bestätigen prüft Odoo Zahlungssperre, Vorkasse und gesperrte Chargen.</p>
+        </field>
+    </record>
+
+    <!-- Chargen: Sperre -->
+    <record id="view_production_lot_form_bc" model="ir.ui.view">
+        <field name="name">stock.lot.form.blistercenter</field>
+        <field name="model">stock.lot</field>
+        <field name="inherit_id" ref="stock.view_production_lot_form"/>
+        <field name="arch" type="xml">
+            <group name="main_group" position="after">
+                <field name="bc_can_unblock" invisible="1"/>
+                <group name="bc_block" string="Sperre" groups="blistercenter.group_bc_user">
+                    <group>
+                        <field name="bc_blocked" readonly="bc_blocked and not bc_can_unblock"/>
+                        <field name="bc_block_reason" invisible="not bc_blocked" required="bc_blocked"
+                               readonly="bc_blocked and not bc_can_unblock and bc_block_reason"/>
+                    </group>
+                    <group invisible="not bc_blocked">
+                        <field name="bc_blocked_by"/>
+                        <field name="bc_blocked_date"/>
+                    </group>
+                </group>
+            </group>
+            <div class="oe_title" position="before">
+                <div class="alert alert-danger" role="alert" invisible="not bc_blocked">
+                    Diese Charge ist gesperrt und darf nicht versendet werden.
+                </div>
+            </div>
+        </field>
+    </record>
+
+    <record id="view_bc_lot_list" model="ir.ui.view">
+        <field name="name">stock.lot.list.blistercenter</field>
+        <field name="model">stock.lot</field>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <list string="Chargen" decoration-danger="bc_blocked">
+                <field name="name" string="Charge"/>
+                <field name="product_id"/>
+                <field name="expiration_date" string="Verfall"/>
+                <field name="product_qty" string="Bestand" optional="show"/>
+                <field name="bc_blocked"/>
+                <field name="bc_block_reason" optional="show"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_bc_lot_search" model="ir.ui.view">
+        <field name="name">stock.lot.search.blistercenter</field>
+        <field name="model">stock.lot</field>
+        <field name="mode">primary</field>
+        <field name="inherit_id" ref="stock.search_product_lot_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <separator/>
+                <filter name="bc_blocked" string="Gesperrt" domain="[('bc_blocked', '=', True)]"/>
+                <filter name="bc_in_stock" string="Mit Bestand" domain="[('product_qty', '&gt;', 0)]"/>
+                <filter name="bc_expired" string="Verfallen" domain="[('expiration_date', '&lt;', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter name="bc_expiry_6" string="Verfall in 6 Monaten"
+                        domain="[('expiration_date', '&lt;', (context_today() + relativedelta(months=6)).strftime('%Y-%m-%d'))]"/>
+                <filter name="bc_expiry_12" string="Verfall in 12 Monaten"
+                        domain="[('expiration_date', '&lt;', (context_today() + relativedelta(months=12)).strftime('%Y-%m-%d'))]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_bc_lots" model="ir.actions.act_window">
+        <field name="name">Chargen</field>
+        <field name="res_model">stock.lot</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_bc_lot_search"/>
+        <field name="context">{'search_default_bc_in_stock': 1}</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_bc_lot_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('stock.view_production_lot_form')})]"/>
+    </record>
+
+    <record id="action_bc_lots_expiry" model="ir.actions.act_window">
+        <field name="name">Verfallsdaten</field>
+        <field name="res_model">stock.lot</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_bc_lot_search"/>
+        <field name="domain">[('expiration_date', '!=', False)]</field>
+        <field name="context">{'search_default_bc_in_stock': 1, 'search_default_bc_expiry_6': 1}</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_bc_lot_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('stock.view_production_lot_form')})]"/>
+    </record>
+
+    <record id="action_bc_lots_blocked" model="ir.actions.act_window">
+        <field name="name">Gesperrte Chargen</field>
+        <field name="res_model">stock.lot</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_bc_lot_search"/>
+        <field name="domain">[('bc_blocked', '=', True)]</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_bc_lot_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('stock.view_production_lot_form')})]"/>
+    </record>
+
+    <record id="view_bc_recall_move_line_list" model="ir.ui.view">
+        <field name="name">stock.move.line.list.blistercenter.recall</field>
+        <field name="model">stock.move.line</field>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <list string="Gelieferte Mengen" create="false" edit="false" delete="false">
+                <field name="date" string="Datum"/>
+                <field name="picking_id" string="Lieferung"/>
+                <field name="picking_partner_id" string="Kunde"/>
+                <field name="product_id"/>
+                <field name="lot_id" string="Charge"/>
+                <field name="quantity" string="Menge" sum="Summe"/>
+                <field name="uom_id" string="Einheit"/>
+            </list>
+        </field>
+    </record>
+</odoo>

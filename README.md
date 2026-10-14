@@ -5,6 +5,7 @@ Eigene Module für die PLCS GmbH. Die Module liegen direkt im Wurzelverzeichnis,
 | Modul | Inhalt | Stand |
 |---|---|---|
 | `plcs_greenrx` | GreenRX-Wareneingang: Scan je Packung, Boxen, Vorprüfung mit Ampel, KabQ-Drucke, VP-Freigabe | einsatzbereit für den Test |
+| `blistercenter` | Großhandel für Blistercenter: Kunden, Shop-Bestellungen, Sammelbestellungen beim Hersteller, Versand, Chargen, Rückruf | Etappe 1 (Gerüst + Grundregeln), Regelkatalog: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_REGELN.md) |
 
 **Prüfumgebung:** https://baltazar1359-odoo20.odoo.com (Odoo.sh, Branch `main` = Production). Prüfanleitung: [`docs/PRUEFANLEITUNG.md`](docs/PRUEFANLEITUNG.md), Testcodes: [`docs/greenrx_testcodes.pdf`](docs/greenrx_testcodes.pdf).
 
@@ -134,3 +135,25 @@ ODOO_PASSWORD=… python e2e/playwright_scan_queue.py --url http://127.0.0.1:806
 - Die Feldzuordnung zum aktuellen GreenRX-ERP und ein API-Benutzer bei ATIV fehlen noch.
 - Validierung über Change Control (Validierungsplan und -bericht) vor dem Produktivstart.
 - Verkauf aus GreenRX/Bestand und Vernichtung gesperrter Ware sind noch nicht Teil des Moduls.
+
+---
+
+## blistercenter – Großhandel für Blistercenter
+
+Eigene App **Blistercenter** als Einstieg. Sie nutzt die Odoo-Standardmodelle (Shop, Verkauf, Einkauf, Rechnungen, Lager) und legt keine parallelen Bestell-, Lager- oder Buchhaltungsdaten an. Eigene Daten sind nur: Kundenmerkmale, die Zuordnung „Auftragsposition → Sammelbestellung“, die Chargensperre und die Einstellungen.
+
+**Menüs:** Übersicht (Kacheln mit Zahlen) · Kunden · Kundenbestellungen (Bestellungen, Positionen, Rechnungen, Zahlungen) · Sammelbestellungen · Lieferanten (Hersteller, Einkaufskonditionen) · Lager und Versand · Chargen und Rückverfolgung · Einstellungen.
+
+**Rollen** (Einstellungen › Benutzer › Blistercenter):
+
+| Rolle | Darf |
+|---|---|
+| Benutzer | Bestellungen, Sammelbestellungen, Lager und Versand; Chargen sperren |
+| Freigabe | zusätzlich Shopfreischaltung, Zahlungsmodell, Zahlungsbedingung, Preisliste und Zahlungssperre von Blistercentern; Chargen entsperren |
+| Administrator | zusätzlich Einstellungen und Prozessregeln, Preislisten |
+
+**Sammelbestellung:** Kundenbestellungen › Positionen → offene Mengen markieren → „Zur Sammelbestellung“ → Hersteller wählen → „Anfrage beim Hersteller erstellen“. Odoo legt eine Anfrage (Einkauf, Entwurf) an; bestellt wird manuell.
+
+**Wichtig:** Blistercenter-Artikel ohne Route „Auf Auftrag beschaffen“ führen, sonst entsteht bei der Auftragsbestätigung zusätzlich eine automatische Bestellung.
+
+Regeln und offene Fragen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_REGELN.md). Tests: `--test-tags /blistercenter` (24 Tests).
