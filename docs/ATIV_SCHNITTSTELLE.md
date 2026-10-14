@@ -262,3 +262,32 @@ JSON. Der Schlüssel wird in PLCS nur als SHA-256-Prüfsumme gespeichert.
 - Abholadresse und Abholtermin (`date_planned`) als Bedeutung mit ATIV bestätigen.
 - API-Benutzer bei ATIV festlegen (vorhandener Benutzer „PLCS“ mit Schreibrechten oder eigener
   Nur-Lese-Benutzer).
+
+## 11. Abnahme
+
+### Erledigt (14.10.2026)
+
+- Automatische Tests mit simuliertem ATIV (Struktur wie Testkopie): Abnahmepunkte 1–10 je als Test
+  (`tests/test_ativ_sync.py`), dazu Gegenprobe: ohne die Schutzregeln schlagen die Tests fehl.
+- Odoo.sh-Dev-Build `feat/ativ-schnittstelle`: 66 Tests, 0 Fehler (mit Browser-Tests).
+- Update von 1.3.2: vorhandene Schnittstelle behält die alte Feldzuordnung, Zeitpläne angelegt.
+- Scan-Oberfläche im Dev-Build: nicht erwarteter Vorgang wird mit Grund angezeigt, „weiter“ gesperrt.
+
+### Sollwerte für den Abgleich (ATIV-Testkopie, Filter „ohne Test“, 14.10.2026)
+
+| Größe | ATIV |
+|---|---|
+| Gutschriften | 1.609 |
+| Positionen | 1.610 |
+| Packungen (Summe Menge) | 4.298 |
+| Vorgänge mit Gutschrift | 1.607 |
+| Tickets zu diesen Gutschriften | 1.608 |
+| Anhänge an diesen Tickets | 5.748 (rund 1,96 GB) |
+
+Nach der Erstübernahme in PLCS vergleichen: GreenRX › Übersicht › ATIV-Gutschriften (Anzahl,
+Gruppierung), Retourenvorgänge mit Filter „Aus ATIV“, Summe Soll.
+
+### Offen (braucht API-Schlüssel)
+
+Probelauf mit wenigen Vorgängen und Erstübernahme gegen die ATIV-Testkopie aus dem Dev-Build oder
+Staging, Abgleich mit den Sollwerten oben, Webhook-Test.
