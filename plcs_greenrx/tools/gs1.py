@@ -375,11 +375,11 @@ def parse_manual_expiry(value):
     raise Gs1Error("Verfall %s nicht lesbar. Bitte als MM/JJJJ eingeben, z. B. 05/2028." % text)
 
 
-def parse_manual(code, serial, serial_repeat, batch, expiry):
+def parse_manual(code, serial, batch, expiry):
     """Packungsdaten von Hand prüfen und wie einen Scan zurückgeben.
 
     code: PZN (8-stellig, auch mit "PZN"/Leerzeichen/Bindestrich) oder GTIN (13/14 Stellen).
-    serial, serial_repeat: Seriennummer zweimal (Schutz gegen Tippfehler). Groß-/Kleinschreibung zählt.
+    serial: Seriennummer, Groß-/Kleinschreibung zählt.
     Rückgabe: dict wie parse() mit format 'manual'; zusätzlich expiry_month_only.
     """
     errors = []
@@ -406,13 +406,10 @@ def parse_manual(code, serial, serial_repeat, batch, expiry):
         errors.append("PZN hat 8 Stellen, GTIN 13 oder 14 Stellen.")
 
     serial = (serial or "").strip()
-    serial_repeat = (serial_repeat or "").strip()
     if not serial:
         errors.append("Seriennummer fehlt.")
     elif not _GS1_CS82.match(serial):
         errors.append("Seriennummer: höchstens 20 Zeichen, nur Buchstaben, Ziffern und - . / ohne Leerzeichen.")
-    elif serial != serial_repeat:
-        errors.append("Die beiden Seriennummern stimmen nicht überein. Bitte beide noch einmal von der Packung ablesen.")
 
     batch = (batch or "").strip()
     if not batch:

@@ -154,7 +154,7 @@
                         </t>
                         <tr><td colspan="4">Summe</td><td class="odoo" colspan="2"><t t-out="o.qty"/> Packungen<t t-if="v['manual_qty']">, davon <t t-out="v['manual_qty']"/> von Hand</t></td></tr>
                     </table>
-                    <div t-if="v['manual_qty']" style="font-size:9px;margin-top:2px;">H = Packungsdaten von Hand eingegeben, weil der Code nicht lesbar war. Seriennummer bei der Eingabe zweimal erfasst.</div>
+                    <div t-if="v['manual_qty']" style="font-size:9px;margin-top:2px;">H = Packungsdaten von Hand eingegeben, weil der Code nicht lesbar war.</div>
                     <table style="width:100%;margin-top:18px;">
                         <tr>
                             <td style="width:50%;padding-right:12px;">Erfasst von: <span class="odoo" t-out="v['checked_by']"/>

@@ -17,10 +17,10 @@ const AMPEL = {
 };
 const RANK = { gruen: 0, gelb: 1, rot: 2 };
 // Felder der Handeingabe einer Packung, in Eingabereihenfolge (Enter springt weiter)
-const PACK_FIELDS = ["code", "batch", "expiry", "serial", "serial2"];
+const PACK_FIELDS = ["code", "batch", "expiry", "serial"];
 
 function emptyPack() {
-    return { code: "", batch: "", expiry: "", serial: "", serial2: "" };
+    return { code: "", batch: "", expiry: "", serial: "" };
 }
 
 /** Sieht die Eingabe wie ein gescannter Packungscode aus (Scanner tippt in ein Eingabefeld)? */
@@ -656,12 +656,6 @@ export class GreenRxReceiptApp extends Component {
         this.state.packError = "";
     }
 
-    onPackPaste(ev) {
-        // Seriennummer muss zweimal getippt werden – Einfügen würde den Schutz aushebeln
-        ev.preventDefault();
-        this.state.packError = _t("Die Wiederholung bitte von der Packung abtippen, nicht einfügen.");
-    }
-
     async onPackKeydown(name, ev) {
         if (ev.key !== "Enter") {
             return;
@@ -696,17 +690,9 @@ export class GreenRxReceiptApp extends Component {
         if (!p.batch.trim()) missing.push(_t("Charge"));
         if (!p.expiry.trim()) missing.push(_t("Verfall"));
         if (!p.serial.trim()) missing.push(_t("Seriennummer"));
-        if (!p.serial2.trim()) missing.push(_t("Seriennummer (Wiederholung)"));
         if (missing.length) {
             this.state.packError = _t("Bitte ausfüllen: %s", missing.join(", "));
             this.play("error");
-            return;
-        }
-        if (p.serial.trim() !== p.serial2.trim()) {
-            this.state.packError = _t("Die beiden Seriennummern stimmen nicht überein. Bitte beide noch einmal von der Packung ablesen.");
-            this.state.pack.serial2 = "";
-            this.play("error");
-            this.focusPackField("serial2");
             return;
         }
         // Über die Warteschlange, damit sich Handeingabe und Scans nicht überholen
@@ -715,7 +701,7 @@ export class GreenRxReceiptApp extends Component {
             .then(async () => {
                 let res;
                 try {
-                    res = await this.call("plcs.greenrx.box", "grx_scan_manual", [[box.id], p.code, p.serial, p.serial2, p.batch, p.expiry]);
+                    res = await this.call("plcs.greenrx.box", "grx_scan_manual", [[box.id], p.code, p.serial, p.batch, p.expiry]);
                 } catch (error) {
                     // Eingabe unvollständig oder ungültig: Maske bleibt offen, nichts erfasst
                     this.state.packError = errorMessage(error);
@@ -731,7 +717,6 @@ export class GreenRxReceiptApp extends Component {
                 if (res.scan_id) {
                     // Nächste Packung: PZN, Charge und Verfall stehen lassen, Seriennummer neu
                     this.state.pack.serial = "";
-                    this.state.pack.serial2 = "";
                     this.focusPackField("serial");
                 } else {
                     this.state.packError = res.message;

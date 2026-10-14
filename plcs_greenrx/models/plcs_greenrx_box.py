@@ -365,11 +365,10 @@ class PlcsGreenrxBox(models.Model):
                 "getrennt. Scanner auf GS1-Ausgabe (FNC1) einstellen oder Kamera nutzen."))
         return self._grx_add_pack(parsed, log)
 
-    def grx_scan_manual(self, code, serial, serial_repeat, batch, expiry):
+    def grx_scan_manual(self, code, serial, batch, expiry):
         """Packung von Hand eingeben, wenn der Code nicht lesbar ist.
 
-        Die Seriennummer wird zweimal verlangt (Schutz gegen Tippfehler). Danach gelten
-        dieselben Regeln wie beim Scan. Die Packung wird als Handeingabe gekennzeichnet
+        Es gelten dieselben Regeln wie beim Scan. Die Packung wird als Handeingabe gekennzeichnet
         und im Verlauf vermerkt; die VP sieht den Hinweis bei der Freigabe.
         """
         self.ensure_one()
@@ -379,7 +378,7 @@ class PlcsGreenrxBox(models.Model):
         raw = "HAND PZN/GTIN=%s SN=%s CH=%s VERF=%s" % (code or "", serial or "", batch or "", expiry or "")
         log = {"box_id": self.id, "raw": raw[:500], "manual": True, "code_format": "manual"}
         try:
-            parsed = gs1.parse_manual(code, serial, serial_repeat, batch, expiry)
+            parsed = gs1.parse_manual(code, serial, batch, expiry)
         except gs1.Gs1Error as e:
             # Eingabefehler werden nicht protokolliert: es wurde nichts erfasst, die Maske bleibt offen
             raise UserError(str(e)) from e

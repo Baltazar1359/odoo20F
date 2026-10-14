@@ -299,16 +299,6 @@
                                     <input id="grx_pk_serial" type="text" class="o_grx_input o_grx_mono" autocomplete="off" autocapitalize="off" spellcheck="false"
                                            t-att-value="this.state.pack.serial" t-on-input="(ev) => this.onPackInput('serial', ev)" t-on-keydown="(ev) => this.onPackKeydown('serial', ev)"/>
                                 </div>
-                                <div>
-                                    <label class="o_grx_label" for="grx_pk_serial2">Seriennummer wiederholen</label>
-                                    <input id="grx_pk_serial2" type="text" class="o_grx_input o_grx_mono" autocomplete="off" autocapitalize="off" spellcheck="false"
-                                           t-att-value="this.state.pack.serial2" t-on-input="(ev) => this.onPackInput('serial2', ev)" t-on-keydown="(ev) => this.onPackKeydown('serial2', ev)"
-                                           t-on-paste="(ev) => this.onPackPaste(ev)"/>
-                                    <div class="small mt-1" t-if="this.state.pack.serial2">
-                                        <span class="o_grx_ok" t-if="this.state.pack.serial2 === this.state.pack.serial">✓ stimmt überein</span>
-                                        <span class="o_grx_err" t-else="">stimmt (noch) nicht überein</span>
-                                    </div>
-                                </div>
                             </div>
                             <div class="o_grx_err mt-2" role="alert" t-if="this.state.packError" t-out="this.state.packError"/>
                             <div class="d-flex gap-2 mt-2">

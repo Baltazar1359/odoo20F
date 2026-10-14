@@ -128,4 +128,4 @@ class TestGreenrxManualPackUi(GreenrxUiCase):
         man = box.scan_ids.filtered(lambda s: s.serial == "MAN1")
         self.assertEqual(man.mapped("manual"), [True])
         self.assertEqual(man.result, "removed")
-        self.assertFalse(box.scan_ids.filtered(lambda s: s.serial == "MAN2"), "Tippfehler wird nicht erfasst")
+        self.assertEqual(len(man), 1, "PZN mit falscher Prüfziffer wird nicht erfasst")

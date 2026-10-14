@@ -16,14 +16,15 @@ class TestManualParser(BaseCase):
     """Handeingabe einer Packung: Prüfung der getippten Werte (ohne Odoo-Daten)."""
 
     def test_valid_pzn_and_formats(self):
-        r = gs1.parse_manual("PZN 1234-5678", "AbC123", "AbC123", "BYE-T01", "05/2028")
+        # Seriennummer wird nur einmal eingegeben (Entscheidung 14.10.2026)
+        r = gs1.parse_manual("PZN 1234-5678", "AbC123", "BYE-T01", "05/2028")
         self.assertEqual(r["format"], "manual")
         self.assertEqual(r["pzn"], "12345678")
         self.assertEqual(r["gtin"], gs1.pzn_to_gtin("12345678"))
         self.assertEqual(r["serial"], "AbC123")  # Groß-/Kleinschreibung bleibt
         self.assertEqual(r["expiry"], datetime.date(2028, 5, 31))
         self.assertTrue(r["expiry_month_only"])
-        r = gs1.parse_manual("04150123456782", "S1", "S1", "L1", "15.05.2028")
+        r = gs1.parse_manual("04150123456782", "S1", "L1", "15.05.2028")
         self.assertEqual(r["pzn"], "12345678")
         self.assertEqual(r["expiry"], datetime.date(2028, 5, 15))
         self.assertFalse(r["expiry_month_only"])
@@ -36,19 +37,17 @@ class TestManualParser(BaseCase):
 
     def test_rejects_typos_and_bad_values(self):
         cases = [
-            (("12345679", "S1", "S1", "L1", "05/2028"), "Prüfziffer"),        # PZN vertippt
-            (("04150123456783", "S1", "S1", "L1", "05/2028"), "Prüfziffer"),  # GTIN vertippt
-            (("1234567890", "S1", "S1", "L1", "05/2028"), "8 Stellen"),
-            (("12A45678", "S1", "S1", "L1", "05/2028"), "nur Ziffern"),
-            (("12345678", "S1", "S2", "L1", "05/2028"), "nicht überein"),     # SN-Wiederholung falsch
-            (("12345678", "s1", "S1", "L1", "05/2028"), "nicht überein"),     # Groß/klein zählt
-            (("12345678", "S 1", "S 1", "L1", "05/2028"), "Seriennummer"),
-            (("12345678", "X" * 21, "X" * 21, "L1", "05/2028"), "Seriennummer"),
-            (("12345678", "S1", "S1", "", "05/2028"), "Charge fehlt"),
-            (("12345678", "S1", "S1", "L1", "13/2028"), "Monat"),
-            (("12345678", "S1", "S1", "L1", "31.02.2028"), "kein gültiges Datum"),
-            (("12345678", "S1", "S1", "L1", "Mai 28"), "MM/JJJJ"),
-            (("", "", "", "", ""), "PZN fehlt"),
+            (("12345679", "S1", "L1", "05/2028"), "Prüfziffer"),        # PZN vertippt
+            (("04150123456783", "S1", "L1", "05/2028"), "Prüfziffer"),  # GTIN vertippt
+            (("1234567890", "S1", "L1", "05/2028"), "8 Stellen"),
+            (("12A45678", "S1", "L1", "05/2028"), "nur Ziffern"),
+            (("12345678", "S 1", "L1", "05/2028"), "Seriennummer"),
+            (("12345678", "X" * 21, "L1", "05/2028"), "Seriennummer"),
+            (("12345678", "S1", "", "05/2028"), "Charge fehlt"),
+            (("12345678", "S1", "L1", "13/2028"), "Monat"),
+            (("12345678", "S1", "L1", "31.02.2028"), "kein gültiges Datum"),
+            (("12345678", "S1", "L1", "Mai 28"), "MM/JJJJ"),
+            (("", "", "", ""), "PZN fehlt"),
         ]
         for args, text in cases:
             with self.assertRaises(gs1.Gs1Error, msg=args) as cm:
@@ -89,8 +88,8 @@ class TestManualPack(TransactionCase):
         Box = self.env["plcs.greenrx.box"].with_user(user or self.lager)
         return Box.browse(Box.grx_open_box(ticket.id, box_code)["id"])
 
-    def _manual(self, box, serial, batch="BYE-T01", expiry=None, pzn="12345678", repeat=None):
-        return box.grx_scan_manual(pzn, serial, serial if repeat is None else repeat, batch, expiry or self.exp_text)
+    def _manual(self, box, serial, batch="BYE-T01", expiry=None, pzn="12345678"):
+        return box.grx_scan_manual(pzn, serial, batch, expiry or self.exp_text)
 
     # ------------------------------------------------------------------
     def test_manual_entry_same_rules_and_marking(self):
@@ -158,11 +157,11 @@ class TestManualPack(TransactionCase):
         r = self._manual(other, "K1")  # jetzt als Seriennummer im System
         self.assertIn("schon im System", r["title"])
 
-    def test_typo_in_repeat_is_rejected_and_nothing_recorded(self):
+    def test_invalid_input_is_rejected_and_nothing_recorded(self):
         ticket = self._ticket(name="MP-3", lines=[{"pzn": "12345678", "qty": 1}])
         box = self._open(ticket)
         with self.assertRaises(UserError):
-            self._manual(box, "TYPO1", repeat="TYP01")
+            self._manual(box, "TYPO 1")  # Leerzeichen in der SN
         with self.assertRaises(UserError):
             self._manual(box, "TYPO1", pzn="12345679")  # Prüfziffer
         with self.assertRaises(UserError):
