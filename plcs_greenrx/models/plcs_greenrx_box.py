@@ -425,6 +425,8 @@ class PlcsGreenrxBox(models.Model):
 
         product = self.env["product.product"]._plcs_find_by_code(gtin=parsed.get("gtin"), pzn=parsed.get("pzn"))
         if not product:
+            product = self.ticket_id._grx_product_from_lines(parsed.get("gtin"), parsed.get("pzn"))
+        if not product:
             return reject("unknown_product", self.env._("Artikel unbekannt"), self.env._(
                 "Kein Artikel mit GTIN %(gtin)s / PZN %(pzn)s im Artikelstamm. Packung ins Klärungsfach "
                 "legen und Lagerleitung Bescheid geben.", gtin=parsed.get("gtin") or "-", pzn=parsed.get("pzn") or "-"))

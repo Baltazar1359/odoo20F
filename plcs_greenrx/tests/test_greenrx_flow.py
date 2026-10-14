@@ -89,6 +89,35 @@ class TestGreenrxFlow(TransactionCase):
         self.assertTrue(admin.has_group("plcs_greenrx.group_grx_vp"))
         self.assertTrue(admin.has_group("plcs_greenrx.group_grx_user"))
 
+    def test_unknown_article_created_from_slip_line(self):
+        """1.7.4: Artikel fehlt im Stamm, PZN steht im Vorgang → Artikel wird angelegt, Scan angenommen."""
+        ticket = self._ticket(name="T-NEU", lines=[{"pzn": "10126593", "qty": 2, "ticket_number": "1001964",
+                                                     "product_name": "XIGDUO 5 mg/1000 mg", "batch": "FPPV"}])
+        gtin = gs1.pzn_to_gtin("10126593")
+        self.assertFalse(self.env["product.product"]._plcs_find_by_code(gtin=gtin))
+        Box = self.env["plcs.greenrx.box"].with_user(self.lager)
+        box = Box.browse(Box.grx_open_box(ticket.id, "GX010")["id"])
+        r = box.grx_scan(code(gtin, "SN-NEU1", "FPPV", self.exp_ok))
+        self.assertEqual(r["status"], "ok", r)
+        product = self.env["product.product"]._plcs_find_by_code(gtin=gtin)
+        self.assertEqual(len(product), 1)
+        self.assertEqual(product.plcs_pzn, "10126593")
+        self.assertEqual(product.tracking, "lot")
+        self.assertEqual(box.product_id, product)
+        self.assertEqual(ticket.line_ids.product_id, product)
+        self.assertEqual(box.line_id, ticket.line_ids)
+        self.assertTrue(any("automatisch angelegt" in (m.body or "") for m in ticket.message_ids))
+        r = box.grx_scan(code(gtin, "SN-NEU2", "FPPV", self.exp_ok))
+        self.assertEqual(r["status"], "ok", r)
+        self.assertEqual(self.env["product.product"].search_count([("plcs_pzn", "=", "10126593")]), 1)
+        # Gegenprobe: PZN nicht im Vorgang → weiter „Artikel unbekannt“, kein Artikel angelegt
+        other = self._ticket(name="T-FREMD", lines=[{"pzn": "12345678", "qty": 1}])
+        box2 = Box.browse(Box.grx_open_box(other.id, "GX011")["id"])
+        r = box2.grx_scan(code(gs1.pzn_to_gtin("11112222"), "SN-X", "CH1", self.exp_ok))
+        self.assertEqual(r["status"], "error")
+        self.assertEqual(r["title"], "Artikel unbekannt")
+        self.assertFalse(self.env["product.product"].search([("plcs_pzn", "=", "11112222")]))
+
     def test_ticket_import_and_search(self):
         ticket = self._ticket()
         self.assertEqual(ticket.partner_id, self.partner)

@@ -170,6 +170,36 @@ class PlcsGreenrxTicket(models.Model):
     # ------------------------------------------------------------------
     # Positionen und Soll / Ist
     # ------------------------------------------------------------------
+    def _grx_product_from_lines(self, gtin=False, pzn=False):
+        """Artikel fehlt im Stamm, die PZN ist aber im Vorgang angemeldet → Artikel anlegen (1.7.4).
+
+        Die Packung gehört damit erkennbar zu diesem Paket. Bezeichnung und Lagerbedingungen kommen
+        aus der Position bzw. der ATIV-Gutschrift; ohne Lagerbedingungen wird im Verlauf auf die
+        Prüfung der Lagertemperatur hingewiesen. Gibt den Artikel oder ein leeres Recordset zurück.
+        """
+        self.ensure_one()
+        Product = self.env["product.product"]
+        pzn = (pzn or gs1.gtin_to_pzn(gtin or "") or "").strip()
+        if pzn.isdigit():
+            pzn = pzn.zfill(8)
+        lines = self.line_ids.filtered(lambda l: not l.ativ_removed and not l.product_id
+                                       and (l.pzn or "").strip().zfill(8) == pzn) if pzn.isdigit() else []
+        if not lines:
+            return Product
+        source = self.env["plcs.ativ.credit.note.line"].sudo().search([("grx_line_id", "in", lines.ids)], limit=1)
+        storage = source.storage_conditions or False
+        name = next((l.product_name for l in lines if l.product_name), False) or self.env._("PZN %s", pzn)
+        product = Product._plcs_ensure_from_ativ(pzn, gtin, name, storage)
+        if not product:
+            return Product
+        lines.sudo().write({"product_id": product.id})
+        note = self.env._("Artikel %(p)s automatisch angelegt (PZN %(pzn)s aus dem Vorgang).",
+                          p=product.display_name, pzn=pzn)
+        if not storage:
+            note += " " + self.env._("Keine Lagerbedingungen bekannt: Lagertemperatur im Artikel prüfen.")
+        self.sudo().message_post(body=note)
+        return product
+
     def _grx_match_line(self, product, batch=False):
         """Position des Retourenscheins für Artikel + Charge finden.
 
