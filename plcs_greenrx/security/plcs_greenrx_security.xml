@@ -21,6 +21,12 @@
         <field name="comment">Verantwortliche Person: gibt Boxen frei oder sperrt sie (4-Augen-Prinzip: nicht die eigenen).</field>
     </record>
 
+    <!-- Administrator bekommt beide GreenRX-Rollen, damit Wareneingang und VP-Freigabe
+         auch in neuen Datenbanken (z. B. Odoo.sh-Testbuilds) sofort im Menü stehen -->
+    <record id="base.user_admin" model="res.users">
+        <field name="group_ids" eval="[(4, ref('group_grx_vp'))]"/>
+    </record>
+
     <!-- Lose/Seriennummern, Pakete und Lagerorte für alle internen Benutzer sichtbar -->
     <record id="base.group_user" model="res.groups">
         <field name="implied_ids" eval="[

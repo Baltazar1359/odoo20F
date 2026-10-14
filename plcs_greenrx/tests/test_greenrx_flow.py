@@ -83,6 +83,12 @@ class TestGreenrxFlow(TransactionCase):
         self.assertEqual(self.company._plcs_grx_setup(), True)  # idempotent
         self.assertEqual(len(self.env["stock.package"].search([("plcs_is_grx_box", "=", True)])), 200)
 
+    def test_admin_has_greenrx_roles(self):
+        """Ohne die Rollen sieht der Administrator nur 'Bestand GreenRX' (1.7.2)."""
+        admin = self.env.ref("base.user_admin")
+        self.assertTrue(admin.has_group("plcs_greenrx.group_grx_vp"))
+        self.assertTrue(admin.has_group("plcs_greenrx.group_grx_user"))
+
     def test_ticket_import_and_search(self):
         ticket = self._ticket()
         self.assertEqual(ticket.partner_id, self.partner)
