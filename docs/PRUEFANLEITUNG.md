@@ -52,7 +52,7 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
 
 ### B. VP-Freigabe (als vp.test, also eine andere Person)
 
-1. **GreenRX › VP-Freigabe** öffnen. Die Boxen erscheinen, Rot zuerst. Eigene Boxen sieht man dort nicht (4-Augen-Prinzip).
+1. **GreenRX › VP-Freigabe** öffnen. Die Boxen erscheinen, Rot zuerst. Boxen, an denen man selbst beteiligt war, stehen am Ende mit „nur sperren“: freigeben muss eine andere VP (4-Augen-Prinzip).
 2. **GX001 freigeben.** Die Ware wird nach GreenRX/Bestand gebucht. Bei einer **gelben** oder **roten** Box verlangt Odoo eine Begründung.
 3. **GX003 sperren** (Grund angeben). Die Ware bleibt im Sperrlager.
 

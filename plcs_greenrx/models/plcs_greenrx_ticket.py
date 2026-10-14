@@ -1,7 +1,7 @@
 import re
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 from odoo.fields import Command, Domain
 
 from ..tools import gs1, slip
@@ -113,6 +113,25 @@ class PlcsGreenrxTicket(models.Model):
         }]
 
     # ------------------------------------------------------------------
+    # Rollen- und Firmenprüfung
+    # ------------------------------------------------------------------
+    def _grx_check_user(self):
+        """Nur „GreenRX: Lager (Erfassung)“ (und damit die VP) darf die Scan-Oberfläche nutzen.
+
+        Das Menü allein schützt nicht: öffentliche Methoden lassen sich direkt aufrufen.
+        Interne Aufrufe mit Superuser-Rechten (Migration, Cron, Schnittstelle) sind ausgenommen.
+        """
+        if self.env.su:
+            return
+        if not self.env.user.has_group("plcs_greenrx.group_grx_user"):
+            raise AccessError(self.env._(
+                "Nur Benutzer der Gruppe „GreenRX: Lager (Erfassung)“ dürfen GreenRX-Vorgänge bearbeiten."))
+        for ticket in self:
+            company = ticket.sudo().company_id
+            if company and company not in self.env.companies:
+                raise AccessError(self.env._("Vorgang %s gehört zu einer anderen Firma.", ticket.sudo().name))
+
+    # ------------------------------------------------------------------
     # Positionen und Soll / Ist
     # ------------------------------------------------------------------
     def _grx_match_line(self, product, batch=False):
@@ -214,6 +233,7 @@ class PlcsGreenrxTicket(models.Model):
     @api.model
     def grx_search(self, query, limit=20):
         """Offene Vorgänge suchen: Referenz, Ticket-, Reklamations-, Gutschrift-, Kundennummer, Apotheke."""
+        self._grx_check_user()
         q = _norm(query)
         if not q:
             return []
@@ -262,6 +282,7 @@ class PlcsGreenrxTicket(models.Model):
     @api.model
     def grx_from_slip(self, raw):
         """QR-Code des Retourenscheins gescannt → Vorgang finden (oder anlegen) und zurückgeben."""
+        self._grx_check_user()
         try:
             data = slip.parse(raw)
         except slip.SlipError as e:
@@ -338,6 +359,7 @@ class PlcsGreenrxTicket(models.Model):
     @api.model
     def grx_home(self):
         """Startseite der Scan-Oberfläche: was ist offen, was ist als Nächstes dran."""
+        self._grx_check_user()
         Box = self.env["plcs.greenrx.box"]
         user = self.env.user
         in_progress = self.search([("state", "=", "in_progress")], order="write_date desc", limit=30)
@@ -360,9 +382,7 @@ class PlcsGreenrxTicket(models.Model):
         is_vp = user.has_group("plcs_greenrx.group_grx_vp")
         vp_count = 0
         if is_vp:
-            vp_count = Box.search_count([
-                ("state", "in", ("to_release", "blocked")), ("vp_user_id", "=", False),
-                ("ticket_id.state", "=", "done"), ("picking_id.state", "=", "done"), ("user_id", "!=", user.id)])
+            vp_count = Box._grx_vp_releasable_count()
         return {
             "user": user.name,
             "initials": "".join(p[:1] for p in (user.name or "?").split()[:2]).upper(),
@@ -376,6 +396,7 @@ class PlcsGreenrxTicket(models.Model):
     def grx_resume(self):
         """In Erfassung befindlichen Vorgang fortsetzen (ggf. mit offener Box des Benutzers)."""
         self.ensure_one()
+        self._grx_check_user()
         data = self.grx_start()
         box = self.box_ids.filtered(
             lambda b: b.state in ("scan", "check", "print") and b.user_id == self.env.user)[:1]
@@ -384,6 +405,7 @@ class PlcsGreenrxTicket(models.Model):
     def grx_start(self):
         """Paket ausgewählt: Eingang anlegen (falls nötig) und Daten zurückgeben."""
         self.ensure_one()
+        self._grx_check_user()
         if self.state not in ("open", "in_progress"):
             raise UserError(self.env._("Vorgang %s ist nicht mehr offen.", self.name))
         if not self.picking_id:
@@ -433,11 +455,13 @@ class PlcsGreenrxTicket(models.Model):
 
     def grx_data(self):
         self.ensure_one()
+        self._grx_check_user()
         return self._grx_ui_data()
 
     def grx_finish(self, deviation_note=False):
         """Paket fertig: alle Boxen abgeschlossen → Eingang buchen (Ware in Quarantäne/Sperrlager)."""
         self.ensure_one()
+        self._grx_check_user()
         if self.state != "in_progress":
             raise UserError(self.env._("Vorgang %s ist nicht in Erfassung.", self.name))
         boxes = self.box_ids.filtered(lambda b: b.state != "cancel")

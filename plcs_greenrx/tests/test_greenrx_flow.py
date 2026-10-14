@@ -233,7 +233,8 @@ class TestGreenrxFlow(TransactionCase):
         self._close(box)
         ticket.with_user(self.vp1).grx_finish()
         listing = self.env["plcs.greenrx.box"].with_user(self.vp1).grx_vp_list()
-        self.assertNotIn(box.id, [b["id"] for b in listing["boxes"]])
+        row = next(b for b in listing["boxes"] if b["id"] == box.id)
+        self.assertFalse(row["can_release"], "eigene Box: nur sperren, nicht freigeben")
         self.assertEqual(listing["own_count"], 1)
         with self.assertRaises(AccessError):
             box.grx_vp_release()

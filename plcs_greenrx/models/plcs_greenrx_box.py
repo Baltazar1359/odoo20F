@@ -1,6 +1,6 @@
 from dateutil.relativedelta import relativedelta
 
-from odoo import api, fields, models
+from odoo import SUPERUSER_ID, Command, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
 from ..tools import gs1
@@ -87,6 +87,8 @@ class PlcsGreenrxBox(models.Model):
     ampel = fields.Selection(AMPEL, "Ampel", tracking=True, readonly=True, index=True)
     note = fields.Text("Bemerkung", readonly=True)
     checked_at = fields.Datetime("Vorprüfung am", readonly=True)
+    checked_by = fields.Many2one("res.users", "Vorprüfung von", readonly=True,
+                                 help="Wer die Vorprüfung abgeschlossen hat (Schritt „Weiter zum Druck“).")
 
     # Druck und Abschluss
     printed_at = fields.Datetime("Gedruckt am", readonly=True)
@@ -98,6 +100,11 @@ class PlcsGreenrxBox(models.Model):
     printed_rev = fields.Integer("Gedruckter Stand", readonly=True,
                                  help="Änderungsstand beim letzten Druck. Weicht er ab, ist ein neuer Druck Pflicht.")
     closed_at = fields.Datetime("Abgeschlossen am", readonly=True)
+    closed_by = fields.Many2one("res.users", "Abgeschlossen von", readonly=True)
+    participant_ids = fields.Many2many(
+        "res.users", "plcs_grx_box_participant_rel", "box_id", "user_id", "Beteiligte", readonly=True,
+        help="Alle Benutzer, die Inhalt, Vorprüfung, Druckbestätigung oder Abschluss der Box bearbeitet haben. "
+             "Sie dürfen die Box nicht als VP freigeben (4-Augen-Prinzip).")
     move_id = fields.Many2one("stock.move", "Lagerbewegung Eingang", readonly=True)
 
     # VP
@@ -218,10 +225,53 @@ class PlcsGreenrxBox(models.Model):
                     "Box %(box)s ist im Schritt „%(state)s“. Diese Aktion geht hier nicht.",
                     box=box.package_id.name, state=dict(box._fields["state"].selection)[box.state]))
 
+    def _grx_check_user(self):
+        """Serverseitige Rollen- und Firmenprüfung für alle Aktionen der Erfassung.
+
+        Das Menü allein schützt nicht: öffentliche Methoden lassen sich direkt aufrufen.
+        Interne Aufrufe mit Superuser-Rechten (Migration, Cron) sind ausgenommen.
+        """
+        if self.env.su:
+            return
+        if not self.env.user.has_group("plcs_greenrx.group_grx_user"):
+            raise AccessError(self.env._(
+                "Nur Benutzer der Gruppe „GreenRX: Lager (Erfassung)“ dürfen GreenRX-Boxen bearbeiten."))
+        for box in self:
+            company = box.sudo().company_id
+            if company and company not in self.env.companies:
+                raise AccessError(self.env._("Box %s gehört zu einer anderen Firma.", box.sudo().name))
+
     def _grx_check_owner(self):
         for box in self:
             if box.user_id != self.env.user and not self.env.user.has_group("plcs_greenrx.group_grx_vp"):
                 raise AccessError(self.env._("Box %s wird von %s erfasst.", box.package_id.name, box.user_id.name))
+
+    # ------------------------------------------------------------------
+    # 4-Augen-Prinzip: Beteiligte
+    # ------------------------------------------------------------------
+    def _grx_mark_participant(self, **vals):
+        """Aktuellen Benutzer als Beteiligten der Box vermerken (und weitere Felder schreiben)."""
+        user = self.env.user
+        for box in self:
+            write_vals = dict(vals)
+            if user.id != SUPERUSER_ID and user not in box.sudo().participant_ids:
+                write_vals["participant_ids"] = [Command.link(user.id)]
+            if write_vals:
+                box.sudo().write(write_vals)
+
+    def _grx_participants(self):
+        """Alle Benutzer, die an der Box beteiligt waren.
+
+        Anleger, alle Scans (auch abgelehnte und wieder entfernte), jede Änderung an Inhalt,
+        Vorprüfung oder Ampel, die Bestätigung des Ausdrucks und der Abschluss.
+        """
+        self.ensure_one()
+        box = self.sudo()
+        return box.user_id | box.scan_ids.user_id | box.participant_ids | box.checked_by | box.closed_by
+
+    def _grx_is_participant(self, user=None):
+        self.ensure_one()
+        return (user or self.env.user) in self._grx_participants()
 
     def _grx_changed(self, vals=None):
         """Inhalt der Box ändert sich: Änderungsstand hochzählen, Ausdruck ungültig machen.
@@ -236,14 +286,16 @@ class PlcsGreenrxBox(models.Model):
             self.sudo().message_post(body=self.env._(
                 "Ausdruck Nr. %s ist ungültig, weil die Box danach geändert wurde. Vor dem Abschluss neu drucken.",
                 self.print_count))
-        self.sudo().write(vals)
+        self._grx_mark_participant(**vals)
 
     @api.model
     def grx_open_box(self, ticket_id, code, manual=False):
         """Box-QR gescannt (oder von Hand eingegeben) → Erfassung anlegen oder fortsetzen."""
+        self._grx_check_user()
         ticket = self.env["plcs.greenrx.ticket"].browse(ticket_id).exists()
         if not ticket:
             raise UserError(self.env._("Ticket nicht gefunden."))
+        ticket._grx_check_user()
         if ticket.state == "open":
             ticket.grx_start()
         if ticket.state != "in_progress":
@@ -284,6 +336,7 @@ class PlcsGreenrxBox(models.Model):
     def grx_scan(self, raw):
         """Packung gescannt. Rückgabe: Ergebnis für die Oberfläche."""
         self.ensure_one()
+        self._grx_check_user()
         self._grx_check_state("scan")
         self._grx_check_owner()
         Scan = self.env["plcs.greenrx.scan"]
@@ -395,6 +448,7 @@ class PlcsGreenrxBox(models.Model):
     def grx_remove_scan(self, scan_id):
         """Letzte(n) Packung wieder herausnehmen (vor der Vorprüfung)."""
         self.ensure_one()
+        self._grx_check_user()
         self._grx_check_state("scan")
         self._grx_check_owner()
         scan = self.scan_ids.filtered(lambda s: s.id == scan_id and s.accepted)
@@ -410,16 +464,18 @@ class PlcsGreenrxBox(models.Model):
 
     def grx_to_check(self):
         self.ensure_one()
+        self._grx_check_user()
         self._grx_check_state("scan")
         self._grx_check_owner()
         if not self.qty:
             raise UserError(self.env._("Erst mindestens eine Packung scannen."))
-        self.sudo().state = "check"
+        self._grx_mark_participant(state="check")
         return self._grx_ui_data()
 
     def grx_back(self):
         """Einen Schritt zurück. Ein vorhandener Ausdruck wird damit ungültig."""
         self.ensure_one()
+        self._grx_check_user()
         self._grx_check_owner()
         if self.state == "check":
             self._grx_changed({"state": "scan"})
@@ -432,6 +488,7 @@ class PlcsGreenrxBox(models.Model):
     def grx_save_check(self, answers=None, ampel=None, note=None):
         """Antworten der Sichtprüfung speichern (ohne weiterzugehen)."""
         self.ensure_one()
+        self._grx_check_user()
         self._grx_check_state("check")
         self._grx_check_owner()
         vals = {}
@@ -455,6 +512,7 @@ class PlcsGreenrxBox(models.Model):
 
     def grx_to_print(self):
         self.ensure_one()
+        self._grx_check_user()
         self._grx_check_state("check")
         self._grx_check_owner()
         missing = [text for fname, text, *_r in QUESTIONS if not self[fname]]
@@ -468,7 +526,7 @@ class PlcsGreenrxBox(models.Model):
                                        a=AMPEL_SHORT[self.ampel], s=AMPEL_SHORT[level]))
         if self.ampel != "gruen" and not reasons and not (self.note or "").strip():
             raise UserError(self.env._("Bitte einen Grund eintragen (die Ampel ist strenger als der Vorschlag)."))
-        self._grx_changed({"state": "print", "checked_at": fields.Datetime.now()})
+        self._grx_changed({"state": "print", "checked_at": fields.Datetime.now(), "checked_by": self.env.user.id})
         return self._grx_ui_data()
 
     @api.model
@@ -490,8 +548,14 @@ class PlcsGreenrxBox(models.Model):
         return not self.printed_at or self.printed_rev != self.content_rev
 
     def grx_print(self):
-        """Dokumente drucken: KabQ-Checkliste, Anlage Box-Inhalt, bei Rot das Sperrblatt."""
+        """Dokumente drucken: KabQ-Checkliste, Anlage Box-Inhalt, bei Rot das Sperrblatt.
+
+        Vor dem Abschluss nur der Erfasser oder eine VP; Nachdruck nach dem Abschluss
+        ebenfalls nur Erfasser oder VP (Prüfung über _grx_check_owner).
+        """
         self.ensure_one()
+        self._grx_check_user()
+        self._grx_check_owner()
         if self.state in ("scan", "check", "cancel"):
             raise UserError(self.env._("Drucken geht erst nach der Vorprüfung."))
         self.sudo().write({
@@ -510,16 +574,18 @@ class PlcsGreenrxBox(models.Model):
 
     def grx_confirm_signed(self, value=True):
         self.ensure_one()
+        self._grx_check_user()
         self._grx_check_state("print")
         self._grx_check_owner()
         if value and self._grx_print_outdated():
             raise UserError(self.env._("Erst die Dokumente drucken."))
-        self.sudo().signed_confirmed = bool(value)
+        self._grx_mark_participant(signed_confirmed=bool(value))
         return self._grx_ui_data()
 
     def grx_close(self):
         """Box abschließen: Seriennummern anlegen und Bewegung in den Eingang schreiben."""
         self.ensure_one()
+        self._grx_check_user()
         self._grx_check_state("print")
         self._grx_check_owner()
         if not self.printed_at:
@@ -578,7 +644,8 @@ class PlcsGreenrxBox(models.Model):
         move = move._action_confirm(merge=False)
         move.picked = True
         state = "blocked" if self.ampel == "rot" else "to_release"
-        self.sudo().write({"state": state, "closed_at": fields.Datetime.now(), "move_id": move.id})
+        self._grx_mark_participant(state=state, closed_at=fields.Datetime.now(), closed_by=self.env.user.id,
+                                   move_id=move.id)
         self.sudo().message_post(body=self.env._(
             "Box abgeschlossen: %(n)s × %(p)s, Charge %(ch)s, Ampel %(a)s → %(loc)s.",
             n=len(lots), p=self.product_id.display_name, ch=self.batch,
@@ -588,6 +655,7 @@ class PlcsGreenrxBox(models.Model):
     def grx_cancel(self):
         """Erfassung abbrechen (nur vor dem Abschluss)."""
         self.ensure_one()
+        self._grx_check_user()
         self._grx_check_state(*OPEN_STATES)
         self._grx_check_owner()
         self.sudo().scan_ids.filtered("accepted").write({"accepted": False, "result": "removed",
@@ -599,35 +667,58 @@ class PlcsGreenrxBox(models.Model):
     # ------------------------------------------------------------------
     # VP
     # ------------------------------------------------------------------
-    def _grx_check_vp(self):
-        if not self.env.user.has_group("plcs_greenrx.group_grx_vp"):
+    def _grx_check_vp(self, release=True):
+        """VP-Entscheidung prüfen.
+
+        release=True (Freigabe): nur eine VP, die an der Box nicht beteiligt war (4-Augen-Prinzip).
+        release=False (Sperre): jede VP, auch eine beteiligte – Sperren ist die sichere Richtung.
+        """
+        self._grx_check_user()
+        if not self.env.su and not self.env.user.has_group("plcs_greenrx.group_grx_vp"):
             raise AccessError(self.env._("Nur die VP (Gruppe „GreenRX: VP-Freigabe“) darf freigeben oder sperren."))
         for box in self:
-            if box.user_id == self.env.user:
+            if release and box._grx_is_participant():
                 raise AccessError(self.env._(
-                    "4-Augen-Prinzip: Box %s hast du selbst erfasst. Eine andere VP muss entscheiden.",
+                    "4-Augen-Prinzip: Du warst an Box %s beteiligt (erfasst, gescannt, geprüft oder abgeschlossen). "
+                    "Freigeben muss eine andere VP. Sperren ist erlaubt.",
                     box.package_id.name))
             if box.ticket_id.state != "done" or box.picking_id.state != "done":
                 raise UserError(self.env._(
                     "Das Paket %s ist noch nicht abgeschlossen (Eingang nicht gebucht).", box.ticket_id.name))
 
-    @api.model
-    def grx_vp_list(self):
-        boxes = self.search([
+    def _grx_vp_waiting_domain(self):
+        return [
             ("state", "in", ("to_release", "blocked")),
             ("ticket_id.state", "=", "done"),
             ("picking_id.state", "=", "done"),
             ("vp_user_id", "=", False),
-        ])
-        own = boxes.filtered(lambda b: b.user_id == self.env.user)
+        ]
+
+    @api.model
+    def grx_vp_list(self):
+        """Boxen, die auf die VP warten.
+
+        Boxen, an denen die VP beteiligt war, stehen am Ende der Liste und können nur gesperrt werden.
+        """
+        self._grx_check_user()
+        boxes = self.search(self._grx_vp_waiting_domain())
+        own = boxes.filtered(lambda b: b._grx_is_participant())
         others = boxes - own
         order = {"rot": 0, "gelb": 1, "gruen": 2}
-        others = others.sorted(lambda b: (order.get(b.ampel, 3), b.closed_at or b.create_date))
+
+        def key(b):
+            return (order.get(b.ampel, 3), b.closed_at or b.create_date)
         return {
-            "boxes": [b._grx_ui_data() for b in others],
+            "boxes": [b._grx_ui_data() for b in others.sorted(key) + own.sorted(key)],
             "own_count": len(own),
             "is_vp": self.env.user.has_group("plcs_greenrx.group_grx_vp"),
         }
+
+    @api.model
+    def _grx_vp_releasable_count(self):
+        """Anzahl Boxen, die der aktuelle Benutzer als VP freigeben darf."""
+        boxes = self.search(self._grx_vp_waiting_domain())
+        return len(boxes.filtered(lambda b: not b._grx_is_participant()))
 
     def _grx_internal_move(self, picking_type, dest, reason_text):
         self.ensure_one()
@@ -721,16 +812,22 @@ class PlcsGreenrxBox(models.Model):
         """VP sperrt die Box → Sperrlager."""
         self.ensure_one()
         self._grx_check_state("to_release", "blocked")
-        self._grx_check_vp()
+        self._grx_check_vp(release=False)
         if not (reason or "").strip():
             raise UserError(self.env._("Bitte einen Grund für die Sperre angeben."))
+        participant = self._grx_is_participant()
         config = self.company_id._plcs_grx_config()
         picking = False
         if self.location_id != config.plcs_grx_blocked_location_id:
             picking = self.sudo()._grx_internal_move(config.plcs_grx_block_type_id, config.plcs_grx_blocked_location_id, reason)
         self.sudo().write({"state": "blocked", "vp_user_id": self.env.user.id, "vp_date": fields.Datetime.now(),
                     "vp_reason": reason, "vp_picking_id": picking.id if picking else False})
-        self.sudo().message_post(body=self.env._("Gesperrt durch VP %(vp)s: %(r)s", vp=self.env.user.name, r=reason))
+        if participant:
+            body = self.env._("Gesperrt durch beteiligte VP %(vp)s: %(r)s. Freigeben darf nur eine andere VP.",
+                              vp=self.env.user.name, r=reason)
+        else:
+            body = self.env._("Gesperrt durch VP %(vp)s: %(r)s", vp=self.env.user.name, r=reason)
+        self.sudo().message_post(body=body)
         return self._grx_ui_data()
 
     # ------------------------------------------------------------------
@@ -786,6 +883,8 @@ class PlcsGreenrxBox(models.Model):
             "vp_user": self.vp_user_id.name or "",
             "vp_reason": self.vp_reason or "",
             "is_own": self.user_id == self.env.user,
+            # 4-Augen-Prinzip: Beteiligte dürfen nicht freigeben (nur sperren)
+            "can_release": not self._grx_is_participant(),
         })
         return data
 

@@ -69,14 +69,18 @@
                             <field name="reasons"/>
                             <field name="note"/>
                             <field name="checked_at"/>
+                            <field name="checked_by"/>
                             <field name="printed_at"/>
+                            <field name="printed_by"/>
                             <field name="print_count"/>
                             <field name="signed_confirmed"/>
                             <field name="closed_at"/>
+                            <field name="closed_by"/>
                         </group>
                     </group>
                     <group string="VP-Entscheidung">
                         <group>
+                            <field name="participant_ids" widget="many2many_tags"/>
                             <field name="vp_user_id"/>
                             <field name="vp_date"/>
                         </group>

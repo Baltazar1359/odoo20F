@@ -57,11 +57,12 @@ Odoo kennt je Packung nur ein „Los/Seriennummer“-Feld. Das Modul speichert d
 - Die VP sieht eine Box erst, wenn das ganze Paket fertig ist.
 - Ware verlässt Quarantäne und Sperrlager **nur** über die VP-Freigabe. Andere Wege werden abgelehnt: Transfer, Barcode-App, Inventur oder Ausschuss.
 - Status und Ergebnisse lassen sich nicht direkt per API ändern. Alle Änderungen laufen über die geprüften Funktionen.
+- Die geprüften Funktionen verlangen auf dem Server die Gruppe „GreenRX: Lager (Erfassung)“ (die VP hat sie automatisch) und einen Vorgang der eigenen Firma. Drucken und Nachdrucken darf nur der Erfasser oder eine VP.
 
 ### VP-Freigabe (Menü GreenRX › VP-Freigabe)
 
 - Die Liste ist nach Ampel sortiert (Rot zuerst).
-- Boxen, die die VP selbst erfasst hat, erscheinen nicht (4-Augen-Prinzip).
+- 4-Augen-Prinzip: Eine VP, die an einer Box beteiligt war (angelegt, gescannt – auch abgelehnte oder wieder entfernte Scans –, Vorprüfung, Bestätigung des Ausdrucks, Abschluss), darf sie **nicht freigeben**, nur sperren. Solche Boxen stehen am Ende der Liste mit dem Hinweis „nur sperren“. Eine Sperre durch eine beteiligte VP wird im Verlauf vermerkt; freigeben kann danach nur eine andere VP.
 - **Freigeben** bucht die Box nach GreenRX/Bestand. Bei einer gelben oder roten (gesperrten) Box ist eine Begründung Pflicht.
 - **Sperren** bucht die Box ins Sperrlager. Ein Grund ist Pflicht.
 
@@ -103,11 +104,12 @@ Danach:
 odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --stop-after-init
 ```
 
-47 automatische Tests decken ab:
+56 automatische Tests decken ab (davon 3 Browser-Tests, die Chrome brauchen):
 
 - den GS1/IFA-Parser und den Retourenschein-QR (auch zerteilt durch den Handscanner),
 - den ganzen Ablauf von Ticket bis VP-Freigabe,
-- das 4-Augen-Prinzip,
+- das 4-Augen-Prinzip mit allen Beteiligten einer Box (1.4.0, `TestGreenrxFourEyesAccess`),
+- die Rollen- und Firmenprüfung auf dem Server und die Druckberechtigung (1.4.0),
 - die rote Box und das Sperrlager,
 - die Restlaufzeit,
 - Soll/Ist-Abweichungen,
