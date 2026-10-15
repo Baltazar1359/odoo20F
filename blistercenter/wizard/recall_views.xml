@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_bc_recall_form" model="ir.ui.view">
+        <field name="name">blistercenter.recall.wizard.form</field>
+        <field name="model">blistercenter.recall.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Rückrufauswertung">
+                <p class="text-muted">
+                    Chargen wählen. Odoo zeigt, an welche Kunden sie geliefert wurden und wo noch Bestand liegt.
+                </p>
+                <group>
+                    <field name="lot_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                    <field name="block_lots"/>
+                    <field name="reason" invisible="not block_lots" required="block_lots"/>
+                </group>
+                <footer>
+                    <button name="action_customers" type="object" string="Betroffene Kunden" class="btn-primary"/>
+                    <button name="action_deliveries" type="object" string="Gelieferte Mengen"/>
+                    <button name="action_stock" type="object" string="Bestand im Lager"/>
+                    <button special="cancel" string="Schließen"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_bc_recall" model="ir.actions.act_window">
+        <field name="name">Rückrufauswertung</field>
+        <field name="res_model">blistercenter.recall.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

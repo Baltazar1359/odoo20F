@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_bc_partial_wizard_form" model="ir.ui.view">
+        <field name="name">blistercenter.partial.wizard.form</field>
+        <field name="model">blistercenter.partial.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Teillieferung erlauben">
+                <p>Standard ist die Komplettlieferung. Eine Teillieferung nur nach Rücksprache mit dem Kunden.</p>
+                <group>
+                    <field name="order_id"/>
+                    <field name="note" placeholder="z. B. Telefonat mit Frau Muster am 15.10."/>
+                </group>
+                <footer>
+                    <button name="action_apply" type="object" string="Teillieferung erlauben" class="btn-primary"/>
+                    <button special="cancel" string="Abbrechen"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_bc_short_wizard_form" model="ir.ui.view">
+        <field name="name">blistercenter.short.wizard.form</field>
+        <field name="model">blistercenter.short.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Kurzläufer freigeben">
+                <p>Diese Chargen haben eine Restlaufzeit unter der Grenze aus den Einstellungen. Die Freigabe wird mit Begründung, Name und Zeit gespeichert.</p>
+                <group>
+                    <field name="picking_id"/>
+                    <field name="lot_ids" widget="many2many_tags"/>
+                    <field name="reason" placeholder="z. B. Kunde hat kurze Restlaufzeit akzeptiert"/>
+                </group>
+                <footer>
+                    <button name="action_apply" type="object" string="Kurzläufer freigeben" class="btn-primary"/>
+                    <button special="cancel" string="Abbrechen"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
