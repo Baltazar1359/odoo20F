@@ -657,8 +657,9 @@ class PlcsGreenrxBox(models.Model):
             "printed_rev": self.content_rev,
         })
         if self.state == "print":
-            # Inhalt dieses Drucks festhalten; Nachdrucke nach dem Abschluss ändern ihn nicht
-            self.sudo().printed_snapshot = self._grx_report_snapshot()
+            # Inhalt dieses Drucks festhalten; Nachdrucke nach dem Abschluss ändern ihn nicht.
+            # Ein neuer Ausdruck muss neu geprüft und unterschrieben werden.
+            self.sudo().write({"printed_snapshot": self._grx_report_snapshot(), "signed_confirmed": False})
         if self.print_count > 1:
             body = self.env._("Box-Dokumente gedruckt (Druck Nr. %(n)s, Neuausdruck Nr. %(r)s).",
                               n=self.print_count, r=self.print_count - 1)

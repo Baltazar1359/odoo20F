@@ -152,6 +152,8 @@ Zusätzlich prüft `e2e/playwright_scan_queue.py` mit Playwright gegen einen lau
 ODOO_PASSWORD=… python e2e/playwright_scan_queue.py --url http://127.0.0.1:8069 --db test_db --login admin
 ```
 
+Testplan zu 1.8.0 mit druckbarem Testpaket: `docs/TESTPLAN_1.8.0.md` und `docs/testpaket_VTEST1801.pdf`.
+
 ### Offen / vor dem Echtbetrieb
 
 - Die Druckvorlagen sind eine Nachbildung der KabQ-Checkliste. Abgleich mit dem Word-Formblatt und Freigabe durch die QMB stehen aus. Das gilt auch für die Anlage und das Sperrblatt als neue Formblätter.
