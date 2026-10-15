@@ -189,16 +189,32 @@ def _parse_with_separators(code):
     return result
 
 
-def _parse_without_separators(code, pos=0, acc=None, solutions=None, limit=5):
-    """Alle Lesarten suchen, wenn Trennzeichen fehlen."""
+_SEARCH_BUDGET = 20000
+
+
+def _parse_without_separators(code, pos=0, acc=None, solutions=None, limit=2, budget=None):
+    """Lesarten mit GTIN (01) und Seriennummer (21) suchen, wenn Trennzeichen fehlen.
+
+    Gezählt werden nur verwertbare Lesarten; die Suche endet bei der zweiten (dann ist der Code
+    mehrdeutig). Reicht das Rechenbudget nicht, gilt der Code als nicht eindeutig lesbar
+    (budget["exhausted"]). Code-Review R14: früher endete die Suche nach fünf beliebigen
+    Lesarten, eine einzige passende darunter bewies keine Eindeutigkeit.
+    """
     if acc is None:
         acc = {}
     if solutions is None:
         solutions = []
-    if len(solutions) >= limit:
+    if budget is None:
+        budget = {"left": _SEARCH_BUDGET, "exhausted": False}
+    if len(solutions) >= limit or budget["exhausted"]:
+        return solutions
+    budget["left"] -= 1
+    if budget["left"] <= 0:
+        budget["exhausted"] = True
         return solutions
     if pos == len(code):
-        solutions.append(dict(acc))
+        if "01" in acc and "21" in acc:
+            solutions.append(dict(acc))
         return solutions
     for length in (2, 3, 4):
         ai = code[pos:pos + length]
@@ -217,8 +233,10 @@ def _parse_without_separators(code, pos=0, acc=None, solutions=None, limit=5):
             if not _value_ok(ai, value):
                 continue
             acc[ai] = value
-            _parse_without_separators(code, end, acc, solutions, limit)
+            _parse_without_separators(code, end, acc, solutions, limit, budget)
             del acc[ai]
+            if len(solutions) >= limit or budget["exhausted"]:
+                return solutions
     return solutions
 
 
@@ -282,8 +300,13 @@ def parse(raw):
     else:
         # Ohne Trennzeichen alle Lesarten prüfen. Eindeutig ist der Code nur,
         # wenn genau eine Lesart Seriennummer und GTIN enthält.
-        solutions = _parse_without_separators(code)
-        wanted = [s for s in solutions if "01" in s and "21" in s]
+        budget = {"left": _SEARCH_BUDGET, "exhausted": False}
+        wanted = _parse_without_separators(code, budget=budget)
+        if budget["exhausted"] and len(wanted) < 2:
+            raise Gs1Error(
+                "Im Code fehlen die Trennzeichen (GS). Der Code ist zu lang, um Seriennummer und Charge "
+                "sicher zu trennen. Scanner auf GS1/FNC1-Ausgabe einstellen."
+            )
         if len(wanted) == 1:
             ais = wanted[0]
             variable = [ai for ai in ais if not _AI[ai][0]]

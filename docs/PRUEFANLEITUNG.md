@@ -68,6 +68,13 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
 - **Eingang nur über „Paket fertig“:** Den GreenRX-Eingang (GRXIN…) eines Pakets in Erfassung unter Lager › Transfers öffnen und „Bestätigen“ klicken. Erwartet: Odoo lehnt das ab und verweist auf „Paket fertig“.
 - **Suche:** Auf der Startseite nach Apotheke, Ticket-, Reklamations-, Gutschrift- oder Kundennummer oder nach dem Artikel suchen. Die Suche läuft über alle offenen Vorgänge (auch bei mehr als 1.000); Leerzeichen und Bindestriche sind egal (z. B. „k 10234“ findet „K-10234“).
 - **Box-Erfassungen › Box öffnen › Verlauf:** Jeder Druck ist mit Nummer vermerkt, ein ungültig gewordener Ausdruck ebenfalls.
+- **Neu in 1.8.0 (Code-Review 14.10.):**
+  - Packungen schnell scannen und sofort „Weiter“ (F9): Alle Packungen stehen in der Box, keine wird verworfen.
+  - Vorprüfung mit Vorschlag Gelb, Rot wählen ohne Bemerkung: Odoo verlangt einen Grund.
+  - Box in Quarantäne unter Lager › Pakete auspacken: Odoo lehnt das ab.
+  - Seriennummer einer erfassten Packung unter Lager › Seriennummern umbenennen: Odoo lehnt das ab.
+  - Box drucken, danach den Absender des Vorgangs oder die Lagertemperatur des Artikels ändern: Abschluss verlangt neuen Druck.
+  - Vorprüfung durch eine andere Person als den Erfasser: Formblatt nennt bei „Wareneingangsprüfung durchgeführt von“ den Prüfer, in der Anlage bei „Erfasst von“ den Erfasser.
 
 ## Hinweise
 

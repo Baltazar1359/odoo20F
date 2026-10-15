@@ -59,6 +59,12 @@ Odoo kennt je Packung nur ein „Los/Seriennummer“-Feld. Das Modul speichert d
 - Der GreenRX-Eingang (GRXIN) wird **nur** mit „Paket fertig“ gebucht, nicht über Lager › Transfers oder die Barcode-App. Wurde ein Eingang früher schon vorzeitig gebucht, kommen weitere Boxen automatisch in einen **Nachtrags-Eingang**, den „Paket fertig“ mitbucht.
 - Die VP sieht eine Box erst, wenn das ganze Paket fertig ist.
 - Ware verlässt Quarantäne und Sperrlager **nur** über die VP-Freigabe. Andere Wege werden abgelehnt: Transfer, Barcode-App, Inventur oder Ausschuss.
+- Eine Box in Quarantäne oder Sperrlager darf nicht ausgepackt oder umgepackt werden. Die VP-Freigabe bewegt nur genau die erfassten Seriennummern; passt der Box-Inhalt nicht mehr zur Erfassung, wird nichts bewegt (1.8.0).
+- Kontextwerte aus API-Aufrufen geben keine Berechtigung: Die Sperren für Quarantäne, Sperrlager und „Paket fertig“ lassen sich nicht über mitgeschickte Werte abschalten. Die Verknüpfung eines Eingangs mit dem Vorgang ist nicht änderbar (1.8.0).
+- Seriennummer, Artikel, Charge und Verfall einer erfassten Packung sind fest (nicht umbenennbar, nicht löschbar). Eine Seriennummer wird auch dann abgelehnt, wenn sie in einer abgeschlossenen Erfassung vorkommt; gleichzeitige Scans an zwei Arbeitsplätzen sichert ein eindeutiger Datenbankindex ab (1.8.0).
+- Ist die gewählte Ampel strenger als der Vorschlag (auch Gelb → Rot), ist eine eigene Begründung Pflicht (1.8.0).
+- Der Ausdruck wird auch ungültig, wenn sich Daten außerhalb der Box ändern, die auf dem Formblatt stehen (z. B. Absender, Lagertemperatur des Artikels). Nachdrucke nach dem Abschluss zeigen genau den bestätigten Inhalt (1.8.0).
+- Formblatt: „Wareneingangsprüfung durchgeführt von“ nennt, wer die Vorprüfung abgeschlossen hat; „Erfasst von“ nennt den Erfasser. Der Abgleich PZN/Bezeichnung/Charge erfolgt mit der Ticketposition; ohne Position steht „nein“, ohne Charge im Ticket bleibt das Feld offen (1.8.0).
 - Status und Ergebnisse lassen sich nicht direkt per API ändern. Alle Änderungen laufen über die geprüften Funktionen.
 - Die geprüften Funktionen verlangen auf dem Server die Gruppe „GreenRX: Lager (Erfassung)“ (die VP hat sie automatisch) und einen Vorgang der eigenen Firma. Drucken und Nachdrucken darf nur der Erfasser oder eine VP.
 
@@ -111,7 +117,7 @@ Danach:
 odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --stop-after-init
 ```
 
-Die automatischen Tests (davon 4 Browser-Tests, die Chrome brauchen) decken ab:
+Die automatischen Tests (davon 5 Browser-Tests, die Chrome brauchen) decken ab:
 
 - den GS1/IFA-Parser und den Retourenschein-QR (auch zerteilt durch den Handscanner),
 - den ganzen Ablauf von Ticket bis VP-Freigabe,
@@ -131,6 +137,10 @@ Die automatischen Tests (davon 4 Browser-Tests, die Chrome brauchen) decken ab:
 - die Sperre gegen vorzeitiges Buchen des Eingangs und den Nachtrags-Eingang (1.3.2),
 - die Handeingabe einer Packung: Prüfziffer, gleiche Regeln wie beim Scan, Kennzeichnung, Rechte, Hinweis ohne Ampel-Wirkung (1.5.0, `TestManualParser`, `TestManualPack`),
 - Handeingabe, Scan in ein Eingabefeld und Sicherheitsabfrage beim Entfernen in der Oberfläche (Browser-Test, `TestGreenrxManualPackUi`).
+- die Befunde des Code-Reviews vom 14.10.2026 (1.8.0, `TestReviewFixes`): Kontextwerte per API, Auspacken und fremder Inhalt
+  vor der Freigabe, gleichzeitige Scans, feste Seriennummern, Begründung Gelb → Rot, Ticketvergleich und Prüfer auf dem
+  Formblatt, Druckinhalt bei Stammdatenänderung, seitenweiser Abruf, Firmentrennung, Menge 0, mehrdeutige GS1-Codes;
+  dazu Scans mit sofortigem F9 (Browser-Test `test_scans_before_next_step_all_arrive`).
 - die ATIV-Schnittstelle mit simuliertem ATIV (1.6.0): Erstübernahme, Dokumente, alle Suchmerkmale, keine Duplikate,
   Änderungen nur an Position/Ticket/Anhang/Nachricht, Schutz lokaler Wareneingangsdaten, vorübergehende und
   dauerhafte Fehler mit Wiederholung, überlappende Läufe, Statuswechsel, Stichtag, fehlende Gutschriften,

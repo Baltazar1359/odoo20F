@@ -73,6 +73,19 @@ class TestGreenrxScanQueue(GreenrxUiCase):
                          ["QUEUE1", "QUEUE2", "QUEUE3", "QUEUE4", "QUEUE5"])
         self.assertEqual(len(box.scan_ids), 5, "jeder Scan genau einmal verarbeitet")
 
+    def test_scans_before_next_step_all_arrive(self):
+        """Code-Review R03: Scans in der Warteschlange + sofort F9 → alle Scans vor dem Schrittwechsel."""
+        ticket = self._ticket("V-NEXT-1", qty=5)
+        Box = self.env["plcs.greenrx.box"].with_user(self.admin)
+        box = Box.browse(Box.grx_open_box(ticket.id, "GX151")["id"])
+
+        self.start_tour("/odoo/action-plcs_greenrx.action_grx_app", "plcs_greenrx_scan_then_next", login="admin")
+
+        box.invalidate_recordset()
+        self.assertEqual(box.state, "check")
+        self.assertEqual(sorted(box.scan_ids.filtered("accepted").mapped("serial")),
+                         ["NEXT1", "NEXT2", "NEXT3", "NEXT4", "NEXT5"])
+
 
 @tagged("post_install", "-at_install", "plcs_greenrx")
 class TestGreenrxPackageFinish(GreenrxUiCase):

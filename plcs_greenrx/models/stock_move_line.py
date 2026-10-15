@@ -1,6 +1,8 @@
 from odoo import fields, models
 from odoo.exceptions import UserError
 
+from ..tools import grx_auth
+
 
 class StockMoveLine(models.Model):
     _inherit = "stock.move.line"
@@ -8,16 +10,18 @@ class StockMoveLine(models.Model):
     plcs_batch = fields.Char("Charge", related="lot_id.plcs_batch")
 
     def _action_done(self):
-        if not self.env.context.get("plcs_grx_controlled_move"):
-            self._plcs_grx_check_controlled_locations()
+        self._plcs_grx_check_controlled_locations()
         return super()._action_done()
 
     def _plcs_grx_check_controlled_locations(self):
         """Ware darf GreenRX-Quarantäne und -Sperrlager nur über die VP-Freigabe verlassen.
 
-        Gilt für alle Wege (Transfers, Barcode-App, Inventur, Ausschuss), damit die
-        Freigabe nicht umgangen werden kann.
+        Gilt für alle Wege (Transfers, Barcode-App, Inventur, Ausschuss, direkte RPC-Aufrufe).
+        Ausgenommen sind nur Zeilen, die zu einer Freigabe aus dem Modulcode gehören
+        (grx_auth.ControlledMove): gleiche Box, nur die Seriennummern dieser Erfassung.
+        Ein Kontextwert aus einem RPC-Aufruf reicht nicht (Code-Review R01).
         """
+        auth = grx_auth.controlled_move(self.env)
         for company in self.company_id:
             protected = company.plcs_grx_quarantine_location_id | company.plcs_grx_blocked_location_id
             if not protected:
@@ -27,9 +31,21 @@ class StockMoveLine(models.Model):
                 src_root = protected.filtered(lambda loc: src.parent_path.startswith(loc.parent_path))
                 if not src_root:
                     continue
-                dest = line.location_dest_id
-                if any(dest.parent_path.startswith(loc.parent_path) for loc in protected):
+                if auth and line.lot_id.id in auth.lot_ids \
+                        and line.picking_id.plcs_grx_release_box_id.id == auth.box_id:
                     continue
+                dest = line.location_dest_id
+                # Aus einer GreenRX-Box auspacken oder umpacken: nur über die VP-Entscheidung,
+                # sonst passt der Boxinhalt nicht mehr zur Erfassung (Code-Review R02)
+                repack = line.package_id.plcs_is_grx_box and line.result_package_id != line.package_id
+                if not repack and any(dest.parent_path.startswith(loc.parent_path) for loc in protected):
+                    continue
+                if repack:
+                    raise UserError(self.env._(
+                        "%(product)s (%(lot)s) liegt in Box %(box)s (%(src)s). Die Box darf dort nicht "
+                        "ausgepackt oder umgepackt werden; die VP entscheidet über den ganzen Box-Inhalt.",
+                        product=line.product_id.display_name, lot=line.lot_id.name or "-",
+                        box=line.package_id.name, src=src_root[0].display_name))
                 raise UserError(self.env._(
                     "%(product)s (%(lot)s) liegt in %(src)s und darf von dort nur über die "
                     "GreenRX-Freigabe der VP bewegt werden.",

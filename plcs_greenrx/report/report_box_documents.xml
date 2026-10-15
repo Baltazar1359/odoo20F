@@ -157,7 +157,7 @@
                     <div t-if="v['manual_qty']" style="font-size:9px;margin-top:2px;">H = Packungsdaten von Hand eingegeben, weil der Code nicht lesbar war.</div>
                     <table style="width:100%;margin-top:18px;">
                         <tr>
-                            <td style="width:50%;padding-right:12px;">Erfasst von: <span class="odoo" t-out="v['checked_by']"/>
+                            <td style="width:50%;padding-right:12px;">Erfasst von: <span class="odoo" t-out="v.get('captured_by') or v['checked_by']"/>
                                 <div class="sig"/><span class="lbl">Unterschrift</span></td>
                             <td style="padding-left:12px;">Geprüft (QMB/VP):
                                 <div class="sig"/><span class="lbl">Datum, Unterschrift</span></td>

@@ -88,6 +88,8 @@ export class GreenRxReceiptApp extends Component {
         // Warteschlange: Scans werden der Reihe nach verarbeitet, keiner geht verloren
         this.scanQueue = Promise.resolve();
         this.scanSeq = 0;
+        // Zähler der Suchanfragen: nur die Antwort der neuesten Anfrage wird angezeigt
+        this.searchGen = 0;
         this.barcode = usePlugin(BarcodePlugin);
         useBus(this.barcode.bus, "barcode_scanned", (ev) => this.onScan(ev.detail.barcode));
         useListener(window, "keydown", (ev) => this.onKeydown(ev));
@@ -130,6 +132,25 @@ export class GreenRxReceiptApp extends Component {
         } catch (error) {
             this.showError(error);
             return false;
+        }
+    }
+
+    /**
+     * Warten, bis alle schon eingegangenen Scans verarbeitet sind (Code-Review R03).
+     * Jeder Schritt- oder Boxwechsel ruft das zuerst auf, damit kein Scan im neuen Schritt
+     * landet und dort verworfen wird.
+     */
+    async flushScans() {
+        await this.scanQueue;
+    }
+
+    /** Box aus einer Serverantwort übernehmen und die Paketübersicht mitziehen (R16). */
+    setBox(box) {
+        this.state.box = box;
+        const entry = this.packageBoxes.find((b) => b.id === box.id);
+        if (entry) {
+            entry.qty = box.qty;
+            entry.manual_qty = box.manual_qty;
         }
     }
 
@@ -228,7 +249,8 @@ export class GreenRxReceiptApp extends Component {
 
     get noteRequired() {
         const box = this.state.box;
-        return box && ["gelb", "rot"].includes(box.ampel) && !(box.reasons || []).length;
+        // Pflicht, sobald die gewählte Ampel strenger ist als der Vorschlag (auch Gelb → Rot)
+        return Boolean(box && box.ampel && RANK[box.ampel] > RANK[box.suggest || "gruen"]);
     }
 
     get canProceedCheck() {
@@ -261,6 +283,8 @@ export class GreenRxReceiptApp extends Component {
     }
 
     async goHome() {
+        await this.flushScans();
+        this.searchGen++;
         this.state.screen = "home";
         this.state.step = 1;
         this.state.box = null;
@@ -280,6 +304,7 @@ export class GreenRxReceiptApp extends Component {
     }
 
     startNew() {
+        this.searchGen++;
         this.state.screen = "step";
         this.state.step = 1;
         this.state.flash = null;
@@ -337,6 +362,7 @@ export class GreenRxReceiptApp extends Component {
     }
 
     async search() {
+        const gen = ++this.searchGen;
         const q = (this.state.query || "").trim();
         if (!q) {
             this.state.results = [];
@@ -344,7 +370,12 @@ export class GreenRxReceiptApp extends Component {
             return;
         }
         await this.run(async () => {
-            this.state.results = await this.call("plcs.greenrx.ticket", "grx_search", [q]);
+            const results = await this.call("plcs.greenrx.ticket", "grx_search", [q]);
+            // Ältere Antwort, die nach einer neueren ankommt, verwerfen (Code-Review R12)
+            if (gen !== this.searchGen) {
+                return;
+            }
+            this.state.results = results;
             this.state.searched = true;
         });
     }
@@ -433,17 +464,25 @@ export class GreenRxReceiptApp extends Component {
             return;
         }
         // Jeder Scan kommt in die Warteschlange und wird nach dem vorherigen verarbeitet.
-        // Doppelscans erkennt der Server.
+        // Doppelscans erkennt der Server. Schritt und Box beim Eingang des Scans festhalten.
+        const arrival = { step: this.state.step, screen: this.state.screen, boxId: this.state.box?.id };
         this.state.pendingScans++;
         const done = this.scanQueue
-            .then(() => this.handleScan(raw))
+            .then(() => this.handleScan(raw, arrival))
             .catch((error) => this.showError(error))
             .finally(() => this.state.pendingScans--);
         this.scanQueue = done;
         return done;
     }
 
-    async handleScan(raw) {
+    async handleScan(raw, arrival = null) {
+        // Ein Packungsscan, der im Packungsschritt eingegangen ist, wird nie stillschweigend verworfen.
+        if (arrival && arrival.screen === "step" && arrival.step === 3 &&
+                (this.state.step !== 3 || this.state.box?.id !== arrival.boxId)) {
+            this.confirmScan("error", _t("Scan nicht verarbeitet"),
+                _t("Die Box oder der Schritt hat gewechselt, bevor der Scan verarbeitet wurde. Packung erneut scannen."));
+            return;
+        }
         if (this.state.screen === "home") {
             this.startNew();
             this.state.query = raw;
@@ -580,11 +619,7 @@ export class GreenRxReceiptApp extends Component {
         }
         try {
             const res = await this.call("plcs.greenrx.box", "grx_scan", [[box.id], raw]);
-            this.state.box = res.box;
-            const entry = this.packageBoxes.find((b) => b.id === res.box.id);
-            if (entry) {
-                entry.qty = res.box.qty;
-            }
+            this.setBox(res.box);
             this.confirmScan(res.status, res.title, res.message);
         } catch (error) {
             this.confirmScan("error", _t("Scan nicht verarbeitet"), errorMessage(error));
@@ -627,7 +662,7 @@ export class GreenRxReceiptApp extends Component {
 
     async doRemoveScan(scan) {
         await this.run(async () => {
-            this.state.box = await this.call("plcs.greenrx.box", "grx_remove_scan", [[this.state.box.id], scan.id]);
+            this.setBox(await this.call("plcs.greenrx.box", "grx_remove_scan", [[this.state.box.id], scan.id]));
             this.state.flash = { status: "info", title: _t("Packung entfernt"), message: _t("SN %s wieder aus der Box genommen.", scan.serial) };
         });
     }
@@ -708,11 +743,7 @@ export class GreenRxReceiptApp extends Component {
                     this.play("error");
                     return;
                 }
-                this.state.box = res.box;
-                const entry = this.packageBoxes.find((b) => b.id === res.box.id);
-                if (entry) {
-                    entry.qty = res.box.qty;
-                }
+                this.setBox(res.box);
                 this.confirmScan(res.status, res.title, res.message);
                 if (res.scan_id) {
                     // Nächste Packung: PZN, Charge und Verfall stehen lassen, Seriennummer neu
@@ -729,6 +760,7 @@ export class GreenRxReceiptApp extends Component {
     }
 
     async toCheck() {
+        await this.flushScans();
         await this.run(async () => {
             this.applyBox(await this.call("plcs.greenrx.box", "grx_to_check", [[this.state.box.id]]));
             this.state.flash = null;
@@ -739,6 +771,7 @@ export class GreenRxReceiptApp extends Component {
         if (!window.confirm(_t("Erfassung dieser Box abbrechen? Die gescannten Packungen werden wieder freigegeben."))) {
             return;
         }
+        await this.flushScans();
         await this.run(async () => {
             this.state.ticket = await this.call("plcs.greenrx.box", "grx_cancel", [[this.state.box.id]]);
             this.state.box = null;
@@ -748,6 +781,7 @@ export class GreenRxReceiptApp extends Component {
     }
 
     async back() {
+        await this.flushScans();
         await this.run(async () => {
             this.applyBox(await this.call("plcs.greenrx.box", "grx_back", [[this.state.box.id]]));
             this.state.flash = null;

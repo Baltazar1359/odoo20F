@@ -36,3 +36,9 @@ class PlcsGreenrxScan(models.Model):
         ("removed", "Wieder entnommen"),
     ], "Ergebnis", readonly=True, index=True)
     message = fields.Char("Meldung", readonly=True)
+
+    # Jede Seriennummer je Artikel nur einmal angenommen – auch bei gleichzeitigen Scans
+    # an zwei Arbeitsplätzen (Code-Review R07). Abgelehnte und entnommene Scans zählen nicht.
+    _grx_unique_accepted_serial = models.UniqueIndex(
+        "(product_id, serial) WHERE accepted IS TRUE AND serial IS NOT NULL",
+        "Diese Seriennummer ist schon in einer anderen Box erfasst.")

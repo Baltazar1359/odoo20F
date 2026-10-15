@@ -1,9 +1,12 @@
+import json
+
+import psycopg2.errors
 from dateutil.relativedelta import relativedelta
 
 from odoo import SUPERUSER_ID, Command, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
-from ..tools import gs1
+from ..tools import grx_auth, gs1
 
 AMPEL = [("gruen", "Grün – unauffällig"), ("gelb", "Gelb – auffällig"), ("rot", "Rot – sperren")]
 AMPEL_RANK = {"gruen": 0, "gelb": 1, "rot": 2}
@@ -100,6 +103,11 @@ class PlcsGreenrxBox(models.Model):
                                  help="Zählt jede Änderung an Packungen, Antworten, Ampel und Bemerkung.")
     printed_rev = fields.Integer("Gedruckter Stand", readonly=True,
                                  help="Änderungsstand beim letzten Druck. Weicht er ab, ist ein neuer Druck Pflicht.")
+    printed_snapshot = fields.Text(
+        "Gedruckter Inhalt", readonly=True, copy=False,
+        help="Fachlicher Inhalt der Dokumente beim letzten Druck vor dem Abschluss. Ändern sich Stamm- oder "
+             "Vorgangsdaten (z. B. Absender, Lagertemperatur), ist der Ausdruck ungültig. Nachdrucke nach dem "
+             "Abschluss zeigen genau diesen Inhalt.")
     closed_at = fields.Datetime("Abgeschlossen am", readonly=True)
     closed_by = fields.Many2one("res.users", "Abgeschlossen von", readonly=True)
     participant_ids = fields.Many2many(
@@ -454,12 +462,14 @@ class PlcsGreenrxBox(models.Model):
                 "Die Seriennummer %(sn)s wurde schon einmal erfasst (%(where)s). Jede Seriennummer darf nur "
                 "einmal im System sein. Packung nicht in die Box legen, sondern ins Klärungsfach, und "
                 "Lagerleitung Bescheid geben.", sn=serial, where=where))
+        # Auch abgeschlossene Erfassungen zählen: deren Scans bleiben, selbst wenn die
+        # Seriennummer (Los) später umbenannt würde (Code-Review R08)
         other = Scan.sudo().search([
             ("accepted", "=", True), ("serial", "=", serial), ("product_id", "=", product.id),
-            ("box_id", "!=", self.id), ("box_id.state", "in", OPEN_STATES)], limit=1)
+            ("box_id", "!=", self.id)], limit=1)
         if other:
             return reject("known_serial", self.env._("Diese Packung ist schon erfasst"), self.env._(
-                "Die Seriennummer %(sn)s liegt bereits in der offenen Erfassung %(box)s.",
+                "Die Seriennummer %(sn)s liegt bereits in der Erfassung %(box)s.",
                 sn=serial, box=other.box_id.name))
         # 3) Box-Regeln: ein Artikel, eine Charge
         if self.product_id and product != self.product_id:
@@ -482,8 +492,14 @@ class PlcsGreenrxBox(models.Model):
             line, match = self.ticket_id._grx_match_line(product, parsed["batch"])
             vals = {"product_id": product.id, "batch": parsed["batch"], "expiry_date": parsed["expiry"],
                     "line_id": line.id, "slip_match": match}
+        try:
+            with self.env.cr.savepoint():
+                scan = Scan.sudo().create(dict(log, result="ok", accepted=True))
+        except psycopg2.errors.UniqueViolation:
+            # Gleichzeitig an einem anderen Arbeitsplatz angenommen (Code-Review R07)
+            return reject("known_serial", self.env._("Diese Packung ist schon erfasst"), self.env._(
+                "Die Seriennummer %s wurde gerade an einem anderen Arbeitsplatz erfasst.", serial))
         self._grx_changed(vals)
-        scan = Scan.sudo().create(dict(log, result="ok", accepted=True))
         result = {"status": "ok", "title": self.env._("Packung erfasst"),
                   "message": self.env._("SN %(sn)s · Ch. %(ch)s · Verf. %(exp)s",
                                         sn=serial, ch=parsed["batch"], exp=parsed["expiry"].strftime("%m/%Y")),
@@ -574,7 +590,8 @@ class PlcsGreenrxBox(models.Model):
         if AMPEL_RANK[self.ampel] < AMPEL_RANK[level]:
             raise UserError(self.env._("Die Ampel %(a)s ist milder als die Antworten (%(s)s). Nicht möglich.",
                                        a=AMPEL_SHORT[self.ampel], s=AMPEL_SHORT[level]))
-        if self.ampel != "gruen" and not reasons and not (self.note or "").strip():
+        # Strenger als der Vorschlag (z. B. Gelb-Vorschlag, Rot gewählt): eigener Grund Pflicht (Code-Review R09)
+        if AMPEL_RANK[self.ampel] > AMPEL_RANK[level] and not (self.note or "").strip():
             raise UserError(self.env._("Bitte einen Grund eintragen (die Ampel ist strenger als der Vorschlag)."))
         self._grx_changed({"state": "print", "checked_at": fields.Datetime.now(), "checked_by": self.env.user.id})
         return self._grx_ui_data()
@@ -595,7 +612,32 @@ class PlcsGreenrxBox(models.Model):
     def _grx_print_outdated(self):
         """True, wenn kein gültiger Ausdruck zum aktuellen Stand der Box vorliegt."""
         self.ensure_one()
-        return not self.printed_at or self.printed_rev != self.content_rev
+        if not self.printed_at or self.printed_rev != self.content_rev:
+            return True
+        # Auch Änderungen außerhalb der Box (Absender, Artikelstamm, Ticketposition) zählen (Code-Review R11)
+        if not self.printed_snapshot:
+            return False
+        printed = self._grx_report_fingerprint(json.loads(self.printed_snapshot))
+        return printed != self._grx_report_fingerprint(self._grx_report_values_live())
+
+    @staticmethod
+    def _grx_report_fingerprint(values):
+        """Vergleichswert des Druckinhalts.
+
+        Ohne Angabe Neuausdruck und ohne die Zeile „Menge“: deren Zwischenstand „im Paket bisher“
+        ändert sich, sobald eine andere Box des Pakets abgeschlossen wird; der endgültige Abgleich
+        ist der Paketabschluss.
+        """
+        values = dict(values)
+        values.pop("reprint", None)
+        values["rows_eingang"] = [r for r in values.get("rows_eingang", []) if r.get("text") != "– Menge"]
+        return json.dumps(values, sort_keys=True, ensure_ascii=False, default=str)
+
+    def _grx_report_snapshot(self):
+        """Fachlicher Inhalt der Druckdokumente als JSON (ohne Angabe Neuausdruck)."""
+        values = dict(self._grx_report_values_live())
+        values.pop("reprint", None)
+        return json.dumps(values, sort_keys=True, ensure_ascii=False, default=str)
 
     def grx_print(self):
         """Dokumente drucken: KabQ-Checkliste, Anlage Box-Inhalt, bei Rot das Sperrblatt.
@@ -614,6 +656,9 @@ class PlcsGreenrxBox(models.Model):
             "print_count": self.print_count + 1,
             "printed_rev": self.content_rev,
         })
+        if self.state == "print":
+            # Inhalt dieses Drucks festhalten; Nachdrucke nach dem Abschluss ändern ihn nicht
+            self.sudo().printed_snapshot = self._grx_report_snapshot()
         if self.print_count > 1:
             body = self.env._("Box-Dokumente gedruckt (Druck Nr. %(n)s, Neuausdruck Nr. %(r)s).",
                               n=self.print_count, r=self.print_count - 1)
@@ -771,13 +816,45 @@ class PlcsGreenrxBox(models.Model):
         boxes = self.search(self._grx_vp_waiting_domain())
         return len(boxes.filtered(lambda b: not b._grx_is_participant()))
 
-    def _grx_internal_move(self, picking_type, dest, reason_text):
+    def _grx_check_content_matches(self):
+        """Inhalt der Box im Lager muss genau der erfassten Ware entsprechen (Code-Review R02).
+
+        Die VP entscheidet über eine bestimmte Erfassung (Seriennummern dieser Box). Wurde die
+        Box inzwischen ausgepackt, umgepackt oder neu befüllt, wird nichts bewegt.
+        Rückgabe: die Quants der Erfassung.
+        """
         self.ensure_one()
-        quants = self.package_id.sudo().quant_ids.filtered(lambda q: q.quantity > 0 and q.location_id.usage == "internal")
+        expected = self.sudo().lot_ids
+        quants = self.package_id.sudo().quant_ids.filtered(
+            lambda q: q.quantity > 0 and q.location_id.usage == "internal")
         if not quants:
             raise UserError(self.env._("In Box %s liegt keine Ware.", self.package_id.name))
+        problems = []
+        if quants.lot_id != expected or len(quants) != len(expected):
+            problems.append(self.env._("Seriennummern in der Box stimmen nicht mit der Erfassung überein"))
+        if any(q.quantity != 1 for q in quants):
+            problems.append(self.env._("Menge je Seriennummer ist nicht 1"))
+        if quants.product_id != self.product_id:
+            problems.append(self.env._("anderer Artikel in der Box"))
+        if len(quants.location_id) > 1:
+            problems.append(self.env._("Ware liegt an mehreren Lagerorten"))
+        if quants.company_id - self.company_id:
+            problems.append(self.env._("Ware gehört zu einer anderen Firma"))
+        outside = expected - quants.lot_id
+        if outside:
+            problems.append(self.env._("%s erfasste Packung(en) liegen nicht mehr in der Box", len(outside)))
+        if problems:
+            raise UserError(self.env._(
+                "Box %(box)s: Der Inhalt passt nicht zur Erfassung %(name)s (%(p)s). Es wird nichts bewegt. "
+                "Lagerleitung informieren.", box=self.package_id.name, name=self.name, p="; ".join(problems)))
+        return quants
+
+    def _grx_internal_move(self, picking_type, dest, reason_text):
+        self.ensure_one()
+        quants = self._grx_check_content_matches()
         src = quants[0].location_id
-        Picking = self.env["stock.picking"].with_context(plcs_grx_controlled_move=True)
+        auth = grx_auth.ControlledMove(self.id, quants.lot_id.ids)
+        Picking = self.env["stock.picking"].with_context(**{grx_auth.CONTROLLED_MOVE_KEY: auth})
         picking = Picking.create({
             "picking_type_id": picking_type.id,
             "location_id": src.id,
@@ -813,9 +890,9 @@ class PlcsGreenrxBox(models.Model):
                     "picking_id": picking.id,
                 }) for q in pquants],
             })
-        picking.with_context(plcs_grx_controlled_move=True).action_confirm()
+        picking.action_confirm()
         picking.move_ids.picked = True
-        picking.with_context(plcs_grx_controlled_move=True, skip_backorder=True, cancel_backorder=True).button_validate()
+        picking.with_context(skip_backorder=True, cancel_backorder=True).button_validate()
         if picking.state != "done":
             raise UserError(self.env._("Bewegung %s konnte nicht gebucht werden.", picking.name))
         return picking
@@ -941,8 +1018,29 @@ class PlcsGreenrxBox(models.Model):
         })
         return data
 
+    def _grx_reprint_label(self):
+        self.ensure_one()
+        if self.print_count > 1:
+            printed = fields.Datetime.context_timestamp(self, self.printed_at or fields.Datetime.now())
+            return "Neuausdruck Nr. %s · %s Uhr" % (self.print_count - 1, printed.strftime("%d.%m.%Y, %H:%M"))
+        return ""
+
     def _grx_report_values(self):
-        """Werte für die Druckdokumente (KabQ-Checkliste, Anlage, Sperrblatt)."""
+        """Werte für die Druckdokumente (KabQ-Checkliste, Anlage, Sperrblatt).
+
+        Nach dem Abschluss: genau der Inhalt des bestätigten Ausdrucks (Snapshot), auch wenn
+        sich Stammdaten seitdem geändert haben (Code-Review R11). Boxen ohne Snapshot (vor 1.8.0)
+        werden wie bisher aus den aktuellen Daten gedruckt.
+        """
+        self.ensure_one()
+        if self.state in ("to_release", "blocked", "released") and self.printed_snapshot:
+            values = json.loads(self.printed_snapshot)
+            values["reprint"] = self._grx_reprint_label()
+            return values
+        return self._grx_report_values_live()
+
+    def _grx_report_values_live(self):
+        """Druckwerte aus den aktuellen Daten."""
         self.ensure_one()
         ticket = self.ticket_id
         tz_now = fields.Datetime.context_timestamp(self, self.checked_at or fields.Datetime.now())
@@ -962,6 +1060,32 @@ class PlcsGreenrxBox(models.Model):
         sender_name = ticket.display_sender or ""
         exp_ok = all(c["ok"] for c in self._grx_system_checks() if "Verfall" in c["label"])
         all_same_pzn = len({p["pzn"] for p in packs}) <= 1
+        # Abgleich mit dem Ticket (nicht nur Einheitlichkeit in der Box). Ohne passende Ticketposition
+        # ist der Abgleich nicht bestanden (Code-Review R10).
+        line = self.line_id
+        scan_text = "%s · %s/%s gleich" % (pzn or "-", len(packs) if all_same_pzn else "?", len(packs))
+        if not line:
+            no_line = "keine Position im Ticket"
+            pzn_value, pzn_remark = "nein", "Scan: %s · %s" % (scan_text, no_line)
+            name_value, name_remark = "nein", "%s · %s" % (self.product_id.display_name or "-", no_line)
+            batch_value, batch_remark = "nein", "Scan: %s · %s" % (self.batch or "-", no_line)
+        else:
+            line_pzn = (line.pzn or gs1.gtin_to_pzn(line.gtin or "") or "").strip()
+            pzn_match = not line_pzn or not pzn or line_pzn.zfill(8) == str(pzn).zfill(8)
+            pzn_value = "ja" if all_same_pzn and pzn_match else "nein"
+            pzn_remark = "Scan: %s · Ticket: %s" % (scan_text, line_pzn or "ohne PZN")
+            name_ok = not line.product_id or line.product_id == self.product_id
+            name_value = "ja" if name_ok else "nein"
+            name_remark = "%s · Ticket: %s" % (self.product_id.display_name or "-",
+                                               line.product_name or line.product_id.display_name or "-")
+            if self.slip_match == "batch_differs":
+                batch_value = "nein"
+            elif line.batch_expected:
+                batch_value = "ja"
+            else:
+                batch_value = ""  # im Ticket keine Charge angegeben: von Hand prüfen
+            batch_remark = "Scan: %s · %s/%s gleich · Ticket: %s" % (
+                self.batch, len(packs), len(packs), line.batch_expected or "keine Charge angegeben – von Hand prüfen")
         rows_annahme = [
             {"text": "Ist die Ware für uns?", "value": "ja" if self.line_id else "nein",
              "remark": ("Vorgang %s · Ticket %s" % (ticket.name, self.line_id.ticket_number or "-")) if self.line_id
@@ -988,15 +1112,11 @@ class PlcsGreenrxBox(models.Model):
              "remark": "Vorprüfung Lager: %s" % dict(ANSWER).get(self.q_storage_proof, "-")},
             {"text": "Entspricht die Lieferung der bestellten Ware (GreenRX: Abgleich mit dem Ticket statt Bestellung):",
              "value": "", "if_no": "Wenn nein: Zusatzblatt ausgefüllt"},
-            {"sub": True, "text": "– PZN", "value": "ja" if all_same_pzn else "nein",
-             "remark": "Scan: %s · %s/%s gleich" % (pzn or "-", len(packs) if all_same_pzn else "?", len(packs))},
-            {"sub": True, "text": "– Bezeichnung", "value": "ja", "remark": self.product_id.display_name},
+            {"sub": True, "text": "– PZN", "value": pzn_value, "remark": pzn_remark},
+            {"sub": True, "text": "– Bezeichnung", "value": name_value, "remark": name_remark},
             {"sub": True, "text": "– Stärke", "value": "", "remark": "von Hand prüfen"},
             {"sub": True, "text": "– Packungsgröße", "value": "", "remark": "von Hand prüfen"},
-            {"sub": True, "text": "– Charge", "value": "nein" if self.slip_match == "batch_differs" else "ja",
-             "remark": "Scan: %s · %s/%s gleich%s" % (
-                 self.batch, len(packs), len(packs),
-                 (" · Schein: %s" % self.line_id.batch_expected) if self.line_id.batch_expected else "")},
+            {"sub": True, "text": "– Charge", "value": batch_value, "remark": batch_remark},
             {"sub": True, "text": "– Verfallsdatum (mind. %s Monate)" % (self.company_id.plcs_grx_min_shelf_months or 0),
              "value": "ja" if exp_ok else "nein", "remark": "Scan: %s" % exp},
             {"sub": True, "text": "– Ware verifizierbar (RX-Arzneimittel)", "value": "", "remark": "securPharm-Status von Hand"},
@@ -1011,19 +1131,18 @@ class PlcsGreenrxBox(models.Model):
         block_reason = "; ".join(reasons) or (self.note or "")
         pairs = [packs[i:i + 2] for i in range(0, len(packs), 2)]
         config = self.company_id
-        reprint = ""
-        if self.print_count > 1:
-            printed = fields.Datetime.context_timestamp(self, self.printed_at or fields.Datetime.now())
-            reprint = "Neuausdruck Nr. %s · %s Uhr" % (self.print_count - 1, printed.strftime("%d.%m.%Y, %H:%M"))
         return {
-            "reprint": reprint,
+            "reprint": self._grx_reprint_label(),
             "ampel_upper": AMPEL_SHORT.get(self.ampel, "-").upper(),
             "sender": "%s%s" % (sender_name, (" (%s)" % ticket.customer_number) if ticket.customer_number else ""),
             "sender_name": sender_name,
             "ref_ticket": " / ".join(x for x in (ticket.name, self.line_id.ticket_number) if x),
             "ticket_number": self.line_id.ticket_number or "",
             "date": tz_now.strftime("%d.%m.%Y"),
-            "checked_by": "%s · %s" % (self.user_id.name, tz_now.strftime("%d.%m.%Y, %H:%M")),
+            # Prüfer = wer die Vorprüfung abgeschlossen hat (z. B. übernehmende VP); Boxen vor 1.4.0
+            # ohne Prüferfeld: Erfasser wie bisher (Code-Review R18)
+            "checked_by": "%s · %s" % ((self.checked_by or self.user_id).name, tz_now.strftime("%d.%m.%Y, %H:%M")),
+            "captured_by": self.user_id.name or "",
             "rows_annahme": rows_annahme,
             "rows_eingang": rows_eingang,
             "doc_ref": "%s · Box %s" % (self.picking_id.name or ticket.name, self.package_id.name),

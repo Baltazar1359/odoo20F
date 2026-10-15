@@ -4,7 +4,7 @@ from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
 from odoo.fields import Command, Domain
 
-from ..tools import gs1, slip
+from ..tools import grx_auth, gs1, slip
 
 # Felder, die die Suche in der Datenbank durchsucht (Referenz, Reklamation, Gutschrift,
 # Kundennummer, Absender, Ticketnummer, Artikel der Positionen)
@@ -575,7 +575,8 @@ class PlcsGreenrxTicket(models.Model):
                 picking.action_confirm()
             for move in picking.move_ids:
                 move.picked = True
-            picking.with_context(plcs_grx_finish=True, skip_backorder=True, cancel_backorder=True).button_validate()
+            picking.with_context(**{grx_auth.FINISH_KEY: grx_auth.Finish(self.id)},
+                                 skip_backorder=True, cancel_backorder=True).button_validate()
             if picking.state != "done":
                 raise UserError(self.env._("Eingang %s konnte nicht gebucht werden.", picking.name))
         picking_names = ", ".join(receipts.filtered(lambda p: p.state == "done").mapped("name"))
@@ -632,14 +633,18 @@ class PlcsGreenrxTicket(models.Model):
         if not name:
             raise UserError(self.env._("Referenznummer (Vorgang) fehlt."))
         ticket = self.browse()
+        # Nur Vorgänge der Zielfirma: with_company() allein schließt andere erlaubte Firmen
+        # nicht aus (Code-Review R06)
+        company = self.env.company
         if ext:
-            ticket = self.search([("external_id", "=", ext), ("source", "=", source)], limit=1)
+            ticket = self.search([("external_id", "=", ext), ("source", "=", source),
+                                  ("company_id", "=", company.id)], limit=1)
         if not ticket:
-            ticket = self.search([("name", "=", name)], limit=1)
+            ticket = self.search([("name", "=", name), ("company_id", "=", company.id)], limit=1)
         partner = self.env["res.partner"]
         if item.get("customer_number"):
             partner = partner.search([("ref", "=", item["customer_number"])], limit=1)
-        vals = {"name": name}
+        vals = {"name": name, "company_id": company.id}
         for key in ("complaint_number", "credit_note", "partner_name", "customer_number"):
             if key in item:
                 vals[key] = item.get(key) or False
@@ -651,9 +656,8 @@ class PlcsGreenrxTicket(models.Model):
             vals["date_ticket"] = item["date_ticket"]
         lines = []
         for line in item.get("lines") or []:
-            qty = int(line.get("qty") or 0)
-            if qty <= 0:
-                continue
+            # Menge 0 bleibt erhalten: setzt das Soll einer vorhandenen Position auf 0 (Code-Review R13)
+            qty = max(int(line.get("qty") or 0), 0)
             lines.append({
                 "ticket_number": line.get("ticket_number") or False,
                 "gtin": line.get("gtin") or False,
@@ -667,13 +671,16 @@ class PlcsGreenrxTicket(models.Model):
             if ticket.state in ("done", "cancel"):
                 stats["skipped"] += 1
                 return ticket
+            vals.pop("company_id")
             ticket.write(vals)
-            if ticket.state == "open" and lines:
+            # "lines" geliefert (auch leer) = aktueller Stand der Positionen; fehlt der Schlüssel,
+            # bleiben die Positionen unverändert (nur Kopfdaten)
+            if ticket.state == "open" and "lines" in item:
                 ticket._grx_merge_lines(lines)
             stats["updated"] += 1
         else:
             vals.update({"source": source, "external_id": ext or False,
-                         "line_ids": [Command.create(l) for l in lines]})
+                         "line_ids": [Command.create(l) for l in lines if l["qty_expected"] > 0]})
             ticket = self.create(vals)
             stats["created"] += 1
         return ticket
@@ -690,16 +697,22 @@ class PlcsGreenrxTicket(models.Model):
         Line = self.env["plcs.greenrx.ticket.line"]
         existing = {(l.ticket_number or "", _norm(l.pzn)): l for l in self.line_ids}
         seen = set()
+        zeroed = []
         for vals in lines:
             key = (vals.get("ticket_number") or "", _norm(vals.get("pzn")))
             line = existing.get(key)
             if line:
                 diff = {k: v for k, v in vals.items() if (line[k] or False) != (v or False)}
                 if diff:
+                    if "qty_expected" in diff and not diff["qty_expected"]:
+                        zeroed.append("%s/%s" % key)
                     line.write(diff)
-            else:
+            elif vals.get("qty_expected", 1) > 0:
                 Line.create(dict(vals, ticket_id=self.id))
             seen.add(key)
+        if zeroed:
+            self.sudo().message_post(body=self.env._(
+                "Schnittstelle: Positionen ohne Menge gemeldet, Soll auf 0 gesetzt: %s", ", ".join(zeroed)))
         missing = [k for k in existing if k not in seen]
         if missing:
             self.sudo().message_post(body=self.env._(

@@ -130,8 +130,18 @@ class PlcsGreenrxConnector(models.Model):
         call = self._connect()
         fnames = [f for f in (self.f_name, self.f_reference, self.f_complaint, self.f_credit_note, self.f_partner,
                               self.f_customer_number, self.f_product, self.f_qty, self.f_batch) if f]
-        rows = call(self.remote_model, "search_read", [self._domain(incremental)],
-                    {"fields": sorted(set(fnames)), "limit": 2000})
+        # Stand vor dem Abruf merken: Änderungen während des Abrufs kommen beim nächsten Lauf mit.
+        # Seitenweise und stabil sortiert lesen, ohne Obergrenze (Code-Review R05).
+        started = fields.Datetime.now()
+        rows = []
+        page = 500
+        domain = self._domain(incremental)
+        while True:
+            batch = call(self.remote_model, "search_read", [domain],
+                         {"fields": sorted(set(fnames)), "limit": page, "offset": len(rows), "order": "id"})
+            rows.extend(batch)
+            if len(batch) < page:
+                break
         # Positionen (Sammelretoure mit mehreren Produkten je Ticket)
         lines_by_ticket = {}
         if self.line_model and self.line_link_field and self.line_product_field:
@@ -191,13 +201,21 @@ class PlcsGreenrxConnector(models.Model):
                                                    lr.get(self.line_qty_field) if self.line_qty_field else 1))
             elif self.f_product and r.get(self.f_product):
                 item["lines"].append(line_vals(r, r.get(self.f_product), r.get(self.f_qty) if self.f_qty else 1))
+        for item in vorgaenge.values():
+            # Der inkrementelle Abruf liefert nur geänderte Zeilen: ohne Positionen nur Kopfdaten abgleichen
+            if not item["lines"]:
+                del item["lines"]
         stats = self.env["plcs.greenrx.ticket"].with_company(self.company_id).api_upsert(
             list(vorgaenge.values()), source="api")
         summary = self.env._("%(c)s neu, %(u)s aktualisiert, %(s)s übersprungen, %(e)s Fehler",
                              c=stats["created"], u=stats["updated"], s=stats["skipped"], e=len(stats["errors"]))
         if stats["errors"]:
             summary += "\n" + "\n".join(stats["errors"][:50])
-        self.write({"last_sync": fields.Datetime.now(), "last_result": summary})
+        vals = {"last_result": summary}
+        if not stats["errors"]:
+            # Fortschritt nur nach fehlerfreiem Lauf; fehlerhafte Vorgänge kommen beim nächsten Lauf erneut
+            vals["last_sync"] = started
+        self.write(vals)
         return {
             "type": "ir.actions.client", "tag": "display_notification",
             "params": {"title": self.env._("Vorgänge abgerufen"), "message": summary.split("\n")[0],

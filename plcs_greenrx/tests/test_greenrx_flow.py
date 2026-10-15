@@ -7,7 +7,7 @@ from odoo import fields
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, new_test_user, tagged
 
-from ..tools import gs1
+from ..tools import grx_auth, gs1
 
 GS = "\x1d"
 
@@ -638,7 +638,8 @@ class TestGreenrxFlow(TransactionCase):
         first = ticket.picking_id
         first.move_ids.picked = True
         # wie damals über Lager › Transfers gebucht, während noch eine Box erfasst wird
-        first.with_context(plcs_grx_finish=True, skip_backorder=True, cancel_backorder=True).button_validate()
+        first.with_context(**{grx_auth.FINISH_KEY: grx_auth.Finish(ticket.id)},
+                           skip_backorder=True, cancel_backorder=True).button_validate()
         self.assertEqual((first.state, ticket.state), ("done", "in_progress"))
         VP = self.env["plcs.greenrx.box"].with_user(self.vp1)
         self.assertNotIn(box1.id, [b["id"] for b in VP.grx_vp_list()["boxes"]], "VP erst nach Paket fertig")

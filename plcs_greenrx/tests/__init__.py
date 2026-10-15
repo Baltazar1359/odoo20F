@@ -5,3 +5,4 @@ from . import test_connector
 from . import test_receipt_ui
 from . import test_manual_pack
 from . import test_ativ_sync
+from . import test_review_fixes
