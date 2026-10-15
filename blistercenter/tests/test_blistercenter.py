@@ -285,6 +285,18 @@ class TestBlistercenterOrders(BlistercenterCommon):
         order.action_confirm()
         self.assertEqual(order.state, "sale")
 
+    def test_shop_rule_skipped_only_when_loading_demo_data(self):
+        """Odoos Demo-Shopbestellungen (Kunde ohne Freischaltung) dürfen das Laden der Demodaten
+        nicht abbrechen. Der Kontextwert allein (z. B. per RPC) hebt die Regel nicht auf."""
+        website = self.env["website"].create({"name": "BC Shop Demo", "company_id": self.company.id})
+        order = self._order(self.customer_other, confirm=False, website_id=website.id)
+        with self.assertRaisesRegex(UserError, "freigeschaltete Blistercenter"):
+            order.sudo().action_confirm()
+        with self.assertRaisesRegex(UserError, "freigeschaltete Blistercenter"):
+            order.with_user(self.user_manager).with_context(install_demo=True).action_confirm()
+        order.sudo().with_context(install_demo=True).action_confirm()
+        self.assertEqual(order.state, "sale")
+
     def test_mto_route_forbidden(self):
         mto = self.env.ref("stock.route_warehouse0_mto")
         mto.active = True

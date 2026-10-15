@@ -1,3 +1,4 @@
+from odoo.http import request
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -167,7 +168,8 @@ class SaleOrder(models.Model):
                 "%(customer)s hat eine Zahlungssperre (%(reason)s). Die Bestellung kann nicht bestätigt werden.",
                 customer=partner.display_name, reason=partner.bc_payment_block_reason or "-",
             )
-        if self.website_id and config.rule_shop_requires_enable and not (partner.bc_is_customer and partner.bc_shop_enabled):
+        if (self.website_id and config.rule_shop_requires_enable and not self._bc_loading_demo_data()
+                and not (partner.bc_is_customer and partner.bc_shop_enabled)):
             return self.env._(
                 "Shop-Bestellungen sind nur für freigeschaltete Blistercenter möglich (%(customer)s ist nicht freigeschaltet).",
                 customer=partner.display_name,
@@ -193,6 +195,15 @@ class SaleOrder(models.Model):
                         product=product.display_name,
                     )
         return False
+
+    def _bc_loading_demo_data(self):
+        """Odoo lädt Demodaten (Installation mit Demodaten, „odoo-bin module force-demo“ auf Odoo.sh).
+
+        Die Shop-Regel gilt dann nicht für Odoos eigene Demo-Shopbestellungen, sonst bricht das
+        Laden der Demodaten ab. Nur ohne HTTP-Anfrage und im Superuser-Modus erkannt – über
+        Web/RPC lässt sich das nicht auslösen, auch nicht mit einem Kontextwert.
+        """
+        return bool(self.env.context.get("install_demo") and self.env.su and not request)
 
     def _cart_add(self, product_id, quantity=1.0, **kwargs):
         self._bc_check_shop_access()
