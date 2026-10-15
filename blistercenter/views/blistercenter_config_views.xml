@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_bc_config_form" model="ir.ui.view">
+        <field name="name">blistercenter.config.form</field>
+        <field name="model">blistercenter.config</field>
+        <field name="arch" type="xml">
+            <form string="Einstellungen Blistercenter" create="false" delete="false">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>Einstellungen Blistercenter</h1>
+                        <field name="company_id" readonly="1"/>
+                    </div>
+                    <group>
+                        <group string="Zuständigkeiten">
+                            <field name="sales_user_id"/>
+                            <field name="accounting_user_id"/>
+                            <field name="purchase_user_id"/>
+                            <field name="vp_user_id"/>
+                            <field name="shipping_user_id"/>
+                        </group>
+                        <group string="Benachrichtigungen (Aufgaben in Odoo, keine E-Mail)">
+                            <field name="notify_new_order"/>
+                            <field name="notify_purchase_created"/>
+                            <field name="notify_release"/>
+                        </group>
+                        <group string="Standardwerte für neue Blistercenter">
+                            <field name="default_payment_model"/>
+                            <field name="default_payment_term_id"/>
+                            <field name="default_pricelist_id"/>
+                        </group>
+                        <group string="Regeln: Bestellung und Zahlung">
+                            <field name="rule_shop_requires_enable"/>
+                            <field name="rule_require_channel"/>
+                            <field name="rule_block_confirm"/>
+                            <field name="rule_block_delivery"/>
+                            <field name="rule_prepayment_downpayment"/>
+                            <field name="rule_prepayment_before_collective"/>
+                            <field name="rule_prepayment_before_delivery"/>
+                            <field name="rule_forbid_mto_route"/>
+                            <field name="rule_require_lot_tracking"/>
+                        </group>
+                        <group string="Regeln: Lager und Versand">
+                            <field name="rule_fixed_allocation"/>
+                            <field name="rule_release_four_eyes"/>
+                            <field name="short_shelf_months"/>
+                            <field name="rule_short_release"/>
+                            <field name="rule_short_delivery"/>
+                            <field name="rule_check_four_eyes"/>
+                            <field name="rule_partial_needs_approval"/>
+                        </group>
+                        <group string="Lager-Einrichtung">
+                            <field name="warehouse_id"/>
+                            <field name="quarantine_location_id"/>
+                            <field name="receipt_type_id"/>
+                            <field name="release_type_id"/>
+                            <button name="action_setup_stock" type="object" string="Lager einrichten / prüfen"
+                                    class="btn-secondary" colspan="2"/>
+                        </group>
+                    </group>
+                    <div class="text-muted">
+                        Gesperrte Chargen werden nie versendet. Sperren darf jeder Benutzer, entsperren nur die Rolle „Freigabe“.
+                        Ware aus Sammelbestellungen kommt immer in die Quarantäne; heraus nimmt sie nur die Rolle „Freigabe“ (VP).
+                    </div>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_bc_config" model="ir.actions.server">
+        <field name="name">Einstellungen</field>
+        <field name="model_id" ref="model_blistercenter_config"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open()</field>
+        <field name="group_ids" eval="[(4, ref('blistercenter.group_bc_manager'))]"/>
+    </record>
+</odoo>

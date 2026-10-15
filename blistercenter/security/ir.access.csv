@@ -1,0 +1,13 @@
+id,name,model_id,group_id/id,operation,domain
+access_bc_config_user,bc.config.user,blistercenter.config,group_bc_user,r,
+access_bc_config_manager,bc.config.manager,blistercenter.config,group_bc_manager,cru,
+access_bc_collective_user,bc.collective.user,blistercenter.collective.order,group_bc_user,crud,
+access_bc_collective_line_user,bc.collective.line.user,blistercenter.collective.order.line,group_bc_user,crud,
+access_bc_overview_user,bc.overview.user,blistercenter.overview,group_bc_user,r,
+access_bc_collective_add_user,bc.collective.add.user,blistercenter.collective.add,group_bc_user,crud,
+access_bc_recall_user,bc.recall.user,blistercenter.recall.wizard,group_bc_user,crud,
+rule_bc_config_company,Blistercenter-Einstellungen: Firma,blistercenter.config,,crud,"[('company_id', 'in', company_ids)]"
+rule_bc_collective_company,Sammelbestellung: Firma,blistercenter.collective.order,,crud,"[('company_id', 'in', company_ids)]"
+rule_bc_collective_line_company,Sammelbestellung-Position: Firma,blistercenter.collective.order.line,,crud,"[('company_id', 'in', company_ids)]"
+access_bc_partial_wizard_user,bc.partial.wizard.user,blistercenter.partial.wizard,group_bc_user,crud,
+access_bc_short_wizard_approver,bc.short.wizard.approver,blistercenter.short.wizard,group_bc_approver,crud,

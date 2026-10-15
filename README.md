@@ -5,6 +5,7 @@ Eigene Module für die PLCS GmbH. Die Module liegen direkt im Wurzelverzeichnis,
 | Modul | Inhalt | Stand |
 |---|---|---|
 | `plcs_greenrx` | GreenRX-Wareneingang: Scan je Packung, Boxen, Vorprüfung mit Ampel, KabQ-Drucke, VP-Freigabe | einsatzbereit für den Test |
+| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Vorkasse, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | Branch `feat/blistercenter-v2`, zum Test |
 
 **Prüfumgebung:** https://baltazar1359-odoo20.odoo.com (Odoo.sh, Branch `main` = Production). Prüfanleitung: [`docs/PRUEFANLEITUNG.md`](docs/PRUEFANLEITUNG.md), Testcodes: [`docs/greenrx_testcodes.pdf`](docs/greenrx_testcodes.pdf).
 
@@ -161,3 +162,35 @@ Testplan zu 1.8.0 mit druckbarem Testpaket: `docs/TESTPLAN_1.8.0.md` und `docs/t
 - ATIV-Schnittstelle: API-Benutzer bei ATIV, Stichtag für alte „Picked Up“-Tickets und Test mit echten Daten stehen aus.
 - Validierung über Change Control (Validierungsplan und -bericht) vor dem Produktivstart.
 - Verkauf aus GreenRX/Bestand und Vernichtung gesperrter Ware sind noch nicht Teil des Moduls.
+
+
+---
+
+## blistercenter – Großhandel für Blistercenter
+
+Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_REGELN.md).
+
+### Ablauf (App „Blistercenter“)
+
+1. **Kunden:** Blistercenter von Hand anlegen, Zahlungsmodell und Preisliste setzen (Rolle Freigabe). Portalzugang über den Knopf **Portalzugänge** am Kunden.
+2. **Bestellung:** im Shop oder über **Kundenbestellungen › Telefonbestellung erfassen** (auch Knopf am Kunden). Bestellweg und Besteller sind Pflicht.
+3. **Vorkasse:** Bei Bestätigung entsteht die Anzahlungsrechnung über 100 % als Entwurf. Die Buchhaltung bucht und versendet sie (Aufgabe in Odoo).
+4. **Sammelbestellungen › Offene Kundenmengen:** Positionen markieren, „Zur Sammelbestellung“, dann „Anfrage erstellen“ und im Einkauf manuell bestellen. Ausnahme: „Aus Lagerbestand liefern“.
+5. **Lager und Versand › Wareneingänge:** Ware mit Charge und Verfall buchen. Sie landet in der Quarantäne (WH/Blistercenter/Quarantäne).
+6. **Freigabe Wareneingang (VP):** eine andere Person mit Rolle Freigabe bestätigt. Kurzläufer (Rest unter 3 Monaten) vorher mit „Kurzläufer freigeben“.
+7. **Kommissionierung:** Ware ist dem Kunden fest zugeordnet. Nach dem Packen „Kommissionierung abgeschlossen“.
+8. **Endkontrolle:** eine zweite Person prüft und bestätigt. Odoo prüft Zahlungssperre, Vorkasse, Chargensperre, Kurzläufer und Vollständigkeit.
+
+### Rollen
+
+| Rolle | Darf |
+|---|---|
+| Benutzer | Bestellungen erfassen, bündeln, Wareneingang buchen, kommissionieren, Endkontrolle, Charge sperren, Teillieferung mit Vermerk erlauben |
+| Freigabe (VP) | zusätzlich: Shopfreischaltung, Konditionen, Zahlungssperre, Charge entsperren, Freigabe aus der Quarantäne, Kurzläufer freigeben |
+| Administrator | zusätzlich: Einstellungen und Prozessregeln |
+
+### Technik
+
+- Eigene Lagerorte und Vorgangstypen: `WH/Blistercenter/Quarantäne`, `BCIN` (Eingang), `BCFRG` (Freigabe VP). Werden bei Installation und Update angelegt (idempotent).
+- Feste Zuordnung über Odoo-Standard-Verkettung: Kundenlieferung „auf Auftrag“ ohne eigene Beschaffung, verkettet mit der Freigabe; reserviert nur deren Chargen.
+- Tests: `odoo-bin ... -i blistercenter --test-enable --test-tags /blistercenter` (39 Tests, zusammen mit `plcs_greenrx` 145).

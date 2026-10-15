@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_bc_overview_kanban" model="ir.ui.view">
+        <field name="name">blistercenter.overview.kanban</field>
+        <field name="model">blistercenter.overview</field>
+        <field name="arch" type="xml">
+            <kanban create="false" edit="false" delete="false" action="action_open" type="object"
+                    class="o_bc_overview">
+                <field name="key"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <field name="name" class="fw-bold fs-5"/>
+                                <div class="text-muted small"><field name="description"/></div>
+                            </div>
+                            <div t-attf-class="display-6 fw-bold ms-3 #{record.count.raw_value and ['payment_blocks', 'awaiting_payment', 'blocked_lots'].includes(record.key.raw_value) ? 'text-danger' : ''}">
+                                <field name="count"/>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="action_bc_overview" model="ir.actions.act_window">
+        <field name="name">Übersicht</field>
+        <field name="res_model">blistercenter.overview</field>
+        <field name="view_mode">kanban</field>
+        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_bc_overview_kanban')})]"/>
+    </record>
+</odoo>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_bc_collective_add_form" model="ir.ui.view">
+        <field name="name">blistercenter.collective.add.form</field>
+        <field name="model">blistercenter.collective.add</field>
+        <field name="arch" type="xml">
+            <form string="Zur Sammelbestellung">
+                <group>
+                    <field name="mode" widget="radio"/>
+                    <field name="supplier_id" invisible="mode != 'new'" required="mode == 'new'"/>
+                    <field name="collective_id" invisible="mode != 'existing'" required="mode == 'existing'"/>
+                </group>
+                <field name="sale_line_ids" readonly="1">
+                    <list>
+                        <field name="order_id"/>
+                        <field name="order_partner_id" string="Blistercenter"/>
+                        <field name="product_id"/>
+                        <field name="bc_qty_open" sum="Summe"/>
+                        <field name="product_uom_id" string="Einheit"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_apply" type="object" string="Übernehmen" class="btn-primary"/>
+                    <button special="cancel" string="Abbrechen"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

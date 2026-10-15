@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form_bc" model="ir.ui.view">
+        <field name="name">res.partner.form.blistercenter</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <div name="button_box" position="inside">
+                <button name="action_bc_open_orders" type="object" class="oe_stat_button" icon="fa-shopping-cart"
+                        invisible="not bc_is_customer" groups="blistercenter.group_bc_user">
+                    <field name="bc_sale_count" widget="statinfo" string="BC-Bestellungen"/>
+                </button>
+                <button name="action_bc_portal_access" type="object" class="oe_stat_button" icon="fa-user-circle"
+                        invisible="not bc_is_customer" groups="blistercenter.group_bc_user">
+                    <field name="bc_portal_user_count" widget="statinfo" string="Portalzugänge"/>
+                </button>
+                <button name="action_bc_open_supplierinfo" type="object" class="oe_stat_button" icon="fa-tags"
+                        invisible="not bc_is_supplier" groups="blistercenter.group_bc_user">
+                    <field name="bc_supplierinfo_count" widget="statinfo" string="Einkaufskonditionen"/>
+                </button>
+            </div>
+            <page name="sales_purchases" position="after">
+                <page name="blistercenter" string="Blistercenter" groups="blistercenter.group_bc_user">
+                    <field name="bc_can_approve" invisible="1"/>
+                    <field name="bc_portal_warning" invisible="1"/>
+                    <div class="alert alert-warning" role="alert" invisible="not bc_portal_warning">
+                        Der Shop ist freigeschaltet, aber kein Kontakt hat einen Portalzugang.
+                        Ohne Zugang kann sich das Blistercenter nicht im Shop anmelden.
+                        <button name="action_bc_portal_access" type="object" string="Portalzugang verwalten" class="btn-link"/>
+                    </div>
+                    <div class="mb-2" invisible="not bc_is_customer">
+                        <button name="action_bc_new_phone_order" type="object" string="Telefonbestellung erfassen"
+                                class="btn-primary" icon="fa-phone"/>
+                    </div>
+                    <group>
+                        <group string="Rolle">
+                            <field name="bc_is_customer"/>
+                            <field name="bc_is_supplier"/>
+                        </group>
+                        <group string="Shop" invisible="not bc_is_customer">
+                            <field name="bc_shop_enabled" readonly="not bc_can_approve"/>
+                            <field name="bc_shop_enabled_by" invisible="not bc_shop_enabled"/>
+                            <field name="bc_shop_enabled_date" invisible="not bc_shop_enabled"/>
+                        </group>
+                        <group string="Zahlung" invisible="not bc_is_customer">
+                            <field name="bc_payment_model" readonly="not bc_can_approve"/>
+                            <field name="property_payment_term_id" string="Zahlungsbedingung" readonly="not bc_can_approve"/>
+                            <field name="property_product_pricelist" string="Preisliste (individuelle Preise/Rabatte)" readonly="not bc_can_approve"/>
+                        </group>
+                        <group string="Zahlungssperre" invisible="not bc_is_customer">
+                            <field name="bc_payment_block" readonly="not bc_can_approve"/>
+                            <field name="bc_payment_block_reason" readonly="not bc_can_approve"
+                                   invisible="not bc_payment_block" required="bc_payment_block"/>
+                        </group>
+                    </group>
+                </page>
+            </page>
+        </field>
+    </record>
+
+    <record id="view_bc_customer_list" model="ir.ui.view">
+        <field name="name">res.partner.list.blistercenter.customer</field>
+        <field name="model">res.partner</field>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <list string="Blistercenter" decoration-danger="bc_payment_block">
+                <field name="complete_name" string="Name"/>
+                <field name="city" optional="show"/>
+                <field name="phone" optional="show"/>
+                <field name="email" optional="hide"/>
+                <field name="bc_shop_enabled" widget="boolean_toggle" readonly="1"/>
+                <field name="bc_payment_model"/>
+                <field name="property_payment_term_id" string="Zahlungsbedingung" optional="show"/>
+                <field name="property_product_pricelist" string="Preisliste" optional="show"/>
+                <field name="bc_payment_block" readonly="1"/>
+                <field name="bc_payment_block_reason" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_bc_supplier_list" model="ir.ui.view">
+        <field name="name">res.partner.list.blistercenter.supplier</field>
+        <field name="model">res.partner</field>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <list string="Hersteller">
+                <field name="complete_name" string="Name"/>
+                <field name="city" optional="show"/>
+                <field name="phone" optional="show"/>
+                <field name="email" optional="show"/>
+                <field name="property_supplier_payment_term_id" string="Zahlungsbedingung Einkauf" optional="show"/>
+                <field name="bc_supplierinfo_count" string="Konditionen"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_bc_partner_search" model="ir.ui.view">
+        <field name="name">res.partner.search.blistercenter</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_res_partner_filter"/>
+        <field name="arch" type="xml">
+            <filter name="inactive" position="before">
+                <filter name="bc_customer" string="Blistercenter" domain="[('bc_is_customer', '=', True)]"/>
+                <filter name="bc_shop" string="Shop freigeschaltet" domain="[('bc_shop_enabled', '=', True)]"/>
+                <filter name="bc_shop_not" string="Shop nicht freigeschaltet" domain="[('bc_is_customer', '=', True), ('bc_shop_enabled', '=', False)]"/>
+                <filter name="bc_blocked" string="Zahlungssperre" domain="[('bc_payment_block', '=', True)]"/>
+                <filter name="bc_supplier" string="Hersteller (Blistercenter)" domain="[('bc_is_supplier', '=', True)]"/>
+                <separator/>
+            </filter>
+        </field>
+    </record>
+
+    <record id="action_bc_customers" model="ir.actions.act_window">
+        <field name="name">Blistercenter</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('bc_is_customer', '=', True)]</field>
+        <field name="context">{'default_bc_is_customer': True, 'default_is_company': True, 'default_customer_rank': 1}</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_bc_customer_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Erstes Blistercenter anlegen</p>
+            <p>Blistercenter sind die Kunden des PLCS-Großhandels.</p>
+        </field>
+    </record>
+
+    <record id="action_bc_suppliers" model="ir.actions.act_window">
+        <field name="name">Hersteller</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('bc_is_supplier', '=', True)]</field>
+        <field name="context">{'default_bc_is_supplier': True, 'default_is_company': True, 'default_supplier_rank': 1}</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_bc_supplier_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})]"/>
+    </record>
+
+    <record id="action_bc_supplierinfo" model="ir.actions.act_window">
+        <field name="name">Einkaufskonditionen</field>
+        <field name="res_model">product.supplierinfo</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('partner_id.bc_is_supplier', '=', True)]</field>
+        <field name="context">{'visible_product_tmpl_id': False}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Einkaufskondition anlegen</p>
+            <p>Je Hersteller und Artikel: Einkaufspreis, Mindestmenge, Lieferzeit. Odoo übernimmt sie in die Anfrage beim Hersteller.</p>
+        </field>
+    </record>
+</odoo>
