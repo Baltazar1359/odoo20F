@@ -61,7 +61,8 @@ def pack_code(pzn, batch, serial):
 def build_data(ref, first_box):
     run = time.strftime("%m%d%H%M")
     box = lambda i: "GX%03d" % (first_box + i)  # noqa: E731
-    sn = lambda n: "TST%s%03d" % (run, n)  # noqa: E731
+    # Seriennummer eindeutig je Paket und Lauf: Referenz-Endziffern + Zeitstempel (max. 20 Zeichen, AI 21)
+    sn = lambda n: "TST%s%s%03d" % (ref[-4:], run, n)  # noqa: E731
     slip_lines = [("1801", "A", "CHA18", 3), ("1802", "B", "CHB18", 1), ("1803", "C", "CHC18", 1),
                   ("1804", "D", "CHD18", 1)]
     slip = "\n".join(["REF:%s" % ref, "REKL:S%s" % ref[1:], "TICKET|PZN|CHARGE|ANZAHL"]
