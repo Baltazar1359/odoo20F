@@ -147,7 +147,7 @@ Danach:
 odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --stop-after-init
 ```
 
-Die automatischen Tests (davon 6 Browser-Tests, die Chrome brauchen) decken ab:
+Die automatischen Tests (davon 7 Browser-Tests, die Chrome brauchen) decken ab:
 
 - den GS1/IFA-Parser und den Retourenschein-QR (auch zerteilt durch den Handscanner),
 - den ganzen Ablauf von Ticket bis VP-Freigabe,
@@ -176,7 +176,7 @@ Die automatischen Tests (davon 6 Browser-Tests, die Chrome brauchen) decken ab:
   dauerhafte Fehler mit Wiederholung, überlappende Läufe, Statuswechsel, Stichtag, fehlende Gutschriften,
   nur lesende Aufrufe, Webhook (auch über HTTP) und Mengen-/Referenzabgleich.
 - die Befunde des Prüfberichts vom 15.10.2026 (1.9.1, `test_gpt_review.py`, F01–F08), jeweils mit Gegenprobe;
-  F03 als Browser-Test mit künstlich verzögerter Serverantwort.
+  F03 als Browser-Test mit künstlich verzögerter Serverantwort, F01 als Browser-Test (gesperrte Box per Liste und Scan freigeben).
 
 Zusätzlich prüft `e2e/playwright_scan_queue.py` mit Playwright gegen einen laufenden Server, dass 5 schnelle Scans alle ankommen:
 

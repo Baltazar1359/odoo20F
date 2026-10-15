@@ -410,3 +410,45 @@ class TestGptReviewManualUi(HttpCase):
         box.invalidate_recordset()
         self.assertEqual(box.product_id, product)
         self.assertEqual(sorted(box.scan_ids.filtered("accepted").mapped("serial")), ["NEXT2", "SLOW1"])
+
+
+@tagged("post_install", "-at_install", "plcs_greenrx")
+class TestGptReviewVpUi(HttpCase):
+    """F01: Gesperrte Box in der VP-Oberfläche finden (Liste und Box-Scan) und freigeben."""
+
+    def test_f01_blocked_box_in_vp_ui(self):
+        self.env.company._plcs_grx_setup()
+        lager = new_test_user(self.env, login="gr_ui_lager", groups="plcs_greenrx.group_grx_user")
+        vp1 = new_test_user(self.env, login="gr_ui_vp1", groups="plcs_greenrx.group_grx_vp")
+        gtin = gs1.pzn_to_gtin("12345678")
+        self.env["product.product"].create({
+            "name": "VP-Testartikel", "is_storable": True, "tracking": "lot", "use_expiration_date": True,
+            "barcode": gtin, "plcs_pzn": "12345678",
+        })
+        res = self.env["plcs.greenrx.ticket"].api_upsert([{
+            "name": "V-VPUI-1", "partner_name": "VP-Apotheke",
+            "lines": [{"ticket_number": "9800001", "pzn": "12345678", "batch": "VLOT", "qty": 1}],
+        }])
+        self.assertFalse(res["errors"], res)
+        ticket = self.env["plcs.greenrx.ticket"].search([("name", "=", "V-VPUI-1")])
+        Box = self.env["plcs.greenrx.box"].with_user(lager)
+        box = Box.browse(Box.grx_open_box(ticket.id, "GX135")["id"])
+        exp = (fields.Date.today() + relativedelta(years=2)).strftime("%y%m00")
+        self.assertIn(box.grx_scan(code(gtin, "VPUI1", "VLOT", exp))["status"], ("ok", "warning"))
+        box.grx_to_check()
+        box.grx_save_check(answers={f: "ja" for f in ANSWERS})
+        box.grx_save_check(ampel="gruen")
+        box.grx_to_print()
+        box.grx_print()
+        box.grx_confirm_signed(True)
+        box.grx_close()
+        ticket.with_user(lager).grx_finish()
+        box.with_user(vp1).grx_vp_block("Umkarton nass")
+        self.assertEqual(box.state, "blocked")
+
+        self.start_tour("/odoo/action-plcs_greenrx.action_grx_app", "plcs_greenrx_vp_blocked", login="admin")
+
+        box.invalidate_recordset()
+        self.assertEqual(box.state, "released")
+        self.assertEqual(box.vp_user_id, self.env.ref("base.user_admin"))
+        self.assertEqual(box.vp_reason, "Packungen geprüft, trocken")
