@@ -4,6 +4,13 @@ Testumgebung: Odoo.sh-Dev-Build des Branches `feat/blistercenter-v2` (nicht Prod
 
 ## Vorbereitung (einmal, als Administrator)
 
+0. **Testdaten (Skript):** Odoo.sh › Branch `feat/blistercenter-v2` › SHELL, dann
+   `odoo-bin shell < ~/src/user/docs/blistercenter_testdaten/testdaten.py`.
+   Legt an: PLCS-Logo (Firma und Shop), Hersteller „AstraZeneca GmbH (Test)“, 10 Arzneimittel mit PZN, GTIN,
+   Charge + Verfall, Shop-Freigabe, Einkaufskondition und Produktfoto, Testkunde „Blistercenter Musterstadt (Test)“
+   (Vorkasse, Shop frei, Ansprechpartnerin Erika Muster). Mehrfach ausführbar. Preise sind fiktiv.
+   Damit entfallen die Punkte 3–5 unten; Benutzer (Punkt 1) und Portalzugang legt das Skript nicht an.
+
 1. **Benutzer:** mindestens drei Personen anlegen, damit die Vier-Augen-Regeln prüfbar sind:
    - Lager A und Lager B: Rolle Blistercenter „Benutzer“,
    - VP: Rolle Blistercenter „Freigabe“.
