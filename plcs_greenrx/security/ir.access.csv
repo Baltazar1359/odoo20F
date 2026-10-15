@@ -25,3 +25,5 @@ rule_ativ_cn_line_company,ATIV-Gutschriftposition: Firma,plcs.ativ.credit.note.l
 rule_ativ_message_company,ATIV-Nachricht: Firma,plcs.ativ.message,,crud,"[('connector_id.company_id', 'in', company_ids)]"
 rule_ativ_run_company,ATIV-Abruf: Firma,plcs.ativ.run,,crud,"[('connector_id.company_id', 'in', company_ids)]"
 rule_ativ_queue_company,ATIV-Warteschlange: Firma,plcs.ativ.queue,,crud,"[('connector_id.company_id', 'in', company_ids)]"
+access_grx_box_document_user,grx.box.document.user,plcs.greenrx.box.document,plcs_greenrx.group_grx_user,r,
+rule_grx_box_document_company,GreenRX-Formblatt: Firma,plcs.greenrx.box.document,,crud,"[('company_id', 'in', company_ids)]"

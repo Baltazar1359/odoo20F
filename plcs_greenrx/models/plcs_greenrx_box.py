@@ -123,6 +123,21 @@ class PlcsGreenrxBox(models.Model):
     vp_picking_id = fields.Many2one("stock.picking", "Freigabe-/Sperrbewegung", readonly=True)
     location_id = fields.Many2one("stock.location", "Lagerort", compute="_compute_location")
 
+    # Formblätter (PDF je Druck) und Archiv (1.9.0)
+    document_ids = fields.One2many("plcs.greenrx.box.document", "box_id", "Formblätter", readonly=True,
+                                   groups="plcs_greenrx.group_grx_user")
+    valid_document_id = fields.Many2one("plcs.greenrx.box.document", "Gültiges Formblatt",
+                                        compute="_compute_valid_document", groups="plcs_greenrx.group_grx_user")
+    document_count = fields.Integer("Anzahl Formblätter", compute="_compute_valid_document",
+                                    groups="plcs_greenrx.group_grx_user")
+    archived = fields.Boolean(
+        "Archiviert", readonly=True, index=True, copy=False,
+        help="Keine Packung dieser Belegung liegt mehr im Lager. Die Belegung ist aus den Arbeitslisten "
+             "ausgeblendet, bleibt aber mit Formblättern, Verlauf und VP-Entscheidung lesbar und unveränderbar. "
+             "Die Box GX… ist frei für eine neue Belegung.")
+    archived_at = fields.Datetime("Archiviert am", readonly=True, copy=False)
+    archive_reason = fields.Char("Grund (letzte Bewegung)", readonly=True, copy=False)
+
     @api.depends("ticket_id.name", "package_id.name")
     def _compute_name(self):
         for box in self:
@@ -140,11 +155,44 @@ class PlcsGreenrxBox(models.Model):
             box.qty = len(accepted)
             box.manual_qty = len(accepted.filtered("manual"))
 
+    @api.depends("document_ids.state")
+    def _compute_valid_document(self):
+        for box in self:
+            docs = box.sudo().document_ids
+            box.valid_document_id = docs.filtered(lambda d: d.state == "valid")[:1]
+            box.document_count = len(docs)
+
     @api.depends("package_id.quant_ids.location_id", "package_id.quant_ids.quantity")
     def _compute_location(self):
         for box in self:
             quants = box.package_id.sudo().quant_ids.filtered(lambda q: q.quantity > 0)
             box.location_id = quants[:1].location_id
+
+    # ------------------------------------------------------------------
+    # Archiv: unveränderbar, nicht löschbar
+    # ------------------------------------------------------------------
+    def write(self, vals):
+        auth = grx_auth.archive(self.env)
+        for box in self:
+            if box.archived and not (auth and box.id in auth.box_ids):
+                raise UserError(self.env._("Die Belegung %s ist archiviert und kann nicht mehr geändert werden.",
+                                           box.name))
+        return super().write(vals)
+
+    def unlink(self):
+        if not self.env.context.get("force_delete"):
+            for box in self:
+                if box.archived or box.sudo().document_ids:
+                    raise UserError(self.env._(
+                        "Die Belegung %s hat gespeicherte Formblätter oder ist archiviert und kann nicht gelöscht werden.",
+                        box.name))
+        return super().unlink()
+
+    def _grx_check_not_archived(self):
+        for box in self:
+            if box.archived:
+                raise UserError(self.env._(
+                    "Die Belegung %s ist archiviert. Die Formblätter sind unter „Formblätter“ einsehbar.", box.name))
 
     # ------------------------------------------------------------------
     # Ampel-Vorschlag
@@ -337,6 +385,8 @@ class PlcsGreenrxBox(models.Model):
                     box=name, t=resume.ticket_id.name))
             resume._grx_check_owner()
             return resume._grx_ui_data()
+        # Alte Belegungen ohne Bestand jetzt archivieren (z. B. vor 1.9.0 abgeschlossen)
+        package.sudo().plcs_grx_box_ids._grx_try_archive()
         reason = package._plcs_grx_occupied_reason()
         if reason:
             raise UserError(self.env._("Box %(box)s ist nicht leer. %(reason)s Bitte eine leere Box nehmen.",
@@ -644,10 +694,13 @@ class PlcsGreenrxBox(models.Model):
 
         Vor dem Abschluss nur der Erfasser oder eine VP; Nachdruck nach dem Abschluss
         ebenfalls nur Erfasser oder VP (Prüfung über _grx_check_owner).
+        Jeder Druck wird als PDF an der Belegung gespeichert (1.9.0). Rückgabe: Aktion, die
+        genau dieses gespeicherte PDF öffnet – Papier und gespeicherte Kopie sind dieselbe Datei.
         """
         self.ensure_one()
         self._grx_check_user()
         self._grx_check_owner()
+        self._grx_check_not_archived()
         if self.state in ("scan", "check", "cancel"):
             raise UserError(self.env._("Drucken geht erst nach der Vorprüfung."))
         self.sudo().write({
@@ -660,13 +713,60 @@ class PlcsGreenrxBox(models.Model):
             # Inhalt dieses Drucks festhalten; Nachdrucke nach dem Abschluss ändern ihn nicht.
             # Ein neuer Ausdruck muss neu geprüft und unterschrieben werden.
             self.sudo().write({"printed_snapshot": self._grx_report_snapshot(), "signed_confirmed": False})
+        doc = self._grx_store_document()
         if self.print_count > 1:
-            body = self.env._("Box-Dokumente gedruckt (Druck Nr. %(n)s, Neuausdruck Nr. %(r)s).",
-                              n=self.print_count, r=self.print_count - 1)
+            body = self.env._("Box-Dokumente gedruckt (Druck Nr. %(n)s, Neuausdruck Nr. %(r)s). Gespeichert als %(f)s.",
+                              n=self.print_count, r=self.print_count - 1, f=doc.file_name)
         else:
-            body = self.env._("Box-Dokumente gedruckt (Druck Nr. %s).", self.print_count)
+            body = self.env._("Box-Dokumente gedruckt (Druck Nr. %(n)s). Gespeichert als %(f)s.",
+                              n=self.print_count, f=doc.file_name)
         self.sudo().message_post(body=body)
-        return self.env.ref("plcs_greenrx.action_report_grx_box_documents").report_action(self)
+        return {"type": "ir.actions.act_url", "url": doc._grx_url(), "target": "new", "document_id": doc.id}
+
+    def _grx_store_document(self):
+        """Formblatt dieses Drucks erzeugen und an der Belegung speichern."""
+        self.ensure_one()
+        stamp = grx_auth.PrintStamp(self.id, self.print_count, self.printed_at, self.env.user.name)
+        report = self.env.ref("plcs_greenrx.action_report_grx_box_documents")
+        content, ftype = self.env["ir.actions.report"].sudo().with_context(
+            **{grx_auth.PRINT_STAMP_KEY: stamp})._render_qweb_pdf(report, self.ids)
+        return self.env["plcs.greenrx.box.document"]._grx_store(
+            self, content, ftype, after_close=self.state not in OPEN_STATES)
+
+    def _grx_print_stamp(self):
+        """Druckvermerk für jede Seite des Formblatts: Druck-Nr., Zeit, Benutzer.
+
+        Nur der echte Druck (grx_print) setzt ihn. Eine reine Ansicht zeigt „Ansicht – kein Druck“.
+        """
+        self.ensure_one()
+        stamp = grx_auth.print_stamp(self.env, self.id)
+        if stamp:
+            when = fields.Datetime.context_timestamp(self, stamp.printed_at).strftime("%d.%m.%Y, %H:%M")
+            return "Druck Nr. %s%s · %s Uhr · gedruckt von %s" % (
+                stamp.print_no, " (Nachdruck)" if stamp.reprint else "", when, stamp.user_name)
+        now = fields.Datetime.context_timestamp(self, fields.Datetime.now()).strftime("%d.%m.%Y, %H:%M")
+        return "Ansicht – kein Druck · %s Uhr · %s" % (now, self.env.user.name)
+
+    def grx_document_url(self):
+        """URL des gültigen Formblatts (sonst des letzten gespeicherten, sonst Ansicht)."""
+        self.ensure_one()
+        self._grx_check_user()
+        docs = self.sudo().document_ids
+        doc = docs.filtered(lambda d: d.state == "valid")[:1] or docs.sorted("print_no", reverse=True)[:1]
+        if doc:
+            return doc._grx_url()
+        return "/report/pdf/plcs_greenrx.report_box_documents/%s" % self.id
+
+    def action_grx_open_valid_document(self):
+        """Gültiges Formblatt öffnen (Knopf im Formular und in Listen)."""
+        self.ensure_one()
+        self._grx_check_user()
+        box = self.sudo()
+        doc = box.valid_document_id or box.document_ids.sorted("print_no", reverse=True)[:1]
+        doc = doc.with_env(self.env)
+        if not doc:
+            raise UserError(self.env._("Für %s ist kein Formblatt gespeichert (Druck vor Version 1.9.0).", self.name))
+        return doc.action_open()
 
     def grx_confirm_signed(self, value=True):
         self.ensure_one()
@@ -743,11 +843,22 @@ class PlcsGreenrxBox(models.Model):
         state = "blocked" if self.ampel == "rot" else "to_release"
         self._grx_mark_participant(state=state, closed_at=fields.Datetime.now(), closed_by=self.env.user.id,
                                    move_id=move.id)
+        self._grx_mark_valid_document()
         self.sudo().message_post(body=self.env._(
             "Box abgeschlossen: %(n)s × %(p)s, Charge %(ch)s, Ampel %(a)s → %(loc)s.",
             n=len(lots), p=self.product_id.display_name, ch=self.batch,
             a=AMPEL_SHORT[self.ampel], loc=dest.display_name))
         return self._grx_ui_data()
+
+    def _grx_mark_valid_document(self):
+        """Beim Abschluss: Formblatt des letzten Drucks zum aktuellen Stand = gültig, ältere = ersetzt."""
+        self.ensure_one()
+        docs = self.sudo().document_ids.filtered(lambda d: d.state == "open")
+        valid = docs.filtered(lambda d: d.print_no == self.print_count and d.content_rev == self.content_rev)
+        if valid:
+            valid.write({"state": "valid"})
+        if docs - valid:
+            (docs - valid).write({"state": "replaced"})
 
     def grx_cancel(self):
         """Erfassung abbrechen (nur vor dem Abschluss)."""
@@ -758,6 +869,7 @@ class PlcsGreenrxBox(models.Model):
         self.sudo().scan_ids.filtered("accepted").write({"accepted": False, "result": "removed",
                                                   "message": self.env._("Erfassung abgebrochen")})
         self.sudo().state = "cancel"
+        self.sudo().document_ids.filtered(lambda d: d.state == "open").write({"state": "void"})
         self.sudo().message_post(body=self.env._("Erfassung abgebrochen von %s.", self.env.user.name))
         return self.ticket_id._grx_ui_data()
 
@@ -773,6 +885,7 @@ class PlcsGreenrxBox(models.Model):
         self._grx_check_user()
         if not self.env.su and not self.env.user.has_group("plcs_greenrx.group_grx_vp"):
             raise AccessError(self.env._("Nur die VP (Gruppe „GreenRX: VP-Freigabe“) darf freigeben oder sperren."))
+        self._grx_check_not_archived()
         for box in self:
             if release and box._grx_is_participant():
                 raise AccessError(self.env._(
@@ -958,6 +1071,56 @@ class PlcsGreenrxBox(models.Model):
             body = self.env._("Gesperrt durch VP %(vp)s: %(r)s", vp=self.env.user.name, r=reason)
         self.sudo().message_post(body=body)
         return self._grx_ui_data()
+
+    # ------------------------------------------------------------------
+    # Archiv (1.9.0): Belegung ohne Bestand
+    # ------------------------------------------------------------------
+    def _grx_stock_quants(self):
+        """Packungen dieser Belegung, die noch im Lager liegen (interne Lagerorte)."""
+        self.ensure_one()
+        lots = self.sudo().lot_ids
+        if not lots:
+            return self.env["stock.quant"].sudo()
+        return self.env["stock.quant"].sudo().search([
+            ("lot_id", "in", lots.ids), ("location_id.usage", "=", "internal"), ("quantity", ">", 0)])
+
+    def _grx_try_archive(self, move_lines=None):
+        """Belegungen archivieren, von denen keine Packung mehr im Lager liegt.
+
+        Hängt an der Lagerbewegung (stock.move.line._action_done), nicht an einem bestimmten
+        Verkaufs- oder Vernichtungsablauf. Teilverkauf: erst mit der letzten Packung.
+        Rückgabe: archivierte Belegungen.
+        """
+        done = self.browse()
+        for box in self.sudo():
+            if box.archived or box.state not in ("released", "blocked") or not box.lot_ids:
+                continue
+            if box._grx_stock_quants():
+                continue
+            reason = box._grx_last_movement_text(move_lines) or self.env._("kein Bestand mehr")
+            box.with_context(**{grx_auth.ARCHIVE_KEY: grx_auth.Archive(box.ids)}).write({
+                "archived": True, "archived_at": fields.Datetime.now(), "archive_reason": reason[:250]})
+            box.message_post(body=self.env._(
+                "Belegung archiviert: keine Packung mehr im Lager (%(r)s). Box %(box)s ist frei für eine neue "
+                "Belegung. Formblätter, Verlauf und VP-Entscheidung bleiben erhalten.",
+                r=reason, box=box.package_id.name))
+            done |= box
+        return done
+
+    def _grx_last_movement_text(self, move_lines=None):
+        """Text zur letzten Bewegung einer Packung dieser Belegung (Grund der Archivierung).
+
+        move_lines: die gerade gebuchten Zeilen (ihr Status ist während der Buchung noch nicht „erledigt“).
+        """
+        self.ensure_one()
+        lots = self.sudo().lot_ids
+        current = (move_lines or self.env["stock.move.line"]).sudo().filtered(lambda ml: ml.exists() and ml.lot_id in lots)
+        if current:
+            line = current.sorted(lambda ml: (ml.date, ml.id))[-1]
+            return line.lot_id._plcs_grx_move_text(line)
+        line = self.env["stock.move.line"].sudo().search(
+            [("lot_id", "in", self.sudo().lot_ids.ids), ("state", "=", "done")], order="date desc, id desc", limit=1)
+        return line.lot_id._plcs_grx_move_text(line) if line else ""
 
     # ------------------------------------------------------------------
     # Daten für die Oberfläche

@@ -41,6 +41,18 @@ class StockPackage(models.Model):
             lambda b: b.state in ("to_release", "blocked") and b.picking_id.state not in ("done", "cancel"))
         if pending:
             return self.env._("Die Box gehört zum noch offenen Eingang %(p)s.", p=pending[0].picking_id.name)
+        # Neue Belegung erst, wenn die alte archiviert ist (1.9.0): Packungen der alten Belegung
+        # liegen noch irgendwo im Lager (z. B. ausgepackt im Regal)
+        active = boxes.filtered(
+            lambda b: b.state in ("to_release", "blocked", "released") and not b.archived and b.lot_ids)
+        for box in active:
+            quants = box._grx_stock_quants()
+            if quants:
+                return self.env._(
+                    "Die Belegung %(box)s ist noch nicht archiviert: %(n)s Packung(en) liegen noch im Lager (%(loc)s).",
+                    box=box.name, n=int(sum(quants.mapped("quantity"))),
+                    loc=", ".join(quants.location_id.mapped("display_name")))
+            return self.env._("Die Belegung %(box)s ist noch nicht archiviert.", box=box.name)
         return False
 
     @api.model

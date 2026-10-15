@@ -8,3 +8,8 @@ class StockQuant(models.Model):
     plcs_batch = fields.Char("Charge", related="lot_id.plcs_batch", store=True, index=True)
     plcs_grx_ampel = fields.Selection(related="lot_id.plcs_grx_box_id.ampel", string="Ampel")
 
+
+    def action_plcs_grx_open_document(self):
+        """Aus dem Bestand direkt zum gültigen Formblatt der Packung."""
+        self.ensure_one()
+        return self.lot_id.action_plcs_grx_open_document()

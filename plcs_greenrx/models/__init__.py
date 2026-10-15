@@ -8,6 +8,7 @@ from . import stock_picking
 from . import stock_move_line
 from . import plcs_greenrx_ticket
 from . import plcs_greenrx_box
+from . import plcs_greenrx_box_document
 from . import plcs_greenrx_scan
 from . import plcs_greenrx_connector
 from . import plcs_ativ_mirror

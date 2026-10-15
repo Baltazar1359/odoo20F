@@ -10,6 +10,11 @@
                     GreenRX-Packung: Seriennummer · Charge <field name="plcs_batch" class="fw-bold"/>
                     · <field name="plcs_grx_box_id"/>
                     <span invisible="not plcs_grx_manual" class="badge text-bg-warning ms-1">von Hand eingegeben</span>
+                    <span invisible="not plcs_grx_archived" class="badge text-bg-secondary ms-1">Belegung archiviert</span>
+                    <div>Verbleib: <field name="plcs_grx_whereabouts" class="d-inline"/></div>
+                    <button name="action_plcs_grx_open_document" type="object" string="Formblatt öffnen"
+                            class="btn btn-link p-0" icon="picture_as_pdf" groups="plcs_greenrx.group_grx_user"/>
+                    <field name="plcs_grx_archived" invisible="1"/>
                     <field name="plcs_is_grx_serial" invisible="1"/>
                     <field name="plcs_grx_manual" invisible="1"/>
                 </div>
@@ -110,6 +115,8 @@
                        decoration-danger="plcs_grx_ampel == 'rot'"/>
                 <field name="quantity" string="Menge" sum="Summe"/>
                 <field name="uom_id" groups="uom.group_uom" optional="hide"/>
+                <button name="action_plcs_grx_open_document" type="object" string="Formblatt" icon="picture_as_pdf"
+                        groups="plcs_greenrx.group_grx_user"/>
             </list>
         </field>
     </record>

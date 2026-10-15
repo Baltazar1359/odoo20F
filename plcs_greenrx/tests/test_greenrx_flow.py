@@ -174,7 +174,7 @@ class TestGreenrxFlow(TransactionCase):
         with self.assertRaises(UserError):
             box.grx_close()  # nicht gedruckt
         action = box.grx_print()
-        self.assertEqual(action["type"], "ir.actions.report")
+        self.assertEqual(action["type"], "ir.actions.act_url")  # 1.9.0: gespeichertes Formblatt-PDF
         html = self.env["ir.actions.report"]._render_qweb_html(
             "plcs_greenrx.action_report_grx_box_documents", box.ids)[0].decode()
         self.assertIn("Checkliste Warenannahme", html)

@@ -827,8 +827,9 @@ export class GreenRxReceiptApp extends Component {
     async printDocs() {
         const box = this.state.box;
         await this.run(async () => {
-            await this.call("plcs.greenrx.box", "grx_print", [[box.id]]);
-            window.open(`/report/pdf/plcs_greenrx.report_box_documents/${box.id}`, "_blank");
+            // Der Server speichert jeden Druck als PDF an der Belegung und liefert genau diese Datei
+            const action = await this.call("plcs.greenrx.box", "grx_print", [[box.id]]);
+            window.open(action.url || `/report/pdf/plcs_greenrx.report_box_documents/${box.id}`, "_blank");
             this.state.box = await this.call("plcs.greenrx.box", "grx_confirm_signed", [[box.id], false]);
         });
     }
@@ -970,8 +971,10 @@ export class GreenRxReceiptApp extends Component {
         });
     }
 
-    printVpBox() {
-        window.open(`/report/pdf/plcs_greenrx.report_box_documents/${this.state.vpBox.id}`, "_blank");
+    async printVpBox() {
+        // Gespeichertes (gültiges) Formblatt der Belegung anzeigen
+        const url = await this.call("plcs.greenrx.box", "grx_document_url", [[this.state.vpBox.id]]);
+        window.open(url, "_blank");
     }
 
     // ------------------------------------------------------------------

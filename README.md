@@ -77,6 +77,22 @@ Odoo kennt je Packung nur ein „Los/Seriennummer“-Feld. Das Modul speichert d
 
 Wo die Ware liegt: **GreenRX › Übersicht › Bestand GreenRX** (nach Lagerort und Box gruppiert, je Packung Seriennummer, Charge, Verfall, Ampel) oder **Box-Erfassungen** (Status, Lagerort, VP, Begründung je Box).
 
+### Formblätter (PDF) und Archiv (1.9.0)
+
+**Jeder Druck wird als PDF an der Belegung gespeichert.** Das ausgedruckte und unterschriebene Formblatt liegt weiter in der Box; das PDF ist die digitale Kopie derselben Datei.
+
+- Dateiname: Box, Vorgang, Datum/Uhrzeit, Druck-Nr. (z. B. `GX181_VTEST1801_2026-10-15_1430_Druck1.pdf`).
+- Jede Seite trägt den Druckvermerk: „Druck Nr. X (Nachdruck) · Datum, Uhrzeit · gedruckt von Name“. Eine reine Ansicht ohne Druck zeigt „Ansicht – kein Druck“.
+- Status je PDF: **gültig** (letzter Druck, der beim Abschluss zum Inhalt passt), **ersetzt** (ältere Drucke), **Nachdruck nach Abschluss**, **verworfen** (Erfassung abgebrochen).
+- PDFs sind für alle Benutzer **nicht änderbar und nicht löschbar** (Prüfung auf dem Server, auch für Anhänge). Prüfsumme (SHA-256) je Datei.
+- Lesen dürfen nur Benutzer mit GreenRX-Rolle der eigenen Firma.
+- Wo zu sehen: Box-Erfassung › Reiter **Formblätter** (gültiges oben) und Knopf **Formblatt öffnen**; Bestand GreenRX und **Seriennummern (Rückverfolgung)** mit Knopf **Formblatt** je Packung.
+- Das PDF hängt an der **Belegung** (Box-Erfassung für einen Vorgang), nicht an der physischen Box. Bei einer neuen Belegung derselben Box erscheinen die alten PDFs nicht.
+
+**Archiv:** Liegt keine Packung einer Belegung mehr im Lager (Verkauf, Vernichtung, Rückgabe – egal wie), wird die Belegung automatisch archiviert, mit Datum und letzter Bewegung. Bei Teilverkauf erst mit der letzten Packung. Archivierte Belegungen sind aus der Arbeitsliste ausgeblendet (Filter „Aktiv“), über den Filter „Archiv“ und die Suche nach Seriennummer oder Charge weiter auffindbar und unveränderbar. Je Packung zeigt „Verbleib“, wohin sie gegangen ist. Eine Box kann erst neu belegt werden, wenn die alte Belegung archiviert ist. Das Papier-Formblatt archiviert PLCS außerhalb von Odoo.
+
+Boxen von vor 1.9.0 bekommen **kein nachträgliches PDF** (keine Daten erfinden). Beim Update werden Belegungen ohne Bestand archiviert.
+
 ### Retourenvorgänge und Tickets
 
 Ein Paket ist ein **Vorgang** (Referenznummer V…). Er enthält je Produkt ein **Ticket** mit PZN, erwarteter Charge und Anzahl, so wie auf dem Retourenschein.

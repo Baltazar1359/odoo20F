@@ -11,7 +11,13 @@ class StockMoveLine(models.Model):
 
     def _action_done(self):
         self._plcs_grx_check_controlled_locations()
-        return super()._action_done()
+        boxes = self.lot_id.filtered("plcs_is_grx_serial").plcs_grx_box_id
+        lines = self.browse(self.ids)
+        res = super()._action_done()
+        # Belegung archivieren, sobald ihre letzte Packung das Lager verlassen hat (1.9.0)
+        if boxes:
+            boxes.sudo()._grx_try_archive(lines.exists())
+        return res
 
     def _plcs_grx_check_controlled_locations(self):
         """Ware darf GreenRX-Quarantäne und -Sperrlager nur über die VP-Freigabe verlassen.

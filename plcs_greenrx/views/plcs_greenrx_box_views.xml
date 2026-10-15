@@ -20,6 +20,11 @@
                 <field name="state" widget="badge" decoration-success="state == 'released'" decoration-danger="state == 'blocked'" decoration-info="state == 'to_release'"/>
                 <field name="location_id"/>
                 <field name="vp_reason" optional="show"/>
+                <field name="archived" optional="hide"/>
+                <field name="archive_reason" optional="hide"/>
+                <field name="valid_document_id" string="Formblatt" optional="show" groups="plcs_greenrx.group_grx_user"/>
+                <button name="action_grx_open_valid_document" type="object" string="Formblatt" icon="picture_as_pdf"
+                        groups="plcs_greenrx.group_grx_user"/>
             </list>
         </field>
     </record>
@@ -30,8 +35,14 @@
         <field name="arch" type="xml">
             <form string="Box-Erfassung" create="0" edit="0">
                 <header>
+                    <button name="action_grx_open_valid_document" type="object" string="Formblatt öffnen"
+                            class="btn-primary" icon="picture_as_pdf" groups="plcs_greenrx.group_grx_user"/>
                     <field name="state" widget="statusbar" statusbar_visible="scan,check,print,to_release,released"/>
                 </header>
+                <div class="alert alert-secondary mb-0" role="status" invisible="not archived">
+                    <b>Archiviert:</b> Keine Packung dieser Belegung liegt mehr im Lager. Die Box ist frei für eine neue
+                    Belegung. Diese Belegung bleibt mit allen Formblättern lesbar und ist nicht änderbar.
+                </div>
                 <sheet>
                     <div class="oe_title">
                         <h1><field name="name"/></h1>
@@ -79,6 +90,11 @@
                             <field name="closed_by"/>
                         </group>
                     </group>
+                    <group string="Archiv" invisible="not archived">
+                        <field name="archived"/>
+                        <field name="archived_at"/>
+                        <field name="archive_reason"/>
+                    </group>
                     <group string="VP-Entscheidung">
                         <group>
                             <field name="participant_ids" widget="many2many_tags"/>
@@ -91,6 +107,37 @@
                         </group>
                     </group>
                     <notebook>
+                        <page string="Formblätter" name="documents" groups="plcs_greenrx.group_grx_user">
+                            <p class="text-muted small">
+                                Jeder Druck wird als PDF gespeichert. Gültig ist der Druck, der beim Abschluss zum Inhalt
+                                der Box passt. Die PDFs können nicht geändert oder gelöscht werden.
+                            </p>
+                            <field name="document_ids">
+                                <list decoration-success="state == 'valid'" decoration-muted="state in ('replaced', 'void')"
+                                      create="0" delete="0" edit="0">
+                                    <field name="state" widget="badge" decoration-success="state == 'valid'"
+                                           decoration-info="state in ('open', 'copy')"/>
+                                    <field name="print_no"/>
+                                    <field name="reprint" optional="hide"/>
+                                    <field name="printed_at"/>
+                                    <field name="printed_by_name" string="Gedruckt von"/>
+                                    <field name="file_name"/>
+                                    <field name="checksum" optional="hide"/>
+                                    <button name="action_open" type="object" string="Öffnen" icon="picture_as_pdf"/>
+                                    <button name="action_download" type="object" string="Herunterladen" icon="download"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Verbleib der Packungen" name="whereabouts">
+                            <field name="lot_ids">
+                                <list create="0" delete="0" edit="0">
+                                    <field name="name" string="Seriennummer"/>
+                                    <field name="plcs_batch"/>
+                                    <field name="expiration_date" widget="date" string="Verfall"/>
+                                    <field name="plcs_grx_whereabouts"/>
+                                </list>
+                            </field>
+                        </page>
                         <page string="Packungen" name="packs">
                             <field name="accepted_scan_ids">
                                 <list>
@@ -136,10 +183,14 @@
                 <field name="product_id"/>
                 <field name="batch"/>
                 <field name="lot_ids" string="Seriennummer"/>
+                <field name="ticket_number"/>
                 <filter name="to_release" string="Wartet auf VP" domain="[('state', '=', 'to_release')]"/>
                 <filter name="blocked" string="Gesperrt" domain="[('state', '=', 'blocked')]"/>
                 <filter name="released" string="Freigegeben" domain="[('state', '=', 'released')]"/>
                 <filter name="open" string="In Erfassung" domain="[('state', 'in', ('scan', 'check', 'print'))]"/>
+                <separator/>
+                <filter name="active_boxes" string="Aktiv" domain="[('archived', '=', False)]"/>
+                <filter name="archive" string="Archiv" domain="[('archived', '=', True)]"/>
                 <separator/>
                 <filter name="rot" string="Ampel Rot" domain="[('ampel', '=', 'rot')]"/>
                 <filter name="gelb" string="Ampel Gelb" domain="[('ampel', '=', 'gelb')]"/>
@@ -155,6 +206,10 @@
         <field name="name">Box-Erfassungen</field>
         <field name="res_model">plcs.greenrx.box</field>
         <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_active_boxes': 1}</field>
+        <field name="help" type="html">
+            <p>Archivierte Belegungen (kein Bestand mehr) sind ausgeblendet. Filter „Archiv“ zeigt sie, beide Filter aus zeigt alle.</p>
+        </field>
     </record>
 
     <record id="view_grx_scan_list" model="ir.ui.view">
@@ -203,12 +258,39 @@
         <field name="view_mode">list</field>
     </record>
 
+    <record id="view_grx_serial_list" model="ir.ui.view">
+        <field name="name">stock.lot.list.greenrx.trace</field>
+        <field name="model">stock.lot</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <list string="GreenRX-Seriennummern" create="0" delete="0" edit="0" export_xlsx="1">
+                <field name="name" string="Seriennummer"/>
+                <field name="product_id"/>
+                <field name="plcs_batch"/>
+                <field name="expiration_date" widget="date" string="Verfall"/>
+                <field name="plcs_grx_box_id" string="Belegung"/>
+                <field name="plcs_grx_ticket_id" optional="hide"/>
+                <field name="plcs_grx_ampel" widget="badge" decoration-success="plcs_grx_ampel == 'gruen'"
+                       decoration-warning="plcs_grx_ampel == 'gelb'" decoration-danger="plcs_grx_ampel == 'rot'"/>
+                <field name="plcs_grx_whereabouts"/>
+                <field name="plcs_grx_archived" optional="show"/>
+                <field name="plcs_grx_manual" optional="hide"/>
+                <button name="action_plcs_grx_open_document" type="object" string="Formblatt" icon="picture_as_pdf"/>
+                <button name="action_plcs_grx_open_box" type="object" string="Belegung" icon="inventory_2"/>
+            </list>
+        </field>
+    </record>
+
     <record id="action_grx_serials" model="ir.actions.act_window">
-        <field name="name">GreenRX-Seriennummern</field>
+        <field name="name">GreenRX-Seriennummern (Rückverfolgung)</field>
         <field name="res_model">stock.lot</field>
         <field name="view_mode">list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('view_grx_serial_list')})]"/>
         <field name="domain">[('plcs_is_grx_serial', '=', True)]</field>
         <field name="context">{'create': 0}</field>
+        <field name="help" type="html">
+            <p>Seriennummer oder Charge suchen: Belegung, Ampel, Verbleib und gültiges Formblatt – auch für verkaufte Packungen.</p>
+        </field>
     </record>
 
     <record id="action_grx_app" model="ir.actions.client">

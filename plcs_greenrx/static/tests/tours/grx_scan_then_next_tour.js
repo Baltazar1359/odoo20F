@@ -36,7 +36,7 @@ registry.category("web_tour.tours").add("plcs_greenrx_scan_then_next", {
         },
         {
             content: "Vorprüfung erreicht",
-            trigger: ".o_grx:contains(Vorschlag aus deinen Antworten)",
+            trigger: ".o_grx_kicker:contains(Ergebnis: Ampel)",
         },
         {
             content: "Warteschlange ist leer",
