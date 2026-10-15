@@ -193,6 +193,9 @@ class PlcsAtivMessage(models.Model):
                          help="Herkunftsangabe aus ATIV. Es wird kein Benutzerkonto angelegt.")
     subtype = fields.Char("Untertyp", readonly=True)
     body = fields.Html("Inhalt", readonly=True, sanitize=True)
+    body_hash = fields.Char("Prüfsumme Inhalt (ATIV)", readonly=True, copy=False,
+                            help="SHA-256 des Inhalts, wie ATIV ihn liefert. Erkennt nachträglich bearbeitete "
+                                 "Nachrichten, ohne den bereinigten (sanitized) Inhalt zu vergleichen.")
     tracking = fields.Text("Änderungen", readonly=True)
     attachment_names = fields.Char("Anhänge", readonly=True)
 

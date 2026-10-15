@@ -53,6 +53,7 @@
                             <field name="box_manual"/>
                             <field name="ticket_id"/>
                             <field name="ticket_number"/>
+                            <field name="slip_match_current"/>
                             <field name="slip_match"/>
                             <field name="picking_id"/>
                             <field name="location_id"/>

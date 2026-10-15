@@ -716,7 +716,9 @@ export class GreenRxReceiptApp extends Component {
 
     async submitPackManual() {
         const box = this.state.box;
-        const p = this.state.pack;
+        // Eingabe beim Übernehmen festhalten (GPT-Review F03): spätere Änderungen im Formular
+        // dürfen einen wartenden Auftrag nicht verändern.
+        const p = { ...this.state.pack };
         if (!box) {
             return;
         }
@@ -730,6 +732,13 @@ export class GreenRxReceiptApp extends Component {
             this.play("error");
             return;
         }
+        // Dieselbe Seriennummer wartet schon (z. B. zweimal schnell „Übernehmen“): nicht doppelt senden
+        this.pendingManual = this.pendingManual || new Set();
+        const pendingKey = `${box.id}|${p.serial.trim()}`;
+        if (this.pendingManual.has(pendingKey)) {
+            return;
+        }
+        this.pendingManual.add(pendingKey);
         // Über die Warteschlange, damit sich Handeingabe und Scans nicht überholen
         this.state.pendingScans++;
         const done = this.scanQueue
@@ -746,15 +755,21 @@ export class GreenRxReceiptApp extends Component {
                 this.setBox(res.box);
                 this.confirmScan(res.status, res.title, res.message);
                 if (res.scan_id) {
-                    // Nächste Packung: PZN, Charge und Verfall stehen lassen, Seriennummer neu
-                    this.state.pack.serial = "";
-                    this.focusPackField("serial");
+                    // Nächste Packung: PZN, Charge und Verfall stehen lassen, Seriennummer neu.
+                    // Nur leeren, wenn im Feld noch genau diese Seriennummer steht (keine neue Eingabe löschen).
+                    if (this.state.pack.serial === p.serial) {
+                        this.state.pack.serial = "";
+                        this.focusPackField("serial");
+                    }
                 } else {
                     this.state.packError = res.message;
                 }
             })
             .catch((error) => this.showError(error))
-            .finally(() => this.state.pendingScans--);
+            .finally(() => {
+                this.pendingManual.delete(pendingKey);
+                this.state.pendingScans--;
+            });
         this.scanQueue = done;
         return done;
     }
@@ -929,7 +944,8 @@ export class GreenRxReceiptApp extends Component {
     }
 
     async onVpScan(raw) {
-        const list = this.state.vp?.boxes || [];
+        // Auch von einer VP gesperrte Boxen (F01): eine andere VP kann sie erneut prüfen und freigeben
+        const list = [...(this.state.vp?.boxes || []), ...(this.state.vp?.blocked || [])];
         const code = String(raw).trim().toUpperCase();
         const box = list.find((b) => b.box === code);
         if (box) {

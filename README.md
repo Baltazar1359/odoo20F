@@ -74,6 +74,7 @@ Odoo kennt je Packung nur ein „Los/Seriennummer“-Feld. Das Modul speichert d
 - 4-Augen-Prinzip: Eine VP, die an einer Box beteiligt war (angelegt, gescannt – auch abgelehnte oder wieder entfernte Scans –, Vorprüfung, Bestätigung des Ausdrucks, Abschluss), darf sie **nicht freigeben**, nur sperren. Solche Boxen stehen am Ende der Liste mit dem Hinweis „nur sperren“. Eine Sperre durch eine beteiligte VP wird im Verlauf vermerkt; freigeben kann danach nur eine andere VP.
 - **Freigeben** bucht die Box nach GreenRX/Bestand. Bei einer gelben oder roten (gesperrten) Box ist eine Begründung Pflicht.
 - **Sperren** bucht die Box ins Sperrlager. Ein Grund ist Pflicht.
+- **Gesperrte Boxen erneut prüfen** (1.9.1): Von einer VP gesperrte Boxen stehen unten in der Liste in einem eigenen Bereich und lassen sich auch per Box-Scan öffnen. Eine unbeteiligte VP kann sie mit Begründung freigeben. Sie zählen nicht als offene Aufgabe auf der Startseite.
 
 Wo die Ware liegt: **GreenRX › Übersicht › Bestand GreenRX** (nach Lagerort und Box gruppiert, je Packung Seriennummer, Charge, Verfall, Ampel) oder **Box-Erfassungen** (Status, Lagerort, VP, Begründung je Box).
 
@@ -92,6 +93,19 @@ Wo die Ware liegt: **GreenRX › Übersicht › Bestand GreenRX** (nach Lagerort
 **Archiv:** Liegt keine Packung einer Belegung mehr im Lager (Verkauf, Vernichtung, Rückgabe – egal wie), wird die Belegung automatisch archiviert, mit Datum und letzter Bewegung. Bei Teilverkauf erst mit der letzten Packung. Archivierte Belegungen sind aus der Arbeitsliste ausgeblendet (Filter „Aktiv“), über den Filter „Archiv“ und die Suche nach Seriennummer oder Charge weiter auffindbar und unveränderbar. Je Packung zeigt „Verbleib“, wohin sie gegangen ist. Eine Box kann erst neu belegt werden, wenn die alte Belegung archiviert ist. Das Papier-Formblatt archiviert PLCS außerhalb von Odoo.
 
 Boxen von vor 1.9.0 bekommen **kein nachträgliches PDF** (keine Daten erfinden). Beim Update werden Belegungen ohne Bestand archiviert.
+
+### Prüfbericht vom 15.10.2026 (1.9.1)
+
+Befunde F01–F08 des externen Prüfberichts, alle im Code bestätigt und behoben (Tests `test_gpt_review.py`):
+
+- **F01** Von einer VP gesperrte Boxen bleiben für eine andere VP sichtbar und freigebbar (siehe VP-Freigabe).
+- **F02** Ampel und Formblatt nutzen den **aktuellen** Abgleich mit dem Retourenschein. Ändert ATIV während der Erfassung die Soll-Charge, entfernt die Position oder setzt die Menge auf 0, gilt das neue Soll. Der Abgleich beim ersten Scan bleibt als Verlauf gespeichert („Abgleich beim ersten Scan“).
+- **F03** Handeingabe: Die Werte werden beim „Übernehmen“ festgehalten. Eine neue Eingabe während einer langsamen Serverantwort wird weder gesendet noch gelöscht. Doppeltes „Übernehmen“ derselben Seriennummer wird nur einmal gesendet.
+- **F04** Bei ATIV bearbeitete Nachrichtentexte werden übernommen (Vergleich über eine Prüfsumme des Inhalts).
+- **F05** Option „Fehlende Artikel anlegen“ = aus gilt auch beim Scan. Vorgänge ohne ATIV-Schnittstelle bleiben wie in 1.7.4.
+- **F06** IFA-Codes: GTIN-Prüfziffer (8P), PPN-Prüfziffern (9N) und widersprüchliche doppelte Angaben werden geprüft.
+- **F07** Eine Zeitüberschreitung beim Lesen der ATIV-Statushistorie wird wiederholt und schaltet die Historie nicht mehr dauerhaft ab.
+- **F08** Vor jedem Druck einer offenen Box und vor dem Abschluss wird die gewählte Ampel gegen die aktuelle Bewertung geprüft (z. B. geänderte Mindestlaufzeit, Datum, ATIV-Daten). Ist sie milder, geht es zurück zur Vorprüfung. Ausnahme: Der Mengenabgleich des Pakets ändert sich mit jeder weiteren Box und wird beim Paketabschluss geprüft.
 
 ### Retourenvorgänge und Tickets
 
@@ -133,7 +147,7 @@ Danach:
 odoo-bin -d test_db -i plcs_greenrx --test-enable --test-tags /plcs_greenrx --stop-after-init
 ```
 
-Die automatischen Tests (davon 5 Browser-Tests, die Chrome brauchen) decken ab:
+Die automatischen Tests (davon 6 Browser-Tests, die Chrome brauchen) decken ab:
 
 - den GS1/IFA-Parser und den Retourenschein-QR (auch zerteilt durch den Handscanner),
 - den ganzen Ablauf von Ticket bis VP-Freigabe,
@@ -161,6 +175,8 @@ Die automatischen Tests (davon 5 Browser-Tests, die Chrome brauchen) decken ab:
   Änderungen nur an Position/Ticket/Anhang/Nachricht, Schutz lokaler Wareneingangsdaten, vorübergehende und
   dauerhafte Fehler mit Wiederholung, überlappende Läufe, Statuswechsel, Stichtag, fehlende Gutschriften,
   nur lesende Aufrufe, Webhook (auch über HTTP) und Mengen-/Referenzabgleich.
+- die Befunde des Prüfberichts vom 15.10.2026 (1.9.1, `test_gpt_review.py`, F01–F08), jeweils mit Gegenprobe;
+  F03 als Browser-Test mit künstlich verzögerter Serverantwort.
 
 Zusätzlich prüft `e2e/playwright_scan_queue.py` mit Playwright gegen einen laufenden Server, dass 5 schnelle Scans alle ankommen:
 

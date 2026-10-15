@@ -179,6 +179,11 @@ class PlcsGreenrxTicket(models.Model):
         """
         self.ensure_one()
         Product = self.env["product.product"]
+        # Option „Fehlende Artikel anlegen“ der ATIV-Schnittstelle gilt auch beim Scan (GPT-Review F05).
+        # Vorgänge ohne ATIV-Schnittstelle (z. B. aus dem Retourenschein angelegt) bleiben wie in 1.7.4.
+        connector = self.sudo().ativ_connector_id
+        if connector and not connector.ativ_create_products:
+            return Product
         pzn = (pzn or gs1.gtin_to_pzn(gtin or "") or "").strip()
         if pzn.isdigit():
             pzn = pzn.zfill(8)

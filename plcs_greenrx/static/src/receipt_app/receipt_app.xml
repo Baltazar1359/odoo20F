@@ -527,6 +527,20 @@
                             <span class="o_grx_badge" t-if="!b.can_release" title="Du warst an dieser Box beteiligt (4-Augen-Prinzip)">nur sperren</span>
                         </button>
                         <div class="o_grx_muted small mt-2">4-Augen-Prinzip: Boxen, an denen du beteiligt warst (erfasst, gescannt, geprüft oder abgeschlossen), kannst du nur sperren. Freigeben muss eine andere VP<t t-if="this.state.vp.own_count"> (<t t-out="this.state.vp.own_count"/> Box(en) betroffen, am Ende der Liste)</t>.</div>
+                        <t t-if="this.state.vp.blocked and this.state.vp.blocked.length">
+                            <div class="o_grx_kicker mt-4">Gesperrte Boxen erneut prüfen (<t t-out="this.state.vp.blocked.length"/>)</div>
+                            <div class="o_grx_muted small mb-2">Von einer VP gesperrt. Eine andere, unbeteiligte VP kann die Box mit Begründung freigeben.</div>
+                            <button type="button" class="o_grx_task" t-foreach="this.state.vp.blocked" t-as="b" t-key="b.id" t-on-click="() => this.openVpBox(b)">
+                                <span t-attf-class="o_grx_dot o_grx_bg_{{ b.ampel or 'none' }}" aria-hidden="true"/>
+                                <span class="o_grx_mono fw-bold fs-5" t-out="b.box"/>
+                                <span class="flex-grow-1">
+                                    <span class="d-block fw-bold"><t t-out="b.product"/> · <t t-out="b.qty"/> Pkg.</span>
+                                    <span class="d-block o_grx_muted small">Gesperrt von <t t-out="b.vp_user"/>, <t t-out="b.vp_date"/> · <t t-out="b.vp_reason"/></span>
+                                </span>
+                                <span class="o_grx_badge">gesperrt</span>
+                                <span class="o_grx_badge" t-if="!b.can_release" title="Du warst an dieser Box beteiligt (4-Augen-Prinzip)">nicht durch dich</span>
+                            </button>
+                        </t>
                     </t>
                 </main>
             </div>
@@ -561,6 +575,7 @@
                             <span><t t-out="q.text"/> <b t-out="q.value === 'ja' ? 'Ja' : 'Nein'"/></span>
                         </div>
                         <div class="o_grx_hint mt-2" t-if="b.note">Bemerkung Lager: <t t-out="b.note"/></div>
+                        <div class="o_grx_hint o_grx_hint_warn mt-2" t-if="b.vp_blocked">Gesperrt von <t t-out="b.vp_user"/> am <t t-out="b.vp_date"/>: <t t-out="b.vp_reason"/></div>
                         <button type="button" class="o_grx_btn o_grx_btn_ghost mt-2" t-on-click="() => this.printVpBox()">Dokumente ansehen</button>
                         <div class="mt-3" t-if="this.state.vpAsk">
                             <label class="o_grx_label" for="grx_vp_reason">
@@ -570,11 +585,11 @@
                             </label>
                             <textarea id="grx_vp_reason" class="o_grx_input" rows="2" t-att-value="this.state.vpReason" t-on-input="(ev) => this.onVpReason(ev)"/>
                         </div>
-                        <div class="o_grx_hint o_grx_hint_warn mt-3" t-if="!b.can_release">4-Augen-Prinzip: Du warst an dieser Box beteiligt. Freigeben muss eine andere VP. Sperren ist möglich.</div>
+                        <div class="o_grx_hint o_grx_hint_warn mt-3" t-if="!b.can_release">4-Augen-Prinzip: Du warst an dieser Box beteiligt. Freigeben muss eine andere VP.<t t-if="!b.vp_blocked"> Sperren ist möglich.</t></div>
                         <div class="o_grx_hint mt-3" t-if="b.can_release and !this.state.vpAsk and (b.state === 'blocked' or b.ampel === 'gelb' or b.ampel === 'rot')">Freigabe nur mit Begründung (Box ist <t t-out="this.ampelOf(b.ampel).label"/>).</div>
                         <div class="d-flex flex-column gap-2 mt-3">
                             <button type="button" class="o_grx_btn o_grx_btn_green o_grx_btn_big" t-if="b.can_release" t-on-click="() => this.vpRelease()">Freigeben → GreenRX-Bestand</button>
-                            <button type="button" class="o_grx_btn o_grx_btn_redline o_grx_btn_big" t-on-click="() => this.vpBlock()">
+                            <button type="button" class="o_grx_btn o_grx_btn_redline o_grx_btn_big" t-if="!b.vp_blocked" t-on-click="() => this.vpBlock()">
                                 <t t-if="b.state === 'blocked'">Sperre bestätigen (mit Grund)</t><t t-else="">Sperren (mit Grund)</t>
                             </button>
                         </div>

@@ -70,7 +70,14 @@ class PlcsGreenrxBox(models.Model):
     ticket_number = fields.Char(related="line_id.ticket_number", string="Ticketnummer", store=True)
     slip_match = fields.Selection([("ok", "passt"), ("batch_differs", "Charge weicht ab"),
                                    ("not_on_slip", "nicht auf dem Schein")],
-                                  "Abgleich Retourenschein", readonly=True)
+                                  "Abgleich beim ersten Scan", readonly=True,
+                                  help="Ergebnis des Abgleichs mit dem Retourenschein beim ersten Scan (Verlauf). "
+                                       "Ampel und Formblatt nutzen den aktuellen Abgleich.")
+    slip_match_current = fields.Selection([("ok", "passt"), ("batch_differs", "Charge weicht ab"),
+                                           ("not_on_slip", "nicht auf dem Schein")],
+                                          "Abgleich Retourenschein (aktuell)", compute="_compute_slip_match_current",
+                                          help="Abgleich mit den aktuellen Soll-Daten der Position (ATIV-Änderungen "
+                                               "während der Erfassung eingeschlossen).")
     expiry_date = fields.Date("Verfall", readonly=True)
     scan_ids = fields.One2many("plcs.greenrx.scan", "box_id", "Scans", readonly=True)
     accepted_scan_ids = fields.One2many("plcs.greenrx.scan", "box_id", "Packungen in der Box",
@@ -197,6 +204,29 @@ class PlcsGreenrxBox(models.Model):
     # ------------------------------------------------------------------
     # Ampel-Vorschlag
     # ------------------------------------------------------------------
+    @api.depends("product_id", "batch", "line_id.batch_expected", "line_id.ativ_removed")
+    def _compute_slip_match_current(self):
+        for box in self:
+            box.slip_match_current = box._grx_current_slip_match()
+
+    def _grx_current_slip_match(self):
+        """Abgleich mit dem Retourenschein aus den aktuellen Soll-Daten (GPT-Review F02).
+
+        Der gespeicherte Wert `slip_match` hält nur den ersten Scan fest. Ändert ATIV während der
+        Erfassung die Soll-Charge oder entfernt die Position, gilt für Ampel und Formblatt der neue Stand.
+        Eine Box ohne Position wird nicht neu zugeordnet (bleibt „nicht auf dem Schein“).
+        """
+        self.ensure_one()
+        if not self.product_id:
+            return False
+        line = self.line_id
+        if not line or line.ativ_removed:
+            return "not_on_slip"
+        expected = (line.batch_expected or "").strip().lower()
+        if expected and expected != (self.batch or "").strip().lower():
+            return "batch_differs"
+        return "ok"
+
     def _grx_system_checks(self):
         """Prüfungen, die Odoo selbst macht. Liste von dicts (label, ok, level, reason)."""
         self.ensure_one()
@@ -237,38 +267,50 @@ class PlcsGreenrxBox(models.Model):
                                "reason": self.env._("Verfall %(exp)s – weniger als %(m)s Monate",
                                                     exp=exp_text, m=minimum)})
         if self.product_id:
-            if self.slip_match == "not_on_slip":
-                checks.append({"label": self.env._("Artikel steht nicht auf dem Retourenschein"), "ok": False,
+            match = self._grx_current_slip_match()
+            if match == "not_on_slip":
+                if self.line_id.ativ_removed:
+                    label = self.env._("Position (Ticket %s) wurde bei ATIV entfernt",
+                                       self.line_id.ticket_number or "-")
+                else:
+                    label = self.env._("Artikel steht nicht auf dem Retourenschein")
+                checks.append({"label": label, "ok": False,
                                "level": "gelb", "reason": self.env._("Artikel steht nicht auf dem Retourenschein")})
-            elif self.slip_match == "batch_differs":
+            elif match == "batch_differs":
                 checks.append({"label": self.env._("Charge weicht vom Retourenschein ab (Schein %(a)s, Scan %(b)s)",
                                                    a=self.line_id.batch_expected or "-", b=self.batch),
                                "ok": False, "level": "gelb",
                                "reason": self.env._("Charge weicht vom Retourenschein ab")})
             row = next((r for r in ticket._grx_soll_ist() if self.line_id and r["line_id"] == self.line_id.id), None)
-            if row and row["status"] == "over":
+            if row and (row["status"] == "over" or (row["status"] == "extra" and match != "not_on_slip")):
+                # „extra“ = Soll 0 bei vorhandener Position (z. B. Menge bei ATIV auf 0 gesetzt), F02
                 checks.append({"label": self.env._("Mehr Packungen als angemeldet (%s)", row["status_text"]),
-                               "ok": False, "level": "gelb",
+                               "ok": False, "level": "gelb", "qty": True,
                                "reason": self.env._("Mehr Packungen als angemeldet")})
-            elif row:
+            elif row and match != "not_on_slip":
                 checks.append({"label": self.env._("Abgleich mit Ticket %(t)s: %(ist)s von %(soll)s Packungen",
                                                    t=row["ticket"] or "-", ist=row["ist"], soll=row["soll"]), "ok": True})
         return checks
 
     @api.depends(lambda self: [q[0] for q in QUESTIONS] + ["expiry_date", "product_id", "qty", "batch", "slip_match",
-                                                          "manual_qty"])
+                                                          "manual_qty", "line_id.batch_expected",
+                                                          "line_id.ativ_removed", "line_id.qty_expected"])
     def _compute_suggestion(self):
         for box in self:
             level, reasons = box._grx_suggestion()
             box.ampel_suggest = level
             box.reasons = "\n".join(reasons)
 
-    def _grx_suggestion(self, answers=None):
+    def _grx_suggestion(self, answers=None, with_qty=True):
+        """Ampel-Vorschlag. with_qty=False: ohne Mengenabgleich des Pakets (ändert sich, sobald andere
+        Boxen desselben Tickets erfasst werden; endgültig geprüft beim Paketabschluss)."""
         self.ensure_one()
         answers = answers if answers is not None else {q[0]: self[q[0]] for q in QUESTIONS}
         level = "gruen"
         reasons = []
         for check in self._grx_system_checks():
+            if not with_qty and check.get("qty"):
+                continue
             if not check["ok"] and not check.get("hint"):
                 reasons.append(check["reason"])
                 if AMPEL_RANK[check["level"]] > AMPEL_RANK[level]:
@@ -646,6 +688,23 @@ class PlcsGreenrxBox(models.Model):
         self._grx_changed({"state": "print", "checked_at": fields.Datetime.now(), "checked_by": self.env.user.id})
         return self._grx_ui_data()
 
+    def _grx_check_ampel_current(self):
+        """Gewählte Ampel gegen die aktuelle Bewertung prüfen (GPT-Review F08).
+
+        Zwischen Vorprüfung und Abschluss können sich Bewertungsgrundlagen ändern (ATIV-Daten,
+        Mindestlaufzeit, Datum). Vor jedem Druck einer offenen Box und vor dem Abschluss darf die
+        gewählte Ampel nicht milder sein als der aktuelle Vorschlag. Der Mengenabgleich des Pakets
+        zählt hier nicht mit: er ändert sich mit jeder weiteren Box und wird beim Paketabschluss geprüft.
+        Nachdrucke abgeschlossener Boxen zeigen weiter den bestätigten Stand.
+        """
+        self.ensure_one()
+        level, reasons = self._grx_suggestion(with_qty=False)
+        if not self.ampel or AMPEL_RANK[self.ampel] < AMPEL_RANK[level]:
+            raise UserError(self.env._(
+                "Die Bewertung hat sich seit der Vorprüfung geändert: Vorschlag jetzt %(s)s (%(r)s), gewählt %(a)s. "
+                "Bitte „Zurück“ zur Vorprüfung und die Ampel neu wählen.",
+                s=AMPEL_SHORT[level], r=", ".join(reasons) or "-", a=AMPEL_SHORT.get(self.ampel, "-")))
+
     @api.model
     def _grx_invalidate_legacy_prints(self):
         """Ausdrücke offener Boxen ohne Änderungsstand (vor Version 1.3.0 gedruckt) ungültig machen.
@@ -703,6 +762,8 @@ class PlcsGreenrxBox(models.Model):
         self._grx_check_not_archived()
         if self.state in ("scan", "check", "cancel"):
             raise UserError(self.env._("Drucken geht erst nach der Vorprüfung."))
+        if self.state == "print":
+            self._grx_check_ampel_current()
         self.sudo().write({
             "printed_at": fields.Datetime.now(),
             "printed_by": self.env.user.id,
@@ -784,6 +845,7 @@ class PlcsGreenrxBox(models.Model):
         self._grx_check_user()
         self._grx_check_state("print")
         self._grx_check_owner()
+        self._grx_check_ampel_current()
         if not self.printed_at:
             raise UserError(self.env._("Erst die Dokumente drucken."))
         if self._grx_print_outdated():
@@ -904,11 +966,23 @@ class PlcsGreenrxBox(models.Model):
             ("vp_user_id", "=", False),
         ]
 
+    def _grx_vp_blocked_domain(self):
+        """Von einer VP gesperrte Boxen (Sperrlager), die eine andere VP erneut prüfen kann (F01)."""
+        return [
+            ("state", "=", "blocked"),
+            ("ticket_id.state", "=", "done"),
+            ("picking_id.state", "=", "done"),
+            ("vp_user_id", "!=", False),
+            ("archived", "=", False),
+        ]
+
     @api.model
     def grx_vp_list(self):
-        """Boxen, die auf die VP warten.
+        """Boxen, die auf die VP warten, und von einer VP gesperrte Boxen.
 
         Boxen, an denen die VP beteiligt war, stehen am Ende der Liste und können nur gesperrt werden.
+        Von einer VP gesperrte Boxen stehen getrennt („Gesperrte Boxen erneut prüfen“): eine unbeteiligte
+        VP kann sie mit Begründung freigeben. Sie zählen nicht als offene Aufgabe.
         """
         self._grx_check_user()
         boxes = self.search(self._grx_vp_waiting_domain())
@@ -918,8 +992,10 @@ class PlcsGreenrxBox(models.Model):
 
         def key(b):
             return (order.get(b.ampel, 3), b.closed_at or b.create_date)
+        blocked = self.search(self._grx_vp_blocked_domain(), order="vp_date desc, id desc")
         return {
             "boxes": [b._grx_ui_data() for b in others.sorted(key) + own.sorted(key)],
+            "blocked": [b._grx_ui_data() for b in blocked],
             "own_count": len(own),
             "is_vp": self.env.user.has_group("plcs_greenrx.group_grx_vp"),
         }
@@ -1176,6 +1252,10 @@ class PlcsGreenrxBox(models.Model):
             if self.closed_at else "",
             "vp_user": self.vp_user_id.name or "",
             "vp_reason": self.vp_reason or "",
+            "vp_date": fields.Datetime.context_timestamp(self, self.vp_date).strftime("%d.%m.%Y %H:%M")
+            if self.vp_date else "",
+            # Von einer VP gesperrt (nicht nur rot abgeschlossen): Sperre steht, nur Freigabe ist offen
+            "vp_blocked": self.state == "blocked" and bool(self.vp_user_id),
             "is_own": self.user_id == self.env.user,
             # 4-Augen-Prinzip: Beteiligte dürfen nicht freigeben (nur sperren)
             "can_release": not self._grx_is_participant(),
@@ -1226,10 +1306,12 @@ class PlcsGreenrxBox(models.Model):
         all_same_pzn = len({p["pzn"] for p in packs}) <= 1
         # Abgleich mit dem Ticket (nicht nur Einheitlichkeit in der Box). Ohne passende Ticketposition
         # ist der Abgleich nicht bestanden (Code-Review R10).
-        line = self.line_id
+        # Position bei ATIV entfernt: wie „keine Position“ (GPT-Review F02)
+        line = self.line_id if not self.line_id.ativ_removed else self.env["plcs.greenrx.ticket.line"]
         scan_text = "%s · %s/%s gleich" % (pzn or "-", len(packs) if all_same_pzn else "?", len(packs))
         if not line:
-            no_line = "keine Position im Ticket"
+            no_line = ("Position bei ATIV entfernt" if self.line_id.ativ_removed
+                       else "keine Position im Ticket")
             pzn_value, pzn_remark = "nein", "Scan: %s · %s" % (scan_text, no_line)
             name_value, name_remark = "nein", "%s · %s" % (self.product_id.display_name or "-", no_line)
             batch_value, batch_remark = "nein", "Scan: %s · %s" % (self.batch or "-", no_line)
@@ -1242,7 +1324,7 @@ class PlcsGreenrxBox(models.Model):
             name_value = "ja" if name_ok else "nein"
             name_remark = "%s · Ticket: %s" % (self.product_id.display_name or "-",
                                                line.product_name or line.product_id.display_name or "-")
-            if self.slip_match == "batch_differs":
+            if self._grx_current_slip_match() == "batch_differs":
                 batch_value = "nein"
             elif line.batch_expected:
                 batch_value = "ja"
@@ -1251,8 +1333,8 @@ class PlcsGreenrxBox(models.Model):
             batch_remark = "Scan: %s · %s/%s gleich · Ticket: %s" % (
                 self.batch, len(packs), len(packs), line.batch_expected or "keine Charge angegeben – von Hand prüfen")
         rows_annahme = [
-            {"text": "Ist die Ware für uns?", "value": "ja" if self.line_id else "nein",
-             "remark": ("Vorgang %s · Ticket %s" % (ticket.name, self.line_id.ticket_number or "-")) if self.line_id
+            {"text": "Ist die Ware für uns?", "value": "ja" if line else "nein",
+             "remark": ("Vorgang %s · Ticket %s" % (ticket.name, line.ticket_number or "-")) if line
              else "Artikel nicht auf dem Retourenschein (Vorgang %s)" % ticket.name},
             {"text": "Stammt die Ware von einem genehmigten Lieferanten?",
              "extra": "  ".join(("[X] " if ticket.sender_type == k else "[ ] ") + v for k, v in (

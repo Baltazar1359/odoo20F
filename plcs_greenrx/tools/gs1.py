@@ -91,6 +91,18 @@ def pzn_to_gtin(pzn):
     return False
 
 
+def ppn_check_ok(ppn):
+    """PPN (IFA): 2 Zeichen Produktregistrierungsagentur + Produktnummer + 2 Prüfziffern.
+
+    Prüfsumme: Summe aus ASCII-Wert x Gewicht (beginnend mit 2) über alle Zeichen vor den
+    Prüfziffern, modulo 97, zweistellig (Beispiel: 111234567842).
+    """
+    if not ppn or len(ppn) < 4 or not ppn[-2:].isdigit() or not ppn[:-2].isalnum():
+        return False
+    total = sum(ord(c) * (i + 2) for i, c in enumerate(ppn[:-2]))
+    return "%02d" % (total % 97) == ppn[-2:]
+
+
 def ppn_to_pzn(ppn):
     """PPN = 11 + PZN (8) + 2 Prüfzeichen."""
     if ppn and len(ppn) == 12 and ppn.startswith("11"):
@@ -256,13 +268,23 @@ def _parse_ifa(code):
     for part in parts:
         for di, key in (("9N", "ppn"), ("8P", "gtin"), ("1T", "batch"), ("16D", "prod_date"), ("D", "expiry"), ("S", "serial")):
             if part.startswith(di):
-                data[key] = part[len(di):]
+                value = part[len(di):]
+                # Gleicher Datenbezeichner mehrfach mit anderem Wert: Code ist widersprüchlich (GPT-Review F06)
+                if key in data and data[key] != value:
+                    raise Gs1Error("Code widersprüchlich: Datenbezeichner %s kommt mit verschiedenen Werten "
+                                   "vor (%s / %s). Packung ins Klärungsfach legen." % (di, data[key], value))
+                data[key] = value
                 break
     out = {"format": "ifa"}
     if data.get("gtin"):
-        gtin = data["gtin"].zfill(14)
-        out["gtin"] = gtin
+        gtin = data["gtin"]
+        # Wie beim GS1-Code: nur Ziffern, höchstens 14 Stellen, Prüfziffer muss stimmen (GPT-Review F06)
+        if not gtin.isdigit() or len(gtin) > 14 or not gtin_check_digit_ok(gtin.zfill(14)):
+            raise Gs1Error("GTIN %s im Code ist ungültig (Prüfziffer oder Länge)." % gtin)
+        out["gtin"] = gtin.zfill(14)
     if data.get("ppn"):
+        if not ppn_check_ok(data["ppn"]):
+            raise Gs1Error("PPN %s im Code ist ungültig (Prüfziffern stimmen nicht)." % data["ppn"])
         out["ppn"] = data["ppn"]
         out["pzn"] = ppn_to_pzn(data["ppn"])
     if data.get("batch"):

@@ -159,7 +159,8 @@ class PlcsGreenrxConnector(models.Model):
         "Fehlende Artikel anlegen", default=True,
         help="Gibt es zur PZN einer ATIV-Position noch keinen Artikel, legt die Synchronisierung ihn an "
              "(Bezeichnung, PZN, GTIN, Charge und Verfall Pflicht, Lagertemperatur aus ATIV). "
-             "Aus: Position bleibt ohne Artikel, Packungen werden als „Artikel unbekannt“ abgelehnt.")
+             "Aus: Position bleibt ohne Artikel, Packungen werden als „Artikel unbekannt“ abgelehnt – "
+             "auch beim Scan wird dann kein Artikel angelegt.")
     doc_copy = fields.Selection([
         ("expected", "Dateien erwarteter Vorgänge kopieren, übrige bei Bedarf"),
         ("all", "Alle Dateien kopieren"),
@@ -808,7 +809,10 @@ class PlcsGreenrxConnector(models.Model):
                             "new_value_datetime"]):
                         tracking[tv["id"]] = tv
             except AtivError as e:
-                if e.status in (403, None):
+                # Nur fehlende Leserechte schalten die Statushistorie ab: HTTP 403 oder eine
+                # XML-RPC-Fehlermeldung ohne HTTP-Status. Zeitüberschreitung/Netzfehler (transient)
+                # gehen an die Wiederholung, sonst fehlt die Historie dauerhaft (GPT-Review F07).
+                if not e.transient and e.status in (403, None):
                     self.sudo().tracking_readable = False
                 else:
                     raise
@@ -1137,9 +1141,12 @@ class PlcsGreenrxConnector(models.Model):
             for mp in tp.get("messages") or []:
                 mvals = {"date": mp.get("date"), "author": mp.get("author"), "kind": mp.get("kind"),
                          "subtype": mp.get("subtype"), "body": mp.get("body"), "tracking": mp.get("tracking"),
-                         "attachment_names": mp.get("attachments")}
+                         "attachment_names": mp.get("attachments"),
+                         "body_hash": hashlib.sha256((mp.get("body") or "").encode()).hexdigest()}
                 msg = existing.get(mp["key"])
                 if msg:
+                    # Inhalt über die Prüfsumme vergleichen: der gespeicherte Text ist bereinigt (sanitized)
+                    # und weicht deshalb auch bei gleichem Inhalt ab (GPT-Review F04)
                     if any((msg[k] or False) != (v or False) for k, v in mvals.items() if k not in ("date", "body")):
                         msg.write(mvals)
                 else:
