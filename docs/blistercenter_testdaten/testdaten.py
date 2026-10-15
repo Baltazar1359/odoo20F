@@ -19,6 +19,15 @@ Echtbetrieb lizenzierte Bilder verwenden (z. B. vom Hersteller).
 import base64
 import os
 
+try:  # Odoo 20: Binärfelder erwarten BinaryValue
+    from odoo.tools.binary import BinaryBytes
+
+    def to_binary(raw):
+        return BinaryBytes(raw)
+except ImportError:  # ältere Versionen: base64-Text
+    def to_binary(raw):
+        return base64.b64encode(raw).decode()
+
 # env, odoo: vom Odoo-Shell bereitgestellt
 
 try:
@@ -56,7 +65,7 @@ def download(url):
         import requests
         res = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0 (PLCS Testdaten)"})
         if res.status_code == 200 and res.content[:3] == b"\xff\xd8\xff":
-            return base64.b64encode(res.content)
+            return to_binary(res.content)
         print("  Foto nicht geladen (%s): %s" % (res.status_code, url))
     except Exception as exc:  # noqa: BLE001 – Testdaten: ohne Foto weitermachen
         print("  Foto nicht geladen (%s): %s" % (type(exc).__name__, url))
@@ -71,7 +80,7 @@ def run(env):
     logo_path = os.path.join(BASE_DIR, "plcs_logo.png")
     if os.path.exists(logo_path):
         with open(logo_path, "rb") as fh:
-            logo = base64.b64encode(fh.read())
+            logo = to_binary(fh.read())
         company.write({"logo": logo})
         if "website" in env:
             env["website"].search([]).write({"logo": logo})
