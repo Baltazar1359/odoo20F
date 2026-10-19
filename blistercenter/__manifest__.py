@@ -1,6 +1,6 @@
 {
     "name": "Blistercenter",
-    "version": "20.0.1.1.1",
+    "version": "20.0.1.2.0",
     "summary": "PLCS-Großhandel für Blistercenter: Kunden, Shop-Bestellungen, Sammelbestellungen beim Hersteller, Versand, Chargen und Rückruf",
     "description": """
 Blistercenter – Großhandel der PLCS GmbH
@@ -12,10 +12,12 @@ Das Modul nutzt die Odoo-Standardmodelle für Shop, Verkauf, Einkauf, Rechnungen
 und Lager und macht sie in der App „Blistercenter“ erreichbar. Es legt keine
 parallele Buchhaltung und keine doppelten Bestell- oder Lagerdaten an.
 
-* Kunden: Blistercenter-Kennzeichen, Shopfreischaltung, Zahlungsmodell, Zahlungssperre
+* Kunden: Blistercenter-Kennzeichen, Shopfreischaltung, Zahlungsart (Lastschrift über DATEV),
+  Zahlungsziel (7 oder 14 Tage), Rabatt 0/1/2 % auf den HAP, Zahlungssperre
 * Kundenbestellungen aus Shop, Telefon, E-Mail oder Fax, mit Bestellweg und Besteller
-* Vorkasse mit Anzahlungsrechnung 100 %
-* Sammelbestellungen: Kundenmengen auswählen, bündeln, Anfrage beim Hersteller erzeugen
+* Proforma-Rechnung (nur Information), Rechnung je Lieferung über die gelieferte Menge
+* Hinweis auf überfällige Rechnungen (keine Sperre)
+* Sammelbestellungen: Liste „Zu bestellen“ je Hersteller, PLCS bündelt und bestellt manuell
 * Wareneingang in Quarantäne, Freigabe durch die VP (Vier-Augen-Prinzip), Kurzläufer-Freigabe
 * Ware fest je Kunde, Endkontrolle durch zweite Person, Teillieferung nur nach Rücksprache
 * Chargen mit Sperre, Rückrufauswertung
@@ -50,6 +52,7 @@ parallele Buchhaltung und keine doppelten Bestell- oder Lagerdaten an.
         "wizard/recall_views.xml",
         "wizard/bc_wizards_views.xml",
         "views/blistercenter_menus.xml",
+        "report/bc_proforma.xml",
     ],
     "installable": True,
     "application": True,

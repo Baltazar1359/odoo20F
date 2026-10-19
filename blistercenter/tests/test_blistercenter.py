@@ -34,14 +34,18 @@ class BlistercenterCommon(AccountTestInvoicingCommon):
         cls.user_accounting = user("bc_accounting", "account.group_account_invoice")
 
         Partner = cls.env["res.partner"].sudo()
+        cls.term_7 = cls.env.ref("blistercenter.payment_term_7days")
+        cls.term_14 = cls.env.ref("blistercenter.payment_term_14days")
         cls.supplier = Partner.create({"name": "AstraZeneca (Test)", "is_company": True, "bc_is_supplier": True})
-        cls.customer_prepay = Partner.create({
-            "name": "Blistercenter Vorkasse", "is_company": True, "bc_is_customer": True,
-            "bc_shop_enabled": True, "bc_payment_model": "prepayment",
+        cls.customer_debit = Partner.create({
+            "name": "Blistercenter Lastschrift", "is_company": True, "bc_is_customer": True,
+            "bc_shop_enabled": True, "bc_payment_model": "direct_debit", "bc_discount": "2",
+            "property_payment_term_id": cls.term_14.id,
         })
         cls.customer_invoice = Partner.create({
             "name": "Blistercenter Rechnung", "is_company": True, "bc_is_customer": True,
-            "bc_shop_enabled": True, "bc_payment_model": "invoice",
+            "bc_shop_enabled": True, "bc_payment_model": "transfer",
+            "property_payment_term_id": cls.term_7.id,
         })
         cls.contact_invoice = Partner.create({
             "name": "Frau Muster", "parent_id": cls.customer_invoice.id, "type": "contact",
@@ -55,7 +59,7 @@ class BlistercenterCommon(AccountTestInvoicingCommon):
             "tracking": "lot",
             "use_expiration_date": True,
             "expiration_time": 730,
-            "invoice_policy": "order",
+            "invoice_policy": "delivery",
             "list_price": 20.0,
             "taxes_id": [Command.clear()],
             "supplier_taxes_id": [Command.clear()],
@@ -88,13 +92,18 @@ class BlistercenterCommon(AccountTestInvoicingCommon):
             active_model="account.move", active_ids=invoice.ids,
         ).create({})._create_payments()
 
-    def _pay(self, order):
-        """Vorkasse: Anzahlungsrechnung buchen und bezahlen; sonst Rechnung erstellen und bezahlen."""
-        invoice = order.invoice_ids.filtered(lambda m: m.state == "draft")
-        if not invoice:
-            invoice = order._create_invoices()
+    def _overdue_invoice(self, partner, days_ago=30, amount=100.0):
+        """Gebuchte Kundenrechnung, deren Zahlungsziel (7 Tage) überschritten ist."""
+        invoice = self.env["account.move"].create({
+            "move_type": "out_invoice",
+            "partner_id": partner.id,
+            "invoice_date": fields.Date.today() - timedelta(days=days_ago),
+            "invoice_payment_term_id": self.term_7.id,
+            "invoice_line_ids": [Command.create({
+                "name": "Altposten", "quantity": 1, "price_unit": amount, "tax_ids": [Command.clear()],
+            })],
+        })
         invoice.action_post()
-        self._register_payment(invoice)
         return invoice
 
     def _stock(self, qty, lot_name="CH-001", days=400):
@@ -169,7 +178,9 @@ class TestBlistercenterRights(BlistercenterCommon):
         with self.assertRaises(AccessError):
             self.customer_invoice.with_user(self.user_bc).write({"property_payment_term_id": term.id})
         with self.assertRaises(AccessError):
-            self.customer_invoice.with_user(self.user_bc).write({"bc_payment_model": "prepayment"})
+            self.customer_invoice.with_user(self.user_bc).write({"bc_payment_model": "direct_debit"})
+        with self.assertRaises(AccessError):
+            self.customer_invoice.with_user(self.user_bc).write({"bc_discount": "2"})
         # Andere Kunden bleiben unberührt (Standardrechte)
         self.customer_other.with_user(self.user_bc).write({"property_payment_term_id": term.id})
         self.customer_invoice.with_user(self.user_approver).write({"property_payment_term_id": term.id})
@@ -198,9 +209,10 @@ class TestBlistercenterRights(BlistercenterCommon):
 
     def test_defaults_for_new_blistercenter(self):
         term = self.env.ref("account.account_payment_term_30days")
-        self.config.write({"default_payment_model": "invoice", "default_payment_term_id": term.id})
+        self.config.write({"default_payment_model": "transfer", "default_payment_term_id": term.id})
         partner = self.env["res.partner"].with_user(self.user_bc).create({"name": "Neues BC", "bc_is_customer": True})
-        self.assertEqual(partner.bc_payment_model, "invoice")
+        self.assertEqual(partner.bc_payment_model, "transfer")
+        self.assertEqual(partner.bc_discount, "0", "Standard: kein Rabatt")
         self.assertEqual(partner.property_payment_term_id, term)
 
     def test_no_access_without_blistercenter_role(self):
@@ -307,30 +319,6 @@ class TestBlistercenterOrders(BlistercenterCommon):
         self.product.route_ids = [Command.unlink(mto.id)]
         order.action_confirm()
         self.assertEqual(order.state, "sale")
-
-    def test_prepayment_downpayment_draft(self):
-        mails_before = self.env["mail.mail"].search_count([])
-        order = self._order(self.customer_prepay)
-        invoice = order.invoice_ids
-        self.assertEqual(len(invoice), 1)
-        self.assertEqual(invoice.state, "draft", "Anzahlungsrechnung bleibt Entwurf")
-        self.assertTrue(invoice.invoice_line_ids.sale_line_ids.is_downpayment)
-        self.assertAlmostEqual(invoice.amount_total, order.amount_total)
-        self.assertTrue(invoice.activity_ids.filtered(lambda a: a.user_id == self.user_accounting))
-        self.assertEqual(self.env["mail.mail"].search_count([]), mails_before, "Keine E-Mail")
-        self.assertEqual(order.bc_state, "awaiting_payment")
-        with self.assertRaises(ValidationError):
-            self._collect(order)
-        invoice.action_post()
-        self.assertFalse(order.bc_is_paid, "Gebucht, aber nicht bezahlt")
-        self._register_payment(invoice)
-        self.assertTrue(order.bc_is_paid)
-        self.assertEqual(order.bc_state, "to_procure")
-        collective = self._collect(order)
-        self.assertEqual(collective.line_ids.qty, 5.0)
-        self.assertEqual(order.bc_state, "procuring")
-        # Rechnungskunden bekommen keine Anzahlungsrechnung
-        self.assertFalse(self._order(self.customer_invoice).invoice_ids)
 
     def test_payment_block_prevents_collective(self):
         order = self._order(self.customer_invoice)
@@ -607,7 +595,7 @@ class TestBlistercenterStock(BlistercenterCommon):
         with self.assertRaises(UserError):
             other.order_line.action_bc_from_stock()
 
-    def test_delivery_payment_block_and_prepayment(self):
+    def test_delivery_payment_block(self):
         self._stock(20)
         order = self._order(self.customer_invoice, qty=2)
         order.order_line.action_bc_from_stock()
@@ -620,16 +608,6 @@ class TestBlistercenterStock(BlistercenterCommon):
         picking.with_user(self.user_bc2).button_validate()
         self.assertEqual(picking.state, "done")
         self.assertEqual(order.bc_state, "done")
-
-        order_prepay = self._order(self.customer_prepay, qty=2)
-        order_prepay.order_line.filtered(lambda sol: not sol.is_downpayment).action_bc_from_stock()
-        picking = self._delivery(order_prepay)
-        picking.with_user(self.user_bc).action_bc_mark_picked()
-        with self.assertRaises(UserError):
-            picking.with_user(self.user_bc2).button_validate()
-        self._pay(order_prepay)
-        picking.with_user(self.user_bc2).button_validate()
-        self.assertEqual(picking.state, "done")
 
     def test_blocked_lot_not_shipped(self):
         lot = self._stock(5, "CH-GESPERRT")
@@ -686,14 +664,16 @@ class TestBlistercenterOverview(BlistercenterCommon):
         tiles = {t.key: t for t in self.env["blistercenter.overview"].with_user(self.user_bc).search([])}
         self.assertEqual(len(tiles), 12)
         before = {k: t.count for k, t in tiles.items()}
-        self._order(self.customer_prepay)
+        self._order(self.customer_debit)
         self._order(self.customer_invoice, confirm=False)
+        self._overdue_invoice(self.customer_invoice)
         self.customer_invoice.write({"bc_payment_block": True, "bc_payment_block_reason": "Test"})
         self._stock(3, "CH-KURZ-BESTAND", days=20)
         self.env.invalidate_all()
         tiles = {t.key: t for t in self.env["blistercenter.overview"].with_user(self.user_bc).search([])}
-        self.assertEqual(tiles["awaiting_payment"].count, before["awaiting_payment"] + 1)
-        self.assertEqual(tiles["downpayments_to_post"].count, before["downpayments_to_post"] + 1)
+        self.assertEqual(tiles["to_procure"].count, before["to_procure"] + 1)
+        self.assertEqual(tiles["overdue_invoices"].count, before["overdue_invoices"] + 1)
+        self.assertNotIn("awaiting_payment", tiles, "Vorkasse entfällt (1.2.0)")
         self.assertEqual(tiles["new_orders"].count, before["new_orders"] + 1)
         self.assertEqual(tiles["payment_blocks"].count, before["payment_blocks"] + 1)
         self.assertEqual(tiles["short_dated"].count, before["short_dated"] + 1)

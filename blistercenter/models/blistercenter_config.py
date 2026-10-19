@@ -1,9 +1,16 @@
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
 
+# Seit 1.2.0: Rechnung je Lieferung mit Zahlungsziel; Vorkasse entfällt.
 PAYMENT_MODELS = [
-    ("prepayment", "Vorkasse"),
-    ("invoice", "Rechnung mit Zahlungsziel"),
+    ("direct_debit", "Lastschrift (DATEV)"),
+    ("transfer", "Überweisung"),
+]
+# Kundenrabatt auf den HAP (Verkaufspreis des Artikels), für alle Artikel gleich
+DISCOUNTS = [
+    ("0", "0 %"),
+    ("1", "1 %"),
+    ("2", "2 %"),
 ]
 
 
@@ -33,7 +40,7 @@ class BlistercenterConfig(models.Model):
     )
     accounting_user_id = fields.Many2one(
         "res.users", string="Zuständig Buchhaltung", tracking=True,
-        help="Erhält die Aufgabe, die Anzahlungsrechnung (Vorkasse) zu buchen und an den Kunden zu senden.",
+        help="Erhält die Aufgabe, die Rechnung zu einer Lieferung zu prüfen, zu buchen und an den Kunden zu senden.",
     )
     purchase_user_id = fields.Many2one(
         "res.users", string="Zuständig Sammelbestellungen", tracking=True,
@@ -63,7 +70,7 @@ class BlistercenterConfig(models.Model):
 
     # Standardwerte für neue Blistercenter
     default_payment_model = fields.Selection(
-        PAYMENT_MODELS, string="Standard-Zahlungsmodell", default="prepayment",
+        PAYMENT_MODELS, string="Standard-Zahlungsart", default="direct_debit",
         required=True, tracking=True,
     )
     default_payment_term_id = fields.Many2one(
@@ -90,17 +97,19 @@ class BlistercenterConfig(models.Model):
     rule_block_delivery = fields.Boolean(
         "Zahlungssperre verhindert Versand", default=True, tracking=True,
     )
-    rule_prepayment_downpayment = fields.Boolean(
-        "Vorkasse: Anzahlungsrechnung 100 % bei Bestätigung", default=True, tracking=True,
-        help="Bei Bestätigung einer Vorkasse-Bestellung legt Odoo eine Anzahlungsrechnung über 100 % als Entwurf an. "
-             "Gebucht und versendet wird sie von der Buchhaltung.",
+    rule_require_payment_term = fields.Boolean(
+        "Zahlungsziel am Kunden Pflicht", default=True, tracking=True,
+        help="Ohne Zahlungsbedingung (z. B. 7 oder 14 Tage) lässt sich eine Blistercenter-Bestellung nicht bestätigen.",
     )
-    rule_prepayment_before_collective = fields.Boolean(
-        "Vorkasse: erst nach Zahlung in Sammelbestellung", default=True, tracking=True,
-        help="Positionen von Vorkasse-Kunden kommen erst in eine Sammelbestellung, wenn der Auftrag bezahlt ist.",
+    rule_customer_discount = fields.Boolean(
+        "Kundenrabatt auf den HAP fest", default=True, tracking=True,
+        help="Jede Warenposition bekommt den Rabatt des Kunden (0, 1 oder 2 %) auf den Verkaufspreis (HAP). "
+             "Ein abweichender Rabatt in der Position verhindert die Bestätigung.",
     )
-    rule_prepayment_before_delivery = fields.Boolean(
-        "Vorkasse: Versand erst nach Zahlung", default=True, tracking=True,
+    rule_invoice_per_delivery = fields.Boolean(
+        "Rechnung je Lieferung", default=True, tracking=True,
+        help="Nach jeder Lieferung legt Odoo die Rechnung über die gelieferte Menge als Entwurf an "
+             "(kein Buchen, kein Versand). Artikel müssen „Fakturierung nach gelieferter Menge“ haben.",
     )
     rule_forbid_mto_route = fields.Boolean(
         "Route „Auf Auftrag beschaffen“ bei Blistercenter-Bestellungen verbieten", default=True, tracking=True,

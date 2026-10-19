@@ -5,7 +5,7 @@ Eigene Module für die PLCS GmbH. Die Module liegen direkt im Wurzelverzeichnis,
 | Modul | Inhalt | Stand |
 |---|---|---|
 | `plcs_greenrx` | GreenRX-Wareneingang: Scan je Packung, Boxen, Vorprüfung mit Ampel, KabQ-Drucke, VP-Freigabe | einsatzbereit für den Test |
-| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Vorkasse, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | Branch `feat/blistercenter-v2`, zum Test |
+| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Proforma, Rechnung je Lieferung, Rabatt 0/1/2 % auf HAP, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | 1.2.0 auf Branch `feat/blistercenter-rechnung`, zum Test (nicht in Production) |
 
 **Prüfumgebung:** https://baltazar1359-odoo20.odoo.com (Odoo.sh, Branch `main` = Production). Prüfanleitung: [`docs/PRUEFANLEITUNG.md`](docs/PRUEFANLEITUNG.md), Testcodes: [`docs/greenrx_testcodes.pdf`](docs/greenrx_testcodes.pdf).
 
@@ -204,14 +204,15 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 
 ### Ablauf (App „Blistercenter“)
 
-1. **Kunden:** Blistercenter von Hand anlegen, Zahlungsmodell und Preisliste setzen (Rolle Freigabe). Portalzugang über den Knopf **Portalzugänge** am Kunden.
-2. **Bestellung:** im Shop oder über **Kundenbestellungen › Telefonbestellung erfassen** (auch Knopf am Kunden). Bestellweg und Besteller sind Pflicht.
-3. **Vorkasse:** Bei Bestätigung entsteht die Anzahlungsrechnung über 100 % als Entwurf. Die Buchhaltung bucht und versendet sie (Aufgabe in Odoo).
-4. **Sammelbestellungen › Offene Kundenmengen:** Positionen markieren, „Zur Sammelbestellung“, dann „Anfrage erstellen“ und im Einkauf manuell bestellen. Ausnahme: „Aus Lagerbestand liefern“.
+1. **Kunden:** Blistercenter von Hand anlegen, Zahlungsart (Lastschrift über DATEV), Zahlungsziel (7 oder 14 Tage) und Rabatt (0, 1 oder 2 % auf den HAP) setzen (Rolle Freigabe). Portalzugang über den Knopf **Portalzugänge** am Kunden.
+2. **Bestellung:** im Shop oder über **Kundenbestellungen › Telefonbestellung erfassen** (auch Knopf am Kunden). Bestellweg und Besteller sind Pflicht. Preis = HAP (Verkaufspreis am Artikel) minus Kundenrabatt.
+3. **Proforma:** Knopf „Proforma drucken“ im bestätigten Auftrag (nur Information, keine Buchung).
+4. **Zu bestellen:** offene Kundenmengen je Hersteller. PLCS entscheidet, wann bestellt wird: markieren, „Zur Sammelbestellung“, dann „Anfrage erstellen“ und im Einkauf manuell bestellen. Ausnahme: „Aus Lagerbestand liefern“.
 5. **Lager und Versand › Wareneingänge:** Ware mit Charge und Verfall buchen. Sie landet in der Quarantäne (WH/Blistercenter/Quarantäne).
 6. **Freigabe Wareneingang (VP):** eine andere Person mit Rolle Freigabe bestätigt. Kurzläufer (Rest unter 3 Monaten) vorher mit „Kurzläufer freigeben“.
 7. **Kommissionierung:** Ware ist dem Kunden fest zugeordnet. Nach dem Packen „Kommissionierung abgeschlossen“.
-8. **Endkontrolle:** eine zweite Person prüft und bestätigt. Odoo prüft Zahlungssperre, Vorkasse, Chargensperre, Kurzläufer und Vollständigkeit.
+8. **Endkontrolle:** eine zweite Person prüft und bestätigt. Odoo prüft Zahlungssperre, Chargensperre, Kurzläufer und Vollständigkeit. Überfällige Rechnungen zeigt Odoo nur als Hinweis.
+9. **Rechnung je Lieferung:** nach jeder Lieferung entsteht die Rechnung über die gelieferte Menge als Entwurf (Aufgabe für die Buchhaltung, keine E-Mail). Lastschrift-Einzug und Mandat nur in DATEV; die Zahlung wird später in Odoo eingebucht.
 
 ### Rollen
 
@@ -225,4 +226,7 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 
 - Eigene Lagerorte und Vorgangstypen: `WH/Blistercenter/Quarantäne`, `BCIN` (Eingang), `BCFRG` (Freigabe VP). Werden bei Installation und Update angelegt (idempotent).
 - Feste Zuordnung über Odoo-Standard-Verkettung: Kundenlieferung „auf Auftrag“ ohne eigene Beschaffung, verkettet mit der Freigabe; reserviert nur deren Chargen.
-- Tests: `odoo-bin ... -i blistercenter --test-enable --test-tags /blistercenter` (39 Tests, zusammen mit `plcs_greenrx` 145).
+- Rechnung je Lieferung über Odoo-Standard (`_create_invoices`, Fakturierung nach gelieferter Menge); Rechnung verweist auf die Lieferung (`bc_picking_id`).
+- Proforma: Standardbericht `sale.report_saleorder_pro_forma` mit eigenem Hinweis, für die Rolle Benutzer freigegeben.
+- 1.2.0: Vorkasse entfernt; Migration setzt „Vorkasse“ → „Lastschrift (DATEV)“, „Rechnung“ → „Überweisung“. Bestehende Anzahlungsrechnungen bleiben unverändert.
+- Tests: `odoo-bin ... -i blistercenter --test-enable --test-tags /blistercenter` (49 Tests, zusammen mit `plcs_greenrx` 191).

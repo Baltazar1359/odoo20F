@@ -14,7 +14,7 @@
                                 <field name="name" class="fw-bold fs-5"/>
                                 <div class="text-muted small"><field name="description"/></div>
                             </div>
-                            <div t-attf-class="display-6 fw-bold ms-3 #{record.count.raw_value and ['payment_blocks', 'awaiting_payment', 'blocked_lots'].includes(record.key.raw_value) ? 'text-danger' : ''}">
+                            <div t-attf-class="display-6 fw-bold ms-3 #{record.count.raw_value and ['payment_blocks', 'overdue_invoices', 'blocked_lots'].includes(record.key.raw_value) ? 'text-danger' : ''}">
                                 <field name="count"/>
                             </div>
                         </div>

@@ -8,6 +8,18 @@
             <field name="padding">4</field>
             <field name="company_id" eval="False"/>
         </record>
+
+        <!-- Zahlungsziele für Blistercenter (fest je Kunde) -->
+        <record id="payment_term_7days" model="account.payment.term">
+            <field name="name">7 Tage netto</field>
+            <field name="note">Zahlbar innerhalb von 7 Tagen ohne Abzug.</field>
+            <field name="line_ids" eval="[Command.clear(), Command.create({'value': 'percent', 'value_amount': 100.0, 'nb_days': 7})]"/>
+        </record>
+        <record id="payment_term_14days" model="account.payment.term">
+            <field name="name">14 Tage netto</field>
+            <field name="note">Zahlbar innerhalb von 14 Tagen ohne Abzug.</field>
+            <field name="line_ids" eval="[Command.clear(), Command.create({'value': 'percent', 'value_amount': 100.0, 'nb_days': 14})]"/>
+        </record>
     </data>
 
     <record id="tile_new_orders" model="blistercenter.overview">
@@ -16,29 +28,29 @@
         <field name="description">Eingegangen, noch nicht bestätigt</field>
         <field name="sequence">10</field>
     </record>
-    <record id="tile_downpayments_to_post" model="blistercenter.overview">
-        <field name="key">downpayments_to_post</field>
-        <field name="name">Anzahlungsrechnungen zu buchen</field>
-        <field name="description">Vorkasse: Entwurf, noch nicht gebucht und versendet</field>
+    <record id="tile_to_procure" model="blistercenter.overview">
+        <field name="key">to_procure</field>
+        <field name="name">Zu bestellen</field>
+        <field name="description">Kundenmengen je Hersteller, noch in keiner Sammelbestellung</field>
         <field name="sequence">15</field>
     </record>
-    <record id="tile_awaiting_payment" model="blistercenter.overview">
-        <field name="key">awaiting_payment</field>
-        <field name="name">Warten auf Zahlung</field>
-        <field name="description">Vorkasse, noch nicht vollständig bezahlt</field>
-        <field name="sequence">20</field>
+    <record id="tile_invoices_to_post" model="blistercenter.overview">
+        <field name="key">invoices_to_post</field>
+        <field name="name">Rechnungen zu buchen</field>
+        <field name="description">Rechnung je Lieferung, noch Entwurf</field>
+        <field name="sequence">82</field>
+    </record>
+    <record id="tile_overdue_invoices" model="blistercenter.overview">
+        <field name="key">overdue_invoices</field>
+        <field name="name">Überfällige Rechnungen</field>
+        <field name="description">Gebucht, Zahlungsziel überschritten (nur Hinweis, keine Sperre)</field>
+        <field name="sequence">84</field>
     </record>
     <record id="tile_payment_blocks" model="blistercenter.overview">
         <field name="key">payment_blocks</field>
         <field name="name">Zahlungssperren</field>
         <field name="description">Blistercenter mit Zahlungssperre</field>
         <field name="sequence">30</field>
-    </record>
-    <record id="tile_to_procure" model="blistercenter.overview">
-        <field name="key">to_procure</field>
-        <field name="name">Offene Kundenmengen</field>
-        <field name="description">Noch keiner Sammelbestellung zugeordnet</field>
-        <field name="sequence">40</field>
     </record>
     <record id="tile_open_collective" model="blistercenter.overview">
         <field name="key">open_collective</field>

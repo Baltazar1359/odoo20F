@@ -243,8 +243,3 @@ class BlistercenterCollectiveOrderLine(models.Model):
                     "%(customer)s hat eine Zahlungssperre. %(order)s kann nicht gebündelt werden.",
                     customer=partner.display_name, order=order.name,
                 ))
-            if config.rule_prepayment_before_collective and order._bc_needs_prepayment():
-                raise ValidationError(self.env._(
-                    "%(order)s ist Vorkasse und noch nicht bezahlt. Erst nach Zahlungseingang bündeln.",
-                    order=order.name,
-                ))

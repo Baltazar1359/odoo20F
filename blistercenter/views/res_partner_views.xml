@@ -42,10 +42,17 @@
                             <field name="bc_shop_enabled_by" invisible="not bc_shop_enabled"/>
                             <field name="bc_shop_enabled_date" invisible="not bc_shop_enabled"/>
                         </group>
-                        <group string="Zahlung" invisible="not bc_is_customer">
+                        <group string="Zahlung und Preis" invisible="not bc_is_customer">
                             <field name="bc_payment_model" readonly="not bc_can_approve"/>
-                            <field name="property_payment_term_id" string="Zahlungsbedingung" readonly="not bc_can_approve"/>
-                            <field name="property_product_pricelist" string="Preisliste (individuelle Preise/Rabatte)" readonly="not bc_can_approve"/>
+                            <field name="property_payment_term_id" string="Zahlungsziel" readonly="not bc_can_approve"
+                                   required="bc_is_customer"/>
+                            <field name="bc_discount" readonly="not bc_can_approve" widget="radio" options="{'horizontal': true}"/>
+                            <field name="property_product_pricelist" string="Preisliste" readonly="not bc_can_approve"/>
+                            <field name="bc_overdue_count" invisible="not bc_overdue_count" decoration-danger="bc_overdue_count"/>
+                            <field name="bc_overdue_amount" invisible="not bc_overdue_count" decoration-danger="bc_overdue_count"/>
+                            <div colspan="2" class="text-muted small" invisible="bc_payment_model != 'direct_debit'">
+                                Lastschrift-Mandat und Einzug nur in DATEV. Odoo vermerkt die Lastschrift auf der Rechnung.
+                            </div>
                         </group>
                         <group string="Zahlungssperre" invisible="not bc_is_customer">
                             <field name="bc_payment_block" readonly="not bc_can_approve"/>
@@ -70,7 +77,8 @@
                 <field name="email" optional="hide"/>
                 <field name="bc_shop_enabled" widget="boolean_toggle" readonly="1"/>
                 <field name="bc_payment_model"/>
-                <field name="property_payment_term_id" string="Zahlungsbedingung" optional="show"/>
+                <field name="property_payment_term_id" string="Zahlungsziel" optional="show"/>
+                <field name="bc_discount" optional="show"/>
                 <field name="property_product_pricelist" string="Preisliste" optional="show"/>
                 <field name="bc_payment_block" readonly="1"/>
                 <field name="bc_payment_block_reason" optional="show"/>

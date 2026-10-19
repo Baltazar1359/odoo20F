@@ -25,7 +25,7 @@
                         </group>
                         <group string="Standardwerte für neue Blistercenter">
                             <field name="default_payment_model"/>
-                            <field name="default_payment_term_id"/>
+                            <field name="default_payment_term_id" string="Standard-Zahlungsziel"/>
                             <field name="default_pricelist_id"/>
                         </group>
                         <group string="Regeln: Bestellung und Zahlung">
@@ -33,9 +33,9 @@
                             <field name="rule_require_channel"/>
                             <field name="rule_block_confirm"/>
                             <field name="rule_block_delivery"/>
-                            <field name="rule_prepayment_downpayment"/>
-                            <field name="rule_prepayment_before_collective"/>
-                            <field name="rule_prepayment_before_delivery"/>
+                            <field name="rule_require_payment_term"/>
+                            <field name="rule_customer_discount"/>
+                            <field name="rule_invoice_per_delivery"/>
                             <field name="rule_forbid_mto_route"/>
                             <field name="rule_require_lot_tracking"/>
                         </group>

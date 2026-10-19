@@ -3,11 +3,15 @@
 Legt an bzw. aktualisiert (beliebig oft ausführbar, keine Duplikate):
 - Firmenlogo und Website-Logo: PLCS-Logo (plcs_logo.png neben diesem Skript),
 - Hersteller „AstraZeneca GmbH (Test)“ mit Kennzeichen „Hersteller (Blistercenter)“,
-- 10 Arzneimittel aus der GreenRX-Artikelliste (PZN, GTIN, Charge + Verfall, im Shop sichtbar,
-  Einkaufskondition beim Hersteller, Produktfoto aus dem Internet),
-- Blistercenter-Testkunde mit Ansprechpartner (Vorkasse, Shop freigeschaltet, ohne Portalzugang).
+- 20 Arzneimittel (PZN, GTIN, Charge + Verfall, im Shop sichtbar, Fakturierung nach Lieferung,
+  Einkaufskondition beim Hersteller, Produktfoto aus dem Internet):
+  10 aus der GreenRX-Artikelliste (Preise fiktiv) und die 10 häufigsten Blistercenter-Artikel
+  Forxiga, Xigduo, Tagrisso (Angaben PLCS/Mehrdad 19.10.2026; HAP aus dem öffentlichen
+  Apothekenverkaufspreis zurückgerechnet, AMPreisV Stand 1.7.2026 – Testwert, nicht Lauer-Taxe),
+- drei Blistercenter-Testkunden mit Rabatt 0 / 1 / 2 % auf den HAP und Zahlungsziel 14 / 7 / 14 Tage
+  (Shop freigeschaltet, ohne Portalzugang).
 
-Preise sind fiktive Testpreise. Benutzer und Portalzugänge legt das Skript nicht an.
+Einkaufspreise sind fiktive Testpreise. Benutzer und Portalzugänge legt das Skript nicht an.
 
 Aufruf im Odoo.sh-Shell des Dev-Builds:
     odoo-bin shell < ~/src/user/docs/blistercenter_testdaten/testdaten.py
@@ -39,18 +43,38 @@ if not os.path.isdir(BASE_DIR):
 
 IMAGE_URL = "https://cdn.shop-apotheke.com/images/256x0/D{a}/{b}/{c}/D{pzn}-p10.jpg"
 
-# PZN, Bezeichnung, Packung, Lagerung, Testpreis Verkauf, Testpreis Einkauf
+# PZN, Bezeichnung, Packung, Lagerung, Verkaufspreis (= HAP), Testpreis Einkauf, Herkunft des Preises
+# Herkunft: "fiktiv" = Testpreis; "hap" = HAP aus dem AVP zurückgerechnet (Recherche 19.10.2026)
 ARTICLES = [
-    ("07560038", "BRILIQUE 90 mg Filmtabletten", "100 St", "ambient", 120.00, 96.00),
-    ("11366951", "BRILIQUE 60 mg Filmtabletten", "60 St", "ambient", 80.00, 64.00),
-    ("16015541", "BYDUREON 2 mg Depot-Injektionssuspension i.e. Fertigpen BCise", "", "cool", 150.00, 120.00),
-    ("00839027", "BYETTA 10 µg Injektionslösung i.e. Fertigpen", "1 St", "cool", 110.00, 88.00),
-    ("00837270", "BYETTA 5 µg Injektionslösung i.e. Fertigpen", "1 St", "cool", 100.00, 80.00),
-    ("18063573", "CALQUENCE 100 mg Filmtabletten", "60 St", "ambient", 500.00, 400.00),
-    ("13475319", "DAXAS 250 Mikrogramm Tabletten", "28 St", "ambient", 40.00, 32.00),
-    ("13570710", "BEVESPI Aerosphere 7,2 µg/5 µg Druckgasinhalation 120 Hub", "1 St", "ambient", 60.00, 48.00),
-    ("13592290", "AERODUR Turbohaler ohne Treibgas 120 ED", "", "ambient", 30.00, 24.00),
-    ("04424530", "BAMBEC Tabletten", "", "ambient", 20.00, 16.00),
+    ("07560038", "BRILIQUE 90 mg Filmtabletten", "100 St", "ambient", 120.00, 96.00, "fiktiv"),
+    ("11366951", "BRILIQUE 60 mg Filmtabletten", "60 St", "ambient", 80.00, 64.00, "fiktiv"),
+    ("16015541", "BYDUREON 2 mg Depot-Injektionssuspension i.e. Fertigpen BCise", "", "cool", 150.00, 120.00, "fiktiv"),
+    ("00839027", "BYETTA 10 µg Injektionslösung i.e. Fertigpen", "1 St", "cool", 110.00, 88.00, "fiktiv"),
+    ("00837270", "BYETTA 5 µg Injektionslösung i.e. Fertigpen", "1 St", "cool", 100.00, 80.00, "fiktiv"),
+    ("18063573", "CALQUENCE 100 mg Filmtabletten", "60 St", "ambient", 500.00, 400.00, "fiktiv"),
+    ("13475319", "DAXAS 250 Mikrogramm Tabletten", "28 St", "ambient", 40.00, 32.00, "fiktiv"),
+    ("13570710", "BEVESPI Aerosphere 7,2 µg/5 µg Druckgasinhalation 120 Hub", "1 St", "ambient", 60.00, 48.00, "fiktiv"),
+    ("13592290", "AERODUR Turbohaler ohne Treibgas 120 ED", "", "ambient", 30.00, 24.00, "fiktiv"),
+    ("04424530", "BAMBEC Tabletten", "", "ambient", 20.00, 16.00, "fiktiv"),
+    # Häufigste Blistercenter-Artikel (alle ambient). Einkaufspreis fiktiv (HAP − 5 %).
+    ("10330224", "FORXIGA 5 mg Filmtabletten", "28 St (N2)", "ambient", 50.87, 48.33, "hap"),
+    ("16033349", "FORXIGA 5 mg Filmtabletten", "98 St (N3)", "ambient", 178.06, 169.16, "hap"),
+    ("10330193", "FORXIGA 10 mg Filmtabletten", "28 St (N2)", "ambient", 50.87, 48.33, "hap"),
+    ("10330201", "FORXIGA 10 mg Filmtabletten", "98 St (N3)", "ambient", 178.06, 169.16, "hap"),
+    ("10126297", "XIGDUO 5 mg/850 mg Filmtabletten", "56 St (N2)", "ambient", 33.32, 31.65, "hap"),
+    ("10126564", "XIGDUO 5 mg/850 mg Filmtabletten", "196 St (N3)", "ambient", 116.62, 110.79, "hap"),
+    # 10126587: Preis nicht direkt gefunden, gleicher Preis wie 5/850 mg 56 St angenommen (vor Echtbetrieb prüfen)
+    ("10126587", "XIGDUO 5 mg/1000 mg Filmtabletten", "56 St (N2)", "ambient", 33.32, 31.65, "hap"),
+    ("10126593", "XIGDUO 5 mg/1000 mg Filmtabletten", "196 St (N3)", "ambient", 116.62, 110.79, "hap"),
+    ("12743321", "TAGRISSO 40 mg Filmtabletten", "30 St", "ambient", 4715.75, 4479.96, "hap"),
+    ("12743338", "TAGRISSO 80 mg Filmtabletten", "30 St", "ambient", 4715.75, 4479.96, "hap"),
+]
+
+# Blistercenter-Testkunden: Name, Rabatt auf HAP, Zahlungsziel (XML-ID), Zahlungsart
+CUSTOMERS = [
+    ("Blistercenter Musterstadt (Test)", "0", "blistercenter.payment_term_14days", "direct_debit"),
+    ("Blistercenter Rabatt 1 % (Test)", "1", "blistercenter.payment_term_7days", "direct_debit"),
+    ("Blistercenter Rabatt 2 % (Test)", "2", "blistercenter.payment_term_14days", "transfer"),
 ]
 
 
@@ -108,7 +132,7 @@ def run(env):
     has_pzn = "plcs_pzn" in Product._fields
     has_temp = "plcs_storage_temp" in Product._fields
     images = 0
-    for pzn, name, pack, storage, price, cost in ARTICLES:
+    for pzn, name, pack, storage, price, cost, origin in ARTICLES:
         full_name = "%s %s" % (name, pack) if pack else name
         gtin = gtin_from_pzn(pzn)
         vals = {
@@ -123,8 +147,12 @@ def run(env):
             "purchase_ok": True,
             "list_price": price,
             "standard_price": cost,
-            "description_sale": "Testartikel (PZN %s). Preis fiktiv.%s" % (
-                pzn, " Kühl lagern (2–8 °C)." if storage == "cool" else ""),
+            "invoice_policy": "delivery",
+            "description_sale": "Testartikel (PZN %s). %s%s" % (
+                pzn,
+                "HAP aus dem Apothekenverkaufspreis gerechnet (Testwert, nicht Lauer-Taxe)."
+                if origin == "hap" else "Preis fiktiv.",
+                " Kühl lagern (2–8 °C)." if storage == "cool" else ""),
         }
         if has_pzn:
             vals["plcs_pzn"] = pzn
@@ -134,7 +162,11 @@ def run(env):
             vals["is_published"] = True
         if categ:
             vals["public_categ_ids"] = [(6, 0, categ.ids)]
-        product = Product.search([("default_code", "=", pzn)], limit=1)
+        # Vorhandenen Artikel wiederverwenden (z. B. aus GreenRX/ATIV angelegt), nicht doppelt anlegen
+        domain = ["|", ("default_code", "=", pzn), ("barcode", "=", gtin)]
+        if has_pzn:
+            domain = ["|"] + domain + [("plcs_pzn", "=", pzn)]
+        product = Product.search(domain, limit=1)
         if product:
             product.write(vals)
         else:
@@ -151,20 +183,27 @@ def run(env):
         print("  %s  %s" % (pzn, full_name))
     report.append("%s Artikel, %s mit Foto" % (len(ARTICLES), images))
 
-    # Blistercenter-Testkunde
-    customer = Partner.search([("name", "=", "Blistercenter Musterstadt (Test)")], limit=1)
-    cust_vals = {"name": "Blistercenter Musterstadt (Test)", "is_company": True, "bc_is_customer": True,
-                 "street": "Musterstraße 1", "zip": "66687", "city": "Wadern",
-                 "country_id": env.ref("base.de").id, "email": "bestellung@blistercenter.example"}
-    if customer:
-        customer.write(cust_vals)
-    else:
-        customer = Partner.create(cust_vals)
-    customer.write({"bc_payment_model": "prepayment", "bc_shop_enabled": True})
-    if not customer.child_ids.filtered(lambda c: c.name == "Erika Muster (Test)"):
-        Partner.create({"name": "Erika Muster (Test)", "parent_id": customer.id, "type": "contact",
-                        "email": "erika.muster@blistercenter.example", "function": "Einkauf"})
-    report.append("Hersteller und Testkunde angelegt")
+    # Blistercenter-Testkunden (Rabatt 0 / 1 / 2 %, Zahlungsziel 14 / 7 / 14 Tage)
+    for index, (cust_name, discount, term_xmlid, payment_model) in enumerate(CUSTOMERS, start=1):
+        customer = Partner.search([("name", "=", cust_name)], limit=1)
+        cust_vals = {"name": cust_name, "is_company": True, "bc_is_customer": True,
+                     "street": "Musterstraße %s" % index, "zip": "66687", "city": "Wadern",
+                     "country_id": env.ref("base.de").id,
+                     "email": "bestellung%s@blistercenter.example" % index}
+        if customer:
+            customer.write(cust_vals)
+        else:
+            customer = Partner.create(cust_vals)
+        customer.write({
+            "bc_payment_model": payment_model, "bc_shop_enabled": True, "bc_discount": discount,
+            "property_payment_term_id": env.ref(term_xmlid).id,
+        })
+        contact = "Erika Muster (Test)" if index == 1 else "Kontakt %s (Test)" % index
+        if not customer.child_ids.filtered(lambda c, n=contact: c.name == n):
+            Partner.create({"name": contact, "parent_id": customer.id, "type": "contact",
+                            "email": "kontakt%s@blistercenter.example" % index, "function": "Einkauf"})
+        print("  Kunde: %s – Rabatt %s %%, %s" % (cust_name, discount, env.ref(term_xmlid).name))
+    report.append("Hersteller und %s Testkunden angelegt" % len(CUSTOMERS))
 
     env.cr.commit()
     print("Blistercenter-Testdaten: " + "; ".join(report))

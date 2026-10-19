@@ -4,10 +4,10 @@ from odoo import api, fields, models
 
 TILE_KEYS = [
     ("new_orders", "Neue Bestellungen"),
-    ("downpayments_to_post", "Anzahlungsrechnungen zu buchen"),
-    ("awaiting_payment", "Warten auf Zahlung"),
+    ("invoices_to_post", "Rechnungen zu buchen"),
+    ("overdue_invoices", "Überfällige Rechnungen"),
     ("payment_blocks", "Zahlungssperren"),
-    ("to_procure", "Offene Kundenmengen"),
+    ("to_procure", "Zu bestellen"),
     ("open_collective", "Offene Sammelbestellungen"),
     ("open_receipts", "Offene Wareneingänge"),
     ("to_release", "Freigabe Wareneingang (VP)"),
@@ -43,19 +43,18 @@ class BlistercenterOverview(models.Model):
                 ("bc_is_blistercenter", "=", True), ("company_id", "in", company_ids),
                 "|", ("state", "=", "sent"), "&", ("state", "=", "draft"), ("website_id", "=", False),
             ], "blistercenter.action_bc_sale_orders")
-        if key == "downpayments_to_post":
+        if key == "invoices_to_post":
             return ("account.move", [
                 ("company_id", "in", company_ids), ("move_type", "=", "out_invoice"), ("state", "=", "draft"),
                 ("commercial_partner_id.bc_is_customer", "=", True),
-                ("invoice_line_ids.sale_line_ids.is_downpayment", "=", True),
             ], "blistercenter.action_bc_invoices")
-        if key == "awaiting_payment":
-            orders = self.env["sale.order"].search([
-                ("bc_is_blistercenter", "=", True), ("company_id", "in", company_ids), ("state", "=", "sale"),
-                ("partner_id.commercial_partner_id.bc_payment_model", "=", "prepayment"),
-            ])
-            ids = orders.filtered(lambda o: not o.bc_is_paid).ids
-            return ("sale.order", [("id", "in", ids)], "blistercenter.action_bc_sale_orders")
+        if key == "overdue_invoices":
+            return ("account.move", [
+                ("company_id", "in", company_ids), ("move_type", "=", "out_invoice"), ("state", "=", "posted"),
+                ("commercial_partner_id.bc_is_customer", "=", True),
+                ("payment_state", "in", ("not_paid", "partial")),
+                ("invoice_date_due", "<", fields.Date.context_today(self)),
+            ], "blistercenter.action_bc_invoices")
         if key == "payment_blocks":
             return ("res.partner", [("bc_is_customer", "=", True), ("bc_payment_block", "=", True)],
                     "blistercenter.action_bc_customers")

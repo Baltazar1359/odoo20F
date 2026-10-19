@@ -186,6 +186,24 @@ class StockPicking(models.Model):
     bc_short_reason = fields.Char("Begründung Kurzläufer", readonly=True, copy=False)
     bc_partial_allowed = fields.Boolean(related="sale_id.bc_partial_allowed", string="Teillieferung erlaubt")
     bc_can_release = fields.Boolean(compute="_compute_bc_can_release")
+    bc_invoice_ids = fields.One2many("account.move", "bc_picking_id", string="Rechnungen zur Lieferung", readonly=True)
+    bc_overdue_amount = fields.Monetary(
+        "Überfällig beim Kunden", compute="_compute_bc_overdue", currency_field="bc_currency_id",
+    )
+    bc_overdue_count = fields.Integer("Überfällige Rechnungen", compute="_compute_bc_overdue")
+    bc_currency_id = fields.Many2one(related="company_id.currency_id", string="Währung")
+
+    @api.depends_context("uid")
+    def _compute_bc_overdue(self):
+        """Nur Hinweis auf überfällige Rechnungen des Kunden; der Versand bleibt möglich."""
+        for picking in self:
+            partner = (picking.sale_id.partner_id or picking.partner_id).commercial_partner_id
+            if picking.bc_kind == "delivery" and partner.bc_is_customer:
+                picking.bc_overdue_count = partner.bc_overdue_count
+                picking.bc_overdue_amount = partner.bc_overdue_amount
+            else:
+                picking.bc_overdue_count = 0
+                picking.bc_overdue_amount = 0.0
 
     @api.depends("partner_id.commercial_partner_id.bc_is_customer", "sale_id.bc_is_blistercenter")
     def _compute_bc_is_blistercenter(self):
@@ -355,11 +373,6 @@ class StockPicking(models.Model):
                 customer=partner.display_name, reason=partner.bc_payment_block_reason or "-", picking=self.name,
             ))
         sale = self.sale_id
-        if sale and config.rule_prepayment_before_delivery and sale._bc_needs_prepayment():
-            raise UserError(self.env._(
-                "%(order)s ist Vorkasse und noch nicht vollständig bezahlt. %(picking)s kann nicht versendet werden.",
-                order=sale.name, picking=self.name,
-            ))
         if config.rule_partial_needs_approval and not (sale and sale.bc_partial_allowed):
             open_moves = self.move_ids.filtered(lambda m: m.state not in ("done", "cancel"))
             if any(m.uom_id.compare(m.quantity, m.product_uom_qty) < 0 for m in open_moves):
@@ -413,7 +426,15 @@ class StockPicking(models.Model):
                     "bc_picked_by": self.env.uid, "bc_picked_date": fields.Datetime.now()})
         done.filtered(lambda p: p.bc_kind == "receipt")._bc_create_release()
         self.purchase_id.bc_collective_ids._bc_update_done()
+        done.filtered(lambda p: p.bc_kind == "delivery" and p.sale_id)._bc_invoice_after_delivery()
         return res
+
+    def _bc_invoice_after_delivery(self):
+        """Rechnung je Lieferung: nach dem Versand die gelieferte Menge als Rechnungsentwurf anlegen."""
+        for picking in self:
+            config = picking._bc_config()
+            if config.rule_invoice_per_delivery and picking.sale_id.bc_is_blistercenter:
+                picking.sale_id._bc_invoice_delivery(picking)
 
     def _bc_create_release(self):
         """Nach dem Wareneingang: Freigabe-Vorgang Quarantäne → Bestand für die VP anlegen.

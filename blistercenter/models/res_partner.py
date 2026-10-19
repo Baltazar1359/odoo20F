@@ -1,12 +1,13 @@
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
 
-from .blistercenter_config import PAYMENT_MODELS
+from .blistercenter_config import DISCOUNTS, PAYMENT_MODELS
 
 # Felder, die nur die Rolle „Freigabe“ ändern darf (bei Blistercenter-Kunden)
 APPROVAL_FIELDS = {
     "bc_shop_enabled",
     "bc_payment_model",
+    "bc_discount",
     "bc_payment_block",
     "bc_payment_block_reason",
 }
@@ -32,7 +33,21 @@ class ResPartner(models.Model):
     bc_shop_enabled = fields.Boolean("Shop freigeschaltet", tracking=True, copy=False)
     bc_shop_enabled_by = fields.Many2one("res.users", "Freigeschaltet von", readonly=True, copy=False)
     bc_shop_enabled_date = fields.Datetime("Freigeschaltet am", readonly=True, copy=False)
-    bc_payment_model = fields.Selection(PAYMENT_MODELS, string="Zahlungsmodell", tracking=True, copy=False)
+    bc_payment_model = fields.Selection(
+        PAYMENT_MODELS, string="Zahlungsart", tracking=True, copy=False,
+        help="Lastschrift: Der Einzug läuft über DATEV, das Mandat wird nur in DATEV geführt. "
+             "Odoo druckt einen Hinweis auf die Rechnung; die Zahlung wird später in Odoo eingebucht.",
+    )
+    bc_discount = fields.Selection(
+        DISCOUNTS, string="Rabatt auf HAP", default="0", tracking=True, copy=False,
+        help="Rabatt des Blistercenters auf den Herstellerabgabepreis (Verkaufspreis des Artikels), "
+             "gilt für alle Artikel. Erlaubt sind 0, 1 oder 2 %.",
+    )
+    bc_overdue_amount = fields.Monetary(
+        "Überfällig", compute="_compute_bc_overdue", currency_field="currency_id",
+        help="Offener Betrag gebuchter Rechnungen, deren Fälligkeit überschritten ist.",
+    )
+    bc_overdue_count = fields.Integer("Überfällige Rechnungen", compute="_compute_bc_overdue")
     bc_payment_block = fields.Boolean("Zahlungssperre", tracking=True, copy=False)
     bc_payment_block_reason = fields.Char("Grund der Zahlungssperre", tracking=True, copy=False)
     bc_can_approve = fields.Boolean(compute="_compute_bc_can_approve")
@@ -52,6 +67,26 @@ class ResPartner(models.Model):
             ])
             partner.bc_portal_user_count = len(users)
             partner.bc_portal_warning = bool(partner.bc_is_customer and partner.bc_shop_enabled and not users)
+
+    def _bc_overdue_invoices(self):
+        """Gebuchte, nicht bezahlte Kundenrechnungen mit überschrittener Fälligkeit (nur lesen)."""
+        self.ensure_one()
+        if not self.commercial_partner_id.id:
+            return self.env["account.move"]
+        return self.env["account.move"].sudo().search([
+            ("commercial_partner_id", "=", self.commercial_partner_id.id),
+            ("move_type", "=", "out_invoice"),
+            ("state", "=", "posted"),
+            ("payment_state", "in", ("not_paid", "partial")),
+            ("invoice_date_due", "<", fields.Date.context_today(self)),
+        ])
+
+    @api.depends_context("uid")
+    def _compute_bc_overdue(self):
+        for partner in self:
+            invoices = partner._bc_overdue_invoices() if partner.commercial_partner_id.bc_is_customer else False
+            partner.bc_overdue_count = len(invoices) if invoices else 0
+            partner.bc_overdue_amount = sum(invoices.mapped("amount_residual_signed")) if invoices else 0.0
 
     @api.depends_context("uid")
     def _compute_bc_can_approve(self):
@@ -78,7 +113,7 @@ class ResPartner(models.Model):
         touched = APPROVAL_FIELDS & set(vals)
         if is_create:
             # Beim Anlegen zählen nur gesetzte Werte
-            touched = {f for f in touched if vals.get(f)}
+            touched = {f for f in touched if vals.get(f) and not (f == "bc_discount" and vals[f] == "0")}
         standard = APPROVAL_STANDARD_FIELDS & set(vals)
         if standard and not is_create:
             if any(p.commercial_partner_id.bc_is_customer for p in self):

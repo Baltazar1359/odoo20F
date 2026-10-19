@@ -1,11 +1,13 @@
+from markupsafe import Markup
+
 from odoo.http import request
 from odoo import api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools import is_html_empty
 
 BC_STATES = [
     ("new", "Eingegangen"),
     ("blocked", "Zahlungssperre"),
-    ("awaiting_payment", "Wartet auf Zahlung"),
     ("to_procure", "Zu beschaffen"),
     ("procuring", "In Beschaffung"),
     ("ready", "Lieferbereit"),
@@ -32,12 +34,15 @@ class SaleOrder(models.Model):
         "Blistercenter-Bestellung", related="partner_id.commercial_partner_id.bc_is_customer",
         store=True, index=True,
     )
-    bc_payment_model = fields.Selection(related="partner_id.commercial_partner_id.bc_payment_model", string="Zahlungsmodell")
+    bc_payment_model = fields.Selection(related="partner_id.commercial_partner_id.bc_payment_model", string="Zahlungsart")
+    bc_discount = fields.Selection(related="partner_id.commercial_partner_id.bc_discount", string="Rabatt auf HAP")
     bc_payment_block = fields.Boolean(related="partner_id.commercial_partner_id.bc_payment_block", string="Zahlungssperre")
     bc_payment_block_reason = fields.Char(related="partner_id.commercial_partner_id.bc_payment_block_reason", string="Grund der Zahlungssperre")
     bc_shop_enabled = fields.Boolean(related="partner_id.commercial_partner_id.bc_shop_enabled", string="Shop freigeschaltet")
-    bc_paid_amount = fields.Monetary("Bezahlt", compute="_compute_bc_payment", currency_field="currency_id")
-    bc_is_paid = fields.Boolean("Vollständig bezahlt", compute="_compute_bc_payment")
+    bc_overdue_amount = fields.Monetary(
+        "Überfällig beim Kunden", compute="_compute_bc_overdue", currency_field="currency_id",
+    )
+    bc_overdue_count = fields.Integer("Überfällige Rechnungen", compute="_compute_bc_overdue")
     bc_state = fields.Selection(BC_STATES, string="Bearbeitungsstatus", compute="_compute_bc_state")
     bc_collective_ids = fields.Many2many(
         "blistercenter.collective.order", string="Sammelbestellungen", compute="_compute_bc_collective_ids",
@@ -68,21 +73,17 @@ class SaleOrder(models.Model):
     bc_partial_by = fields.Many2one("res.users", "Teillieferung erlaubt von", readonly=True, copy=False)
     bc_partial_date = fields.Datetime("Teillieferung erlaubt am", readonly=True, copy=False)
 
-    @api.depends("invoice_ids.state", "invoice_ids.payment_state", "invoice_ids.amount_total", "amount_total")
-    def _compute_bc_payment(self):
+    @api.depends_context("uid")
+    def _compute_bc_overdue(self):
+        """Hinweis auf überfällige Rechnungen des Kunden. Sperrt nichts (Entscheidung PLCS 19.10.2026)."""
         for order in self:
-            posted = order.invoice_ids.filtered(lambda m: m.state == "posted")
-            paid = sum(
-                m.amount_total for m in posted
-                if m.move_type == "out_invoice" and m.payment_state in ("paid", "in_payment")
-            )
-            refunded = sum(m.amount_total for m in posted if m.move_type == "out_refund")
-            order.bc_paid_amount = paid - refunded
-            order.bc_is_paid = order.currency_id.compare_amounts(paid - refunded, order.amount_total) >= 0
-
-    def _bc_needs_prepayment(self):
-        self.ensure_one()
-        return self.bc_payment_model == "prepayment" and not self.bc_is_paid
+            partner = order.partner_id.commercial_partner_id
+            if order.bc_is_blistercenter and partner:
+                order.bc_overdue_count = partner.bc_overdue_count
+                order.bc_overdue_amount = partner.bc_overdue_amount
+            else:
+                order.bc_overdue_count = 0
+                order.bc_overdue_amount = 0.0
 
     def _compute_bc_collective_ids(self):
         for order in self:
@@ -90,7 +91,7 @@ class SaleOrder(models.Model):
             order.bc_collective_ids = collective
             order.bc_collective_count = len(collective)
 
-    @api.depends("state", "delivery_status", "bc_is_paid", "order_line.bc_qty_open")
+    @api.depends("state", "delivery_status", "order_line.bc_qty_open")
     def _compute_bc_state(self):
         for order in self:
             if order.state == "cancel":
@@ -99,8 +100,6 @@ class SaleOrder(models.Model):
                 state = "new"
             elif order.bc_payment_block:
                 state = "blocked"
-            elif order._bc_needs_prepayment():
-                state = "awaiting_payment"
             elif order.delivery_status == "full":
                 state = "done"
             elif order.delivery_status in ("partial", "started"):
@@ -183,6 +182,26 @@ class SaleOrder(models.Model):
             if channel in CHANNELS_WITH_ORDERER and not (self.bc_orderer_id or (self.bc_orderer_name or "").strip()):
                 return self.env._(
                     "%(order)s: Bitte angeben, wer bestellt hat (Besteller als Kontakt oder Name).", order=self.name)
+        if config.rule_require_payment_term and not self.payment_term_id:
+            return self.env._(
+                "%(order)s: Bitte am Blistercenter %(customer)s ein Zahlungsziel (z. B. 7 oder 14 Tage) hinterlegen "
+                "und in der Bestellung übernehmen.", order=self.name, customer=partner.display_name)
+        goods = self.order_line.filtered(lambda sol: sol._bc_is_goods_line())
+        if config.rule_invoice_per_delivery:
+            wrong = goods.product_id.filtered(lambda p: p.invoice_policy != "delivery")
+            if wrong:
+                return self.env._(
+                    "Rechnung je Lieferung: %(products)s wird nach bestellter Menge fakturiert. Bitte am Artikel "
+                    "„Fakturierung: gelieferte Mengen“ einstellen.",
+                    products=", ".join(wrong.mapped("display_name")))
+        if config.rule_customer_discount:
+            expected = float(partner.bc_discount or 0)
+            wrong = goods.filtered(lambda sol: sol.currency_id.compare_amounts(sol.discount, expected) != 0)
+            if wrong:
+                return self.env._(
+                    "%(order)s: %(customer)s hat %(discount)s %% Rabatt auf den HAP. Abweichend in: %(products)s.",
+                    order=self.name, customer=partner.display_name, discount=partner.bc_discount or "0",
+                    products=", ".join(wrong.product_id.mapped("display_name")))
         if config.rule_forbid_mto_route:
             mto = self._bc_mto_route()
             for line in self.order_line.filtered(lambda sol: sol.product_id and not sol.display_type):
@@ -238,30 +257,63 @@ class SaleOrder(models.Model):
                     summary=self.env._("Neue Blistercenter-Bestellung bearbeiten"),
                     user_id=config.sales_user_id.id,
                 )
-            if order.bc_payment_model == "prepayment" and config.rule_prepayment_downpayment:
-                order._bc_create_downpayment(config)
         return res
 
-    def _bc_create_downpayment(self, config):
-        """Vorkasse: Anzahlungsrechnung über 100 % als Entwurf anlegen (kein Buchen, kein Versand)."""
+    # ------------------------------------------------------------------
+    # Proforma und Rechnung je Lieferung
+    # ------------------------------------------------------------------
+    def action_bc_print_proforma(self):
+        """Proforma-Rechnung drucken: nur Information über Menge und Preis, keine Buchung, kein Versand."""
+        for order in self:
+            if not order.bc_is_blistercenter or order.state != "sale":
+                raise UserError(self.env._("Proforma nur für bestätigte Blistercenter-Bestellungen."))
+        return self.env.ref("blistercenter.action_report_bc_proforma").report_action(self)
+
+    def _bc_direct_debit_note(self):
         self.ensure_one()
-        if self.currency_id.is_zero(self.amount_total):
+        partner = self.partner_id.commercial_partner_id
+        if not (self.bc_is_blistercenter and partner.bc_payment_model == "direct_debit"):
+            return False
+        return self.env._(
+            "Zahlung per SEPA-Lastschrift: Der Rechnungsbetrag wird zum Fälligkeitsdatum von Ihrem Konto "
+            "eingezogen. Bitte nicht überweisen.")
+
+    def _prepare_invoice(self):
+        vals = super()._prepare_invoice()
+        note = self._bc_direct_debit_note()
+        if note:
+            narration = vals.get("narration")
+            text = Markup("<p><strong>%s</strong></p>") % note
+            vals["narration"] = text if is_html_empty(narration) else Markup("%s%s") % (text, narration)
+        return vals
+
+    def _bc_invoice_delivery(self, picking):
+        """Rechnung über die mit dieser Lieferung gelieferte Menge als Entwurf (kein Buchen, kein Versand)."""
+        self.ensure_one()
+        config = self.env["blistercenter.config"]._get(self.company_id)
+        order = self.sudo()
+        if not order.order_line.filtered(lambda sol: sol._bc_is_goods_line() and sol.qty_to_invoice > 0):
             return self.env["account.move"]
-        if self.invoice_ids.filtered(lambda m: m.state != "cancel"):
-            return self.env["account.move"]
-        wizard = self.env["sale.advance.payment.inv"].with_context(
-            active_model="sale.order", active_ids=self.ids, active_id=self.id,
-        ).create({"advance_payment_method": "percentage", "amount": 100.0})
-        invoice = wizard._create_invoices(self)
+        # Ohne Zuweisungs-E-Mail an den Verkäufer; die Buchhaltung bekommt eine Aufgabe in Odoo
+        invoice = order.with_context(mail_auto_subscribe_no_notify=True)._create_invoices()
+        if not invoice:
+            return invoice
+        delivery_note = Markup("<p>%s</p>") % self.env._("Lieferung: %(picking)s", picking=picking.name)
+        invoice.write({
+            "bc_picking_id": picking.id,
+            "narration": delivery_note if is_html_empty(invoice.narration) else Markup("%s%s") % (
+                invoice.narration, delivery_note),
+        })
         self.message_post(body=self.env._(
-            "Vorkasse: Anzahlungsrechnung über 100 %% als Entwurf angelegt (%(invoice)s). "
-            "Sie wird erst nach Buchung und Versand durch die Buchhaltung wirksam.",
-            invoice=invoice.display_name or "-",
-        ))
+            "Rechnung %(invoice)s zur Lieferung %(picking)s als Entwurf angelegt.",
+            invoice=invoice.display_name or "-", picking=picking.name))
+        picking.message_post(body=self.env._(
+            "Rechnung %(invoice)s als Entwurf angelegt.", invoice=invoice.display_name or "-"))
         if config.accounting_user_id:
-            invoice.sudo().with_context(mail_activity_quick_update=True).activity_schedule(
+            invoice.with_context(mail_activity_quick_update=True).activity_schedule(
                 "mail.mail_activity_data_todo",
-                summary=self.env._("Vorkasse: Anzahlungsrechnung buchen und an %(customer)s senden",
+                summary=self.env._("Rechnung zur Lieferung %(picking)s prüfen, buchen und an %(customer)s senden",
+                                   picking=picking.name,
                                    customer=self.partner_id.commercial_partner_id.display_name),
                 user_id=config.accounting_user_id.id,
             )
@@ -326,6 +378,31 @@ class SaleOrderLine(models.Model):
         help="Diese Position wird aus dem freien Lagerbestand geliefert, nicht über eine Sammelbestellung.",
     )
     bc_from_stock_by = fields.Many2one("res.users", "Aus Lagerbestand von", readonly=True, copy=False)
+    bc_supplier_id = fields.Many2one(
+        "res.partner", string="Hersteller", compute="_compute_bc_supplier_id", store=True, index="btree_not_null",
+        help="Hersteller aus der Einkaufskondition des Artikels (für die Liste „Zu bestellen“).",
+    )
+
+    @api.depends("product_id.seller_ids.partner_id", "product_id.seller_ids.partner_id.bc_is_supplier")
+    def _compute_bc_supplier_id(self):
+        for line in self:
+            sellers = line.product_id.seller_ids.partner_id if line.bc_is_blistercenter else False
+            if not sellers:
+                line.bc_supplier_id = False
+                continue
+            line.bc_supplier_id = sellers.filtered("bc_is_supplier")[:1] or sellers[:1]
+
+    @api.depends("order_id.partner_id")
+    def _compute_discount(self):
+        """Blistercenter: Rabatt des Kunden (0, 1 oder 2 %) auf den HAP für jede Warenposition."""
+        super()._compute_discount()
+        for line in self:
+            partner = line.order_id.partner_id.commercial_partner_id
+            if not (partner.bc_is_customer and line._bc_is_goods_line()):
+                continue
+            config = self.env["blistercenter.config"]._get(line.order_id.company_id or self.env.company)
+            if config.rule_customer_discount:
+                line.discount = float(partner.bc_discount or 0)
 
     def _bc_is_goods_line(self):
         self.ensure_one()

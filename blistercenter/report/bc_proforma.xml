@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Proforma-Rechnung für Blistercenter: nur Information über Menge und Preis.
+         Nutzt den Standard-Proforma-Bericht von Odoo (ohne Gruppenbeschränkung für die App). -->
+    <record id="action_report_bc_proforma" model="ir.actions.report">
+        <field name="name">Proforma-Rechnung (Blistercenter)</field>
+        <field name="model">sale.order</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">sale.report_saleorder_pro_forma</field>
+        <field name="print_report_name">'Proforma - %s' % (object.name)</field>
+        <field name="group_ids" eval="[(4, ref('blistercenter.group_bc_user'))]"/>
+    </record>
+
+    <template id="report_saleorder_document_bc_proforma" inherit_id="sale.report_saleorder_document">
+        <xpath expr="//div[@id='informations']" position="before">
+            <div t-if="is_proforma and doc.bc_is_blistercenter" class="alert alert-warning mb-4"
+                 name="bc_proforma_notice" style="border: 1px solid #c58f00; padding: 8px;">
+                <strong>Proforma – keine Rechnung.</strong>
+                Nur zur Information über Menge und Preis. Bitte nicht bezahlen.
+                Die Rechnung folgt mit jeder Lieferung.
+                <t t-if="doc.bc_payment_model == 'direct_debit'">
+                    Der Betrag wird nach Rechnungsstellung per SEPA-Lastschrift eingezogen.
+                </t>
+            </div>
+        </xpath>
+    </template>
+</odoo>
