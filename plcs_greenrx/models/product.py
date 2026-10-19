@@ -59,7 +59,8 @@ class ProductProduct(models.Model):
         found = self._plcs_find_by_code(gtin=gtin, pzn=pzn or False)
         if found:
             return found if len(found) == 1 else self.browse()
-        if not (pzn.isdigit() and len(pzn) == 8 and gtin and (name or "").strip()):
+        # Prüfbericht 19.10. R11: gleiche PZN-Prüfung wie bei Scan und Handeingabe
+        if not (gs1._pzn_check_ok(pzn) and gtin and gs1.gtin_check_digit_ok(gtin) and (name or "").strip()):
             return self.browse()
         cool = bool(re.search(r"k(ü|ue)hl|2\s*[-–]\s*8", storage or "", re.IGNORECASE))
         return self.sudo().create({

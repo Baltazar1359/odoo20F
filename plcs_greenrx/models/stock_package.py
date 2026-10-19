@@ -62,6 +62,9 @@ class StockPackage(models.Model):
         prefix = company.plcs_grx_box_prefix or "GX"
         maximum = company.plcs_grx_box_max or 200
         names = ["%s%03d" % (prefix, i) for i in range(1, maximum + 1)]
+        # Hinweis Prüfbericht 19.10. R09: Die Firma einer Box (stock.package) berechnet Odoo aus ihrem
+        # Inhalt; leere Boxen haben keine Firma. Boxen sind deshalb firmenübergreifend eindeutig
+        # (PLCS arbeitet mit einer Firma). Für mehrere Firmen ein eigenes Box-Präfix je Firma setzen.
         existing = self.search([("name", "in", names)])
         existing.filtered(lambda p: not p.plcs_is_grx_box).write({"plcs_is_grx_box": True})
         missing = sorted(set(names) - set(existing.mapped("name")))

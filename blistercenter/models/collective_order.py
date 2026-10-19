@@ -3,6 +3,11 @@ from collections import defaultdict
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from ..tools import bc_auth
+
+# Status und Herstellerbestellung nur über die geprüften Übergänge (Prüfbericht 19.10.2026 R05)
+COLLECTIVE_PROTECTED_FIELDS = ("state", "purchase_id")
+
 
 class BlistercenterCollectiveOrder(models.Model):
     """Sammelbestellung: bündelt Mengen aus Kundenaufträgen zu einer Anfrage beim Hersteller.
@@ -56,12 +61,15 @@ class BlistercenterCollectiveOrder(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
+            if vals.get("state", "draft") != "draft" or vals.get("purchase_id"):
+                bc_auth.check_protected(self, vals, COLLECTIVE_PROTECTED_FIELDS)
             if vals.get("name", "/") == "/":
                 company = self.env["res.company"].browse(vals.get("company_id")) if vals.get("company_id") else self.env.company
                 vals["name"] = self.env["ir.sequence"].with_company(company).next_by_code("blistercenter.collective.order") or "/"
         return super().create(vals_list)
 
     def write(self, vals):
+        bc_auth.check_protected(self, vals, COLLECTIVE_PROTECTED_FIELDS, name="collective")
         if "supplier_id" in vals and any(o.state != "draft" for o in self):
             raise UserError(self.env._("Der Hersteller lässt sich nur im Entwurf ändern."))
         return super().write(vals)
@@ -104,8 +112,9 @@ class BlistercenterCollectiveOrder(models.Model):
                 ],
             })
             for line in order.line_ids:
-                line.purchase_line_id = purchase.order_line.filtered(lambda pl: pl.product_id == line.product_id)[:1]
-            order.write({"purchase_id": purchase.id, "state": "ordered"})
+                bc_auth.grant(line, "collective").purchase_line_id = purchase.order_line.filtered(
+                    lambda pl: pl.product_id == line.product_id)[:1]
+            bc_auth.grant(order, "collective").write({"purchase_id": purchase.id, "state": "ordered"})
             order.message_post(body=self.env._(
                 "Anfrage %(po)s beim Hersteller erstellt. Bitte prüfen und manuell bestellen.", po=purchase.name,
             ))
@@ -137,7 +146,7 @@ class BlistercenterCollectiveOrder(models.Model):
                 ))
             if order.purchase_id and order.purchase_id.state != "cancel":
                 order.purchase_id.button_cancel()
-            order.state = "cancel"
+            bc_auth.grant(order, "collective").state = "cancel"
         return True
 
     def action_set_draft(self):
@@ -145,15 +154,18 @@ class BlistercenterCollectiveOrder(models.Model):
             if order.state != "cancel":
                 raise UserError(self.env._("Nur stornierte Sammelbestellungen können zurück in den Entwurf."))
             order.line_ids._bc_check_allowed()
-            order.write({"state": "draft", "purchase_id": False})
-            order.line_ids.purchase_line_id = False
+            order.line_ids._bc_lock_sale_lines()
+            bc_auth.grant(order, "collective").write({"state": "draft", "purchase_id": False})
+            bc_auth.grant(order.line_ids, "collective").purchase_line_id = False
+            # Prüfbericht R06: wieder aktive Mengen dürfen den Auftrag nicht überschreiten
+            order.line_ids._check_qty()
         return True
 
     def _bc_update_done(self):
         """Auf Erledigt setzen, wenn der Wareneingang der Herstellerbestellung vollständig ist."""
         for order in self:
             if order.state == "ordered" and order.purchase_id.receipt_status == "full":
-                order.state = "done"
+                bc_auth.grant(order.sudo(), "collective").state = "done"
 
 
 class BlistercenterCollectiveOrderLine(models.Model):
@@ -176,8 +188,20 @@ class BlistercenterCollectiveOrderLine(models.Model):
     purchase_line_id = fields.Many2one("purchase.order.line", string="Position Bestellung", readonly=True, copy=False)
     state = fields.Selection(related="order_id.state")
 
+    def _bc_lock_sale_lines(self):
+        """Auftragspositionen sperren, damit gleichzeitige Bündelungen nacheinander laufen (R06)."""
+        ids = tuple(self.sale_line_id.ids)
+        if ids:
+            self.env.cr.execute("SELECT id FROM sale_order_line WHERE id IN %s FOR UPDATE", (ids,))
+            self.sale_line_id.invalidate_recordset(["bc_collective_line_ids"])
+
     @api.model_create_multi
     def create(self, vals_list):
+        for vals in vals_list:
+            bc_auth.check_protected(self, vals, ("purchase_line_id",), name="collective")
+        sale_ids = tuple({vals["sale_line_id"] for vals in vals_list if vals.get("sale_line_id")})
+        if sale_ids:
+            self.env.cr.execute("SELECT id FROM sale_order_line WHERE id IN %s FOR UPDATE", (sale_ids,))
         lines = super().create(vals_list)
         if any(line.order_id.state != "draft" for line in lines):
             raise UserError(self.env._("Kundenmengen lassen sich nur im Entwurf hinzufügen."))
@@ -185,6 +209,9 @@ class BlistercenterCollectiveOrderLine(models.Model):
         return lines
 
     def write(self, vals):
+        bc_auth.check_protected(self, vals, ("purchase_line_id",), name="collective")
+        if {"qty", "sale_line_id"} & set(vals):
+            self._bc_lock_sale_lines()
         if set(vals) - {"purchase_line_id"} and any(line.order_id.state != "draft" for line in self):
             raise UserError(self.env._("Kundenmengen lassen sich nur im Entwurf ändern."))
         res = super().write(vals)

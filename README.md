@@ -5,7 +5,7 @@ Eigene Module für die PLCS GmbH. Die Module liegen direkt im Wurzelverzeichnis,
 | Modul | Inhalt | Stand |
 |---|---|---|
 | `plcs_greenrx` | GreenRX-Wareneingang: Scan je Packung, Boxen, Vorprüfung mit Ampel, KabQ-Drucke, VP-Freigabe | einsatzbereit für den Test |
-| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Proforma, Rechnung je Lieferung, Rabatt 0/1/2 % auf HAP, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | 1.2.0 auf Branch `feat/blistercenter-rechnung`, zum Test (nicht in Production) |
+| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Proforma, Rechnung je Lieferung, Rabatt 0/1/2 % auf HAP, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | 1.2.1 auf Branch `fix/pruefbericht-1019`, zum Test (nicht in Production) |
 
 **Prüfumgebung:** https://baltazar1359-odoo20.odoo.com (Odoo.sh, Branch `main` = Production). Prüfanleitung: [`docs/PRUEFANLEITUNG.md`](docs/PRUEFANLEITUNG.md), Testcodes: [`docs/greenrx_testcodes.pdf`](docs/greenrx_testcodes.pdf).
 
@@ -229,4 +229,5 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 - Rechnung je Lieferung über Odoo-Standard (`_create_invoices`, Fakturierung nach gelieferter Menge); Rechnung verweist auf die Lieferung (`bc_picking_id`).
 - Proforma: Standardbericht `sale.report_saleorder_pro_forma` mit eigenem Hinweis, für die Rolle Benutzer freigegeben.
 - 1.2.0: Vorkasse entfernt; Migration setzt „Vorkasse“ → „Lastschrift (DATEV)“, „Rechnung“ → „Überweisung“. Bestehende Anzahlungsrechnungen bleiben unverändert.
-- Tests: `odoo-bin ... -i blistercenter --test-enable --test-tags /blistercenter` (49 Tests, zusammen mit `plcs_greenrx` 191).
+- Tests: `odoo-bin ... -i blistercenter --test-enable --test-tags /blistercenter` (70 Tests, zusammen mit `plcs_greenrx` 207).
+- Nachweisfelder sind serverseitig geschützt (`blistercenter/tools/bc_auth.py`, gleiches Muster wie `plcs_greenrx/tools/grx_auth.py`). Umsetzung Prüfbericht 19.10.2026: `docs/PRUEFBERICHT_2026-10-19.md`.

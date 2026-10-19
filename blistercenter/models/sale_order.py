@@ -2,8 +2,10 @@ from markupsafe import Markup
 
 from odoo.http import request
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tools import is_html_empty
+
+from ..tools import bc_auth
 
 BC_STATES = [
     ("new", "Eingegangen"),
@@ -25,14 +27,18 @@ ORDER_CHANNELS = [
 ]
 # Bestellwege, bei denen der Besteller Pflicht ist (keine Anmeldung im Shop)
 CHANNELS_WITH_ORDERER = ("phone", "email", "fax", "other")
+# Nachweis der Teillieferung nur über den Assistenten (Prüfbericht 19.10.2026 R07)
+ORDER_PROTECTED_FIELDS = ("bc_partial_allowed", "bc_partial_note", "bc_partial_by", "bc_partial_date")
+LINE_PROTECTED_FIELDS = ("bc_from_stock", "bc_from_stock_by")
 
 
 class SaleOrder(models.Model):
     _inherit = "sale.order"
 
     bc_is_blistercenter = fields.Boolean(
-        "Blistercenter-Bestellung", related="partner_id.commercial_partner_id.bc_is_customer",
-        store=True, index=True,
+        "Blistercenter-Bestellung", compute="_compute_bc_is_blistercenter", store=True, index=True,
+        help="Wird beim Anlegen und bis zur Bestätigung aus dem Kunden übernommen und danach festgehalten. "
+             "Eine spätere Änderung am Kunden hebt die Regeln laufender Bestellungen nicht auf.",
     )
     bc_payment_model = fields.Selection(related="partner_id.commercial_partner_id.bc_payment_model", string="Zahlungsart")
     bc_discount = fields.Selection(related="partner_id.commercial_partner_id.bc_discount", string="Rabatt auf HAP")
@@ -72,6 +78,14 @@ class SaleOrder(models.Model):
     bc_partial_note = fields.Char("Vermerk Teillieferung", readonly=True, tracking=True, copy=False)
     bc_partial_by = fields.Many2one("res.users", "Teillieferung erlaubt von", readonly=True, copy=False)
     bc_partial_date = fields.Datetime("Teillieferung erlaubt am", readonly=True, copy=False)
+
+    @api.depends("partner_id", "state")
+    def _compute_bc_is_blistercenter(self):
+        """Prüfbericht 19.10.2026 R04: Zuordnung bei bestätigten Aufträgen festhalten."""
+        for order in self:
+            if order.state in ("sale", "cancel") and order._origin.id and order.bc_is_blistercenter:
+                continue
+            order.bc_is_blistercenter = order.partner_id.commercial_partner_id.bc_is_customer
 
     @api.depends_context("uid")
     def _compute_bc_overdue(self):
@@ -122,6 +136,7 @@ class SaleOrder(models.Model):
         Partner = self.env["res.partner"]
         for vals in vals_list:
             partner = Partner.browse(vals.get("partner_id")).commercial_partner_id
+            bc_auth.check_protected(self, vals, ORDER_PROTECTED_FIELDS)
             if not partner.bc_is_customer:
                 continue
             if vals.get("website_id") and not vals.get("bc_channel"):
@@ -133,6 +148,10 @@ class SaleOrder(models.Model):
                 vals.setdefault("bc_received_by", self.env.uid)
                 vals.setdefault("bc_received_date", fields.Datetime.now())
         return super().create(vals_list)
+
+    def write(self, vals):
+        bc_auth.check_protected(self, vals, ORDER_PROTECTED_FIELDS)
+        return super().write(vals)
 
     @api.onchange("partner_id")
     def _onchange_partner_id_bc(self):
@@ -162,18 +181,19 @@ class SaleOrder(models.Model):
             return message
         partner = self.partner_id.commercial_partner_id
         config = self.env["blistercenter.config"]._get(self.company_id)
-        if partner.bc_is_customer and partner.bc_payment_block and config.rule_block_confirm:
+        is_bc = self.bc_is_blistercenter or partner.bc_is_customer
+        if is_bc and partner.bc_payment_block and config.rule_block_confirm:
             return self.env._(
                 "%(customer)s hat eine Zahlungssperre (%(reason)s). Die Bestellung kann nicht bestätigt werden.",
                 customer=partner.display_name, reason=partner.bc_payment_block_reason or "-",
             )
         if (self.website_id and config.rule_shop_requires_enable and not self._bc_loading_demo_data()
-                and not (partner.bc_is_customer and partner.bc_shop_enabled)):
+                and not (is_bc and partner.bc_shop_enabled)):
             return self.env._(
                 "Shop-Bestellungen sind nur für freigeschaltete Blistercenter möglich (%(customer)s ist nicht freigeschaltet).",
                 customer=partner.display_name,
             )
-        if not partner.bc_is_customer:
+        if not is_bc:
             return False
         if config.rule_require_channel:
             channel = self.bc_channel or ("shop" if self.website_id else False)
@@ -392,13 +412,35 @@ class SaleOrderLine(models.Model):
                 continue
             line.bc_supplier_id = sellers.filtered("bc_is_supplier")[:1] or sellers[:1]
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            bc_auth.check_protected(self, vals, LINE_PROTECTED_FIELDS)
+        return super().create(vals_list)
+
+    def write(self, vals):
+        bc_auth.check_protected(self, vals, LINE_PROTECTED_FIELDS)
+        return super().write(vals)
+
+    @api.constrains("product_uom_qty", "product_uom_id")
+    def _check_bc_qty_allocated(self):
+        """Prüfbericht 19.10.2026 R06: Auftragsmenge nie unter die Menge in Sammelbestellungen senken."""
+        for line in self.filtered("bc_collective_line_ids"):
+            allocated = sum(c.qty for c in line.bc_collective_line_ids if c.order_id.state != "cancel")
+            if line.product_uom_id.compare(allocated, line.product_uom_qty) > 0:
+                raise ValidationError(self.env._(
+                    "%(order)s / %(product)s: In Sammelbestellungen stehen %(alloc)s, der Auftrag hätte nur "
+                    "noch %(qty)s. Erst die Sammelbestellung anpassen.",
+                    order=line.order_id.name, product=line.product_id.display_name,
+                    alloc=allocated, qty=line.product_uom_qty))
+
     @api.depends("order_id.partner_id")
     def _compute_discount(self):
         """Blistercenter: Rabatt des Kunden (0, 1 oder 2 %) auf den HAP für jede Warenposition."""
         super()._compute_discount()
         for line in self:
             partner = line.order_id.partner_id.commercial_partner_id
-            if not (partner.bc_is_customer and line._bc_is_goods_line()):
+            if not ((line.order_id.bc_is_blistercenter or partner.bc_is_customer) and line._bc_is_goods_line()):
                 continue
             config = self.env["blistercenter.config"]._get(line.order_id.company_id or self.env.company)
             if config.rule_customer_discount:

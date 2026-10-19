@@ -278,15 +278,22 @@ def _parse_ifa(code):
     out = {"format": "ifa"}
     if data.get("gtin"):
         gtin = data["gtin"]
-        # Wie beim GS1-Code: nur Ziffern, höchstens 14 Stellen, Prüfziffer muss stimmen (GPT-Review F06)
-        if not gtin.isdigit() or len(gtin) > 14 or not gtin_check_digit_ok(gtin.zfill(14)):
+        # Erst die echte Länge prüfen (8, 12, 13 oder 14 Stellen), dann auf 14 auffüllen
+        # (GPT-Review F06, Prüfbericht 19.10. R10)
+        if not gtin_check_digit_ok(gtin):
             raise Gs1Error("GTIN %s im Code ist ungültig (Prüfziffer oder Länge)." % gtin)
         out["gtin"] = gtin.zfill(14)
+        out["pzn"] = gtin_to_pzn(out["gtin"])
     if data.get("ppn"):
         if not ppn_check_ok(data["ppn"]):
             raise Gs1Error("PPN %s im Code ist ungültig (Prüfziffern stimmen nicht)." % data["ppn"])
         out["ppn"] = data["ppn"]
-        out["pzn"] = ppn_to_pzn(data["ppn"])
+        ppn_pzn = ppn_to_pzn(data["ppn"])
+        # GTIN und PPN müssen dieselbe PZN ergeben (Prüfbericht 19.10. R10)
+        if ppn_pzn and out.get("pzn") and out["pzn"] != ppn_pzn:
+            raise Gs1Error("Code widersprüchlich: GTIN (PZN %s) und PPN (PZN %s) passen nicht zusammen. "
+                           "Packung ins Klärungsfach legen." % (out["pzn"], ppn_pzn))
+        out["pzn"] = ppn_pzn or out.get("pzn")
     if data.get("batch"):
         out["batch"] = data["batch"]
     if data.get("serial"):
@@ -312,9 +319,10 @@ def parse(raw):
     heuristic = False
     if code.startswith("("):
         # Klammer-Schreibweise (Handeingabe)
-        pairs = re.findall(r"\((\d{2,4})\)([^(]*)", code)
-        if not pairs:
-            raise Gs1Error("Klammer-Schreibweise nicht lesbar.")
+        # Die ganze Eingabe muss aus (AI)Wert-Paaren bestehen; Reste werden abgelehnt (Prüfbericht R10)
+        if not re.fullmatch(r"(?:\(\d{2,4}\)[^()]*)+", code):
+            raise Gs1Error("Klammer-Schreibweise nicht lesbar oder unvollständig.")
+        pairs = re.findall(r"\((\d{2,4})\)([^()]*)", code)
         code = FNC1.join(ai + val for ai, val in pairs)
 
     if FNC1 in code:
@@ -349,8 +357,13 @@ def parse(raw):
     if "710" in ais:
         nhrn = ais["710"]
         out["nhrn"] = nhrn
+        nhrn_pzn = ppn_to_pzn(nhrn) or (nhrn if len(nhrn) == 8 and nhrn.isdigit() else False)
+        # NTIN und NHRN müssen dieselbe PZN ergeben (Prüfbericht 19.10. R10)
+        if nhrn_pzn and out.get("pzn") and nhrn_pzn != out["pzn"]:
+            raise Gs1Error("Code widersprüchlich: NTIN (PZN %s) und NHRN (PZN %s) passen nicht zusammen. "
+                           "Packung ins Klärungsfach legen." % (out["pzn"], nhrn_pzn))
         if not out.get("pzn"):
-            out["pzn"] = ppn_to_pzn(nhrn) or (nhrn if len(nhrn) == 8 and nhrn.isdigit() else False)
+            out["pzn"] = nhrn_pzn
     if "21" in ais:
         out["serial"] = ais["21"]
     if "10" in ais:

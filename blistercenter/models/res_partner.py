@@ -1,6 +1,7 @@
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
 
+from ..tools import bc_auth
 from .blistercenter_config import DISCOUNTS, PAYMENT_MODELS
 
 # Felder, die nur die Rolle „Freigabe“ ändern darf (bei Blistercenter-Kunden)
@@ -17,6 +18,10 @@ APPROVAL_STANDARD_FIELDS = {
     "property_product_pricelist",
     "specific_property_product_pricelist",
 }
+
+
+# Nachweis der Shopfreischaltung setzt nur Odoo (Prüfbericht 19.10.2026)
+PARTNER_PROTECTED_FIELDS = ("bc_shop_enabled_by", "bc_shop_enabled_date")
 
 
 class ResPartner(models.Model):
@@ -108,9 +113,15 @@ class ResPartner(models.Model):
     # Rechte und Konsistenz
     # ------------------------------------------------------------------
     def _bc_check_approval_rights(self, vals, is_create=False):
+        bc_auth.check_protected(self, vals, PARTNER_PROTECTED_FIELDS)
         if self.env.su or self.env.user.has_group("blistercenter.group_bc_approver"):
             return
         touched = APPROVAL_FIELDS & set(vals)
+        # Prüfbericht 19.10.2026 R04: Kennzeichen „Blistercenter“ entfernen nur durch die Rolle Freigabe,
+        # sonst ließen sich Zahlungssperre, Zahlungsziel und Rabatt umgehen
+        if not is_create and "bc_is_customer" in vals and not vals["bc_is_customer"] \
+                and any(p.bc_is_customer for p in self):
+            touched |= {"bc_is_customer"}
         if is_create:
             # Beim Anlegen zählen nur gesetzte Werte
             touched = {f for f in touched if vals.get(f) and not (f == "bc_discount" and vals[f] == "0")}

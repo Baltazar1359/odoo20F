@@ -1,4 +1,4 @@
-# Blistercenter – Regelkatalog (Stand 19.10.2026, Modul 20.0.1.2.0)
+# Blistercenter – Regelkatalog (Stand 19.10.2026, Modul 20.0.1.2.1)
 
 Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im Shop, per Telefon, E-Mail oder Fax. PLCS bündelt die Mengen in Sammelbestellungen und bestellt manuell beim Hersteller (z. B. AstraZeneca).
 
@@ -57,6 +57,9 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R34 | **Rabatt je Kunde:** Verkaufspreis = **HAP** (Verkaufspreis am Artikel). Je Kunde **0, 1 oder 2 %** auf alle Artikel, andere Werte nicht möglich. Ein abweichender Rabatt in einer Position sperrt die Bestätigung. Der Preis zum Zeitpunkt des Auftrags gilt. | ja |
 | R35 | **Preise von Hand:** keine Lauer-Taxe. HAP am Artikel, Einkaufspreis je Hersteller und Artikel als Einkaufskondition. | – |
 | R36 | **Überfällige Rechnungen:** Auftrag, Lieferung und Kunde zeigen einen deutlichen Hinweis (Anzahl, Betrag). **Keine Sperre.** Kachel „Überfällige Rechnungen“. | – |
+| R37 | **Nachweise nur aus dem Ablauf** (Prüfbericht 19.10.2026): Wer kommissioniert, gebucht, Kurzläufer freigegeben, eine Teillieferung abgestimmt oder „Aus Lagerbestand“ gewählt hat, setzt nur Odoo in der jeweiligen Aktion. Status der Sammelbestellung nur über ihre Übergänge. Direkte Schreibzugriffe (z. B. über die Schnittstelle) werden abgelehnt. | – |
+| R38 | **Kennzeichen „Blistercenter“** entfernt nur die Rolle Freigabe. Ein bestätigter Auftrag bleibt Blistercenter-Auftrag, auch wenn das Kennzeichen später fehlt. | – |
+| R39 | **Mengen:** Die Auftragsmenge kann nicht unter die Menge in Sammelbestellungen sinken; eine stornierte Sammelbestellung lässt sich nur reaktivieren, wenn die Menge noch frei ist. Die Herstellerbestellung muss die Kundenmengen decken (mehr ist erlaubt). | – |
 
 ## B. Entscheidungen 15.10.2026 (Mehrdad)
 

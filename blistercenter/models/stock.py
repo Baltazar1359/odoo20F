@@ -3,6 +3,8 @@ from dateutil.relativedelta import relativedelta
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
 
+from ..tools import bc_auth
+
 BC_PICKING_KINDS = [
     ("receipt", "Wareneingang (Quarantäne)"),
     ("release", "Freigabe (VP)"),
@@ -13,6 +15,12 @@ PICK_RELEVANT_FIELDS = {
     "quantity", "lot_id", "lot_name", "product_id", "location_id", "location_dest_id",
     "package_id", "result_package_id", "owner_id",
 }
+# Nachweisfelder: nur über die geprüften Aktionen (Prüfbericht 19.10.2026 R01, R03)
+PICKING_PROTECTED_FIELDS = (
+    "bc_validated_by", "bc_validated_date", "bc_picked_by", "bc_picked_date",
+    "bc_short_approved_lot_ids", "bc_short_approved_by", "bc_short_approved_date", "bc_short_reason",
+)
+LOT_PROTECTED_FIELDS = ("bc_blocked_by", "bc_blocked_date")
 
 
 class StockLot(models.Model):
@@ -31,6 +39,7 @@ class StockLot(models.Model):
             lot.bc_can_unblock = allowed
 
     def write(self, vals):
+        bc_auth.check_protected(self, vals, LOT_PROTECTED_FIELDS)
         if "bc_blocked" in vals:
             vals = dict(vals)
             if vals["bc_blocked"]:
@@ -40,7 +49,8 @@ class StockLot(models.Model):
                     raise UserError(self.env._("Für die Sperre einer Charge ist ein Grund Pflicht."))
                 to_block = self.filtered(lambda lot: not lot.bc_blocked)
                 res = super().write(vals)
-                to_block.write({"bc_blocked_by": self.env.uid, "bc_blocked_date": fields.Datetime.now()})
+                bc_auth.grant(to_block, "lot_block").write({
+                    "bc_blocked_by": self.env.uid, "bc_blocked_date": fields.Datetime.now()})
                 return res
             # Entsperren nur durch die Rolle Freigabe
             if any(lot.bc_blocked for lot in self) and not (
@@ -48,6 +58,7 @@ class StockLot(models.Model):
             ):
                 raise AccessError(self.env._("Eine gesperrte Charge darf nur die Rolle „Blistercenter Freigabe“ entsperren."))
             vals.update({"bc_block_reason": False, "bc_blocked_by": False, "bc_blocked_date": False})
+            return super(StockLot, bc_auth.grant(self, "lot_block")).write(vals)
         return super().write(vals)
 
 
@@ -92,6 +103,11 @@ class StockMove(models.Model):
             if vals.get("bc_wait_collective"):
                 vals["procure_method"] = "make_to_order"
         return super().create(vals_list)
+
+    def write(self, vals):
+        # Feste Zuordnung nur über „Aus Lagerbestand liefern“ aufheben (Prüfbericht 19.10.2026)
+        bc_auth.check_protected(self, vals, ("bc_wait_collective",))
+        return super().write(vals)
 
     def _action_confirm(self, merge=True, merge_into=False, create_proc=True):
         # Bewegungen, die auf eine Sammelbestellung warten, lösen keine eigene Beschaffung aus
@@ -261,9 +277,23 @@ class StockPicking(models.Model):
             lambda ml: ml.quantity > 0 and ml.lot_id.expiration_date and ml.lot_id.expiration_date < limit)
         return lines.lot_id
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            bc_auth.check_protected(self, vals, PICKING_PROTECTED_FIELDS)
+        return super().create(vals_list)
+
+    def write(self, vals):
+        bc_auth.check_protected(self, vals, PICKING_PROTECTED_FIELDS)
+        return super().write(vals)
+
     def _bc_reset_picked(self):
-        """Abgeschlossene Kommissionierung zurücksetzen, wenn sich die Lagerzeilen ändern."""
-        if self.env.context.get("bc_in_done"):
+        """Abgeschlossene Kommissionierung zurücksetzen, wenn sich die Lagerzeilen ändern.
+
+        Ausnahme nur während der Buchung selbst; die Freigabe dafür kann ein RPC-Aufruf nicht
+        mitschicken (Prüfbericht 19.10.2026 R02, früher Kontextwert „bc_in_done“).
+        """
+        if bc_auth.has(self.env, "in_done"):
             return
         for picking in self.filtered(lambda p: p.bc_picked_by and p.state not in ("done", "cancel")):
             picking.sudo().write({"bc_picked_by": False, "bc_picked_date": False})
@@ -373,7 +403,9 @@ class StockPicking(models.Model):
                 customer=partner.display_name, reason=partner.bc_payment_block_reason or "-", picking=self.name,
             ))
         sale = self.sale_id
-        if config.rule_partial_needs_approval and not (sale and sale.bc_partial_allowed):
+        partial_ok = bool(sale and sale.bc_partial_allowed and (sale.bc_partial_note or "").strip()
+                          and sale.bc_partial_by)
+        if config.rule_partial_needs_approval and not partial_ok:
             open_moves = self.move_ids.filtered(lambda m: m.state not in ("done", "cancel"))
             if any(m.uom_id.compare(m.quantity, m.product_uom_qty) < 0 for m in open_moves):
                 raise UserError(self.env._(
@@ -410,11 +442,11 @@ class StockPicking(models.Model):
 
     def _action_done(self):
         self._bc_check_before_done()
-        res = super(StockPicking, self.with_context(bc_in_done=True))._action_done()
+        res = super(StockPicking, bc_auth.grant(self, "in_done"))._action_done()
         done = self.filtered(lambda p: p.state == "done")
         bc_done = done.filtered("bc_kind")
         if bc_done:
-            bc_done.sudo().with_context(bc_in_done=True).write({
+            bc_auth.grant(bc_done.sudo(), "in_done").write({
                 "bc_validated_by": self.env.uid, "bc_validated_date": fields.Datetime.now(),
             })
         # Mehrstufiger Versand: wer den Vorschritt gebucht hat, hat kommissioniert
@@ -422,7 +454,7 @@ class StockPicking(models.Model):
             outgoing = picking.move_ids.move_dest_ids.picking_id.filtered(
                 lambda p: p.bc_kind == "delivery" and not p.bc_picked_by and p.state not in ("done", "cancel"))
             if outgoing:
-                outgoing.sudo().with_context(bc_in_done=True).write({
+                bc_auth.grant(outgoing.sudo(), "in_done").write({
                     "bc_picked_by": self.env.uid, "bc_picked_date": fields.Datetime.now()})
         done.filtered(lambda p: p.bc_kind == "receipt")._bc_create_release()
         self.purchase_id.bc_collective_ids._bc_update_done()

@@ -8,3 +8,4 @@ from . import test_ativ_sync
 from . import test_review_fixes
 from . import test_formblatt_pdf
 from . import test_gpt_review
+from . import test_pruefbericht_1019

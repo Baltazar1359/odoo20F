@@ -886,10 +886,21 @@ class PlcsGreenrxTicket(models.Model):
         self.write({"state": new_state, "ativ_auto_state": new_state != "open"})
         return True
 
+    def _grx_check_override_access(self):
+        """Prüfbericht 19.10. R08: Datensatz- und Firmenrechte vor dem Wechsel auf sudo prüfen."""
+        if self.env.su:
+            return
+        self.check_access("write")
+        for ticket in self:
+            company = ticket.sudo().company_id
+            if company and company not in self.env.companies:
+                raise AccessError(self.env._("Vorgang %s gehört zu einer anderen Firma.", ticket.sudo().name))
+
     def action_ativ_override(self):
         """Lagerleitung: Vorgang trotz ATIV-Status als erwartet öffnen."""
         if not self.env.user.has_group("stock.group_stock_manager"):
             raise UserError(self.env._("Nur die Lagerleitung darf die Erwartung von Hand festlegen."))
+        self._grx_check_override_access()
         for ticket in self.sudo():
             if ticket.state not in ("closed", "cancel"):
                 continue
@@ -902,6 +913,7 @@ class PlcsGreenrxTicket(models.Model):
         """Festlegung aufheben: Status wieder aus ATIV übernehmen."""
         if not self.env.user.has_group("stock.group_stock_manager"):
             raise UserError(self.env._("Nur die Lagerleitung darf das."))
+        self._grx_check_override_access()
         for ticket in self.sudo().filtered("ativ_override"):
             ticket.ativ_override = False
             ticket._ativ_apply_status(ticket.ativ_status, ticket.ativ_status)
