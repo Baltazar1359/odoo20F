@@ -17,6 +17,9 @@ class TestPlcsLayout(TransactionCase):
             "plcs_tax_number": "111/222/333", "plcs_legal_note": "Großhandelserlaubnis Testtext",
         })
         cls.company._plcs_apply_layout()
+        # Demodaten bringen ein Firmenkonto mit; die Tests beginnen ohne Bankverbindung
+        cls.company.plcs_bank_id = False
+        cls.company.partner_id.bank_ids.write({"active": False})
         cls.partner = cls.env["res.partner"].create({
             "name": "Empfänger Test", "street": "Empfängerweg 9", "zip": "50667", "city": "Köln"})
 

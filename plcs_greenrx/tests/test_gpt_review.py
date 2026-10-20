@@ -34,6 +34,7 @@ class TestGptReviewBox(TransactionCase):
         super().setUpClass()
         cls.company = cls.env.company
         cls.company._plcs_grx_setup()
+        flow.hide_existing_articles(cls.env)
         cls.lager = new_test_user(cls.env, login="gr_lager", groups="plcs_greenrx.group_grx_user")
         cls.lager2 = new_test_user(cls.env, login="gr_lager2", groups="plcs_greenrx.group_grx_user")
         cls.vp1 = new_test_user(cls.env, login="gr_vp1", groups="plcs_greenrx.group_grx_vp")

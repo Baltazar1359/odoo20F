@@ -16,6 +16,19 @@ def code(gtin, serial, batch, exp):
     return "01" + gtin + "21" + serial + GS + "10" + batch + GS + "17" + exp
 
 
+def hide_existing_articles(env):
+    """Vorhandene Artikel mit PZN/GTIN aus dem Testlauf nehmen (z. B. Demodaten anderer Module).
+
+    Datenbanken mit Demodaten (Odoo.sh-Dev-Builds) enthalten ab Blistercenter 1.3.0 Testartikel mit
+    echten PZN. Tests, die „Artikel noch nicht im Stamm“ prüfen, brauchen einen leeren Stamm.
+    Alles läuft in der Testtransaktion und wird danach zurückgesetzt.
+    """
+    products = env["product.product"].with_context(active_test=False).search([
+        "|", "|", ("plcs_pzn", "!=", False), ("barcode", "!=", False), ("default_code", "!=", False)])
+    products.write({"barcode": False, "default_code": False, "active": False})
+    products.product_tmpl_id.write({"plcs_pzn": False})
+
+
 @tagged("post_install", "-at_install", "plcs_greenrx")
 class TestGreenrxFlow(TransactionCase):
 
@@ -24,6 +37,7 @@ class TestGreenrxFlow(TransactionCase):
         super().setUpClass()
         cls.company = cls.env.company
         cls.company._plcs_grx_setup()
+        hide_existing_articles(cls.env)
         cls.cfg = cls.company
         cls.lager = new_test_user(cls.env, login="grx_lager", groups="plcs_greenrx.group_grx_user")
         cls.vp1 = new_test_user(cls.env, login="grx_vp1", groups="plcs_greenrx.group_grx_vp")

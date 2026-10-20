@@ -8,6 +8,7 @@ from odoo.tools import mute_logger
 
 from ..models.plcs_ativ_sync import CONTRACT_VERSION, PlcsGreenrxConnector
 from ..tools.ativ_client import READ_METHODS, AtivClient, AtivError
+from . import test_greenrx_flow as flow
 from .ativ_fake import FakeAtiv, FakeClient
 
 
@@ -18,6 +19,7 @@ class AtivCase(TransactionCase):
         super().setUpClass()
         cls.company = cls.env.company
         cls.company._plcs_grx_setup()
+        flow.hide_existing_articles(cls.env)
         cls.manager = new_test_user(cls.env, login="ativ_mgr", groups="stock.group_stock_manager,plcs_greenrx.group_grx_vp")
         cls.lager = new_test_user(cls.env, login="ativ_lager", groups="plcs_greenrx.group_grx_user")
         cls.prod_byetta = cls.env["product.product"].create({
