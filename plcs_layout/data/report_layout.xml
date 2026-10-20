@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- A4 mit Platz für Logo oben und die mehrzeilige PLCS-Fußzeile unten -->
+    <record id="paperformat_plcs_a4" model="report.paperformat">
+        <field name="name">PLCS A4</field>
+        <field name="format">A4</field>
+        <field name="page_height">0</field>
+        <field name="page_width">0</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">40</field>
+        <field name="margin_bottom">50</field>
+        <field name="margin_left">20</field>
+        <field name="margin_right">15</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">36</field>
+        <field name="dpi">90</field>
+        <field name="css_margins" eval="False"/>
+    </record>
+
+    <record id="report_layout_plcs" model="report.layout">
+        <field name="name">PLCS</field>
+        <field name="sequence">1</field>
+        <field name="view_id" ref="plcs_layout.external_layout_plcs"/>
+    </record>
+</odoo>

@@ -177,9 +177,8 @@ class TestBlistercenterWorkAreas(BlistercenterCommon):
     def test_phone_order_tile_opens_form(self):
         tile = self.env.ref("blistercenter.tile_phone_order").with_user(self.only_sales)
         action = tile.action_open()
-        self.assertEqual(action["res_model"], "sale.order")
+        self.assertEqual(action["res_model"], "blistercenter.order.sheet", "1.4.0: Bestellschein")
         self.assertEqual(action["view_mode"], "form")
-        self.assertIn("phone", str(action.get("context")))
 
     def test_areas_do_not_change_rights(self):
         """Arbeitsbereiche steuern nur die Sicht; die Rechte kommen weiter aus „Benutzer“."""

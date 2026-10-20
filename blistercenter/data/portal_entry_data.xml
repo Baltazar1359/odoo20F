@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Karte im Kundenportal; sichtbar nur für freigeschaltete Blistercenter (Zähler bc_sheet_count) -->
+    <record id="portal_entry_order_sheet" model="portal.entry">
+        <field name="name">Bestellschein</field>
+        <field name="description">Blistercenter-Artikel bestellen: Mengen eintragen und abschicken</field>
+        <field name="url">/my/bestellschein</field>
+        <field name="image" type="bytes" file="blistercenter/static/src/img/order_sheet.svg"/>
+        <field name="placeholder_count">bc_sheet_count</field>
+        <field name="category">client_category</field>
+        <field name="sequence" eval="5"/>
+    </record>
+</odoo>

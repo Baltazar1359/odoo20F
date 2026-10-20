@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- PLCS-Briefpapier (nach der PLCS-Gutschrift): Logo rechts, Absenderzeile über der Adresse links,
+         Fußzeile mit Firmendaten aus Odoo. Alle Angaben aus den Firmendaten, nichts fest im Code. -->
+    <template id="plcs_sender_line">
+        <div class="o_plcs_sender" style="font-size: 8pt; color: #444; border-bottom: 1px solid #b5b5b5; padding-bottom: 1mm; margin-bottom: 3mm;">
+            <span t-out="company.name"/><t t-if="company.street"> | <span t-out="company.street"/></t><t t-if="company.zip or company.city"> | <span t-out="company.zip"/> <span t-out="company.city"/></t>
+        </div>
+    </template>
+
+    <template id="external_layout_plcs">
+        <t t-set="plcs_red" t-value="company.primary_color or '#9c0000'"/>
+        <div t-attf-class="o_company_#{company.id}_layout header o_plcs_header">
+            <div style="text-align: right; padding-top: 2mm;">
+                <img t-if="company.logo" t-att-src="image_data_uri(company.logo)" alt="Logo"
+                     style="max-height: 26mm; max-width: 55mm;"/>
+            </div>
+        </div>
+
+        <t t-set="customized_address_layout">
+            <div t-if="address or information_block" class="row o_plcs_address" style="margin-bottom: 8mm;">
+                <div class="col-6">
+                    <t t-call="plcs_layout.plcs_sender_line"/>
+                    <div name="address" style="font-size: 9.5pt;"><t t-out="address"/></div>
+                </div>
+                <div t-if="information_block" name="information_block" class="col-5 offset-1" style="font-size: 9.5pt;">
+                    <t t-out="information_block"/>
+                </div>
+            </div>
+        </t>
+        <t t-call="web.external_layout_body">
+            <t t-out="0"/>
+        </t>
+
+        <div t-attf-class="footer o_company_#{company.id}_layout o_plcs_footer {{report_type != 'pdf' and 'mt-auto'}}"
+             style="font-size: 9pt; color: #555; line-height: 1.45;">
+            <t t-set="bank" t-value="company._plcs_footer_bank()"/>
+            <div t-if="company.plcs_legal_note" class="o_plcs_note" style="color: #333; margin-bottom: 2mm;" t-field="company.plcs_legal_note"/>
+            <div t-if="report_type == 'pdf'" class="o_plcs_pager" style="text-align: right; margin-bottom: 1mm;">Seite: <span class="page"/> von <span class="topage"/></div>
+            <div style="border-top: 1.2px solid #222; padding-top: 1.5mm;">
+                <div class="o_plcs_legal_name" t-attf-style="color: {{plcs_red}}; font-size: 10pt;" t-out="company.plcs_legal_name or company.name"/>
+                <div t-if="company.street or company.city">
+                    <span t-out="company.street"/><t t-if="company.street2">, <span t-out="company.street2"/></t> | <span t-out="company.zip"/> <span t-out="company.city"/>
+                </div>
+                <div>
+                    <t t-if="company.plcs_managing_director">Geschäftsführer: <span t-out="company.plcs_managing_director"/></t>
+                    <t t-if="company.phone"><t t-if="company.plcs_managing_director"> · </t>Fon: <span t-out="company.phone"/></t>
+                    <t t-if="company.email"> · E-Mail: <span t-out="company.email"/></t>
+                </div>
+                <div t-if="bank" class="o_plcs_bank" style="margin-top: 1.5mm;">
+                    Bankverbindung: <span t-out="bank.holder_name or company.plcs_legal_name or company.name"/>
+                    <t t-if="bank.bank_name"> · <span t-out="bank.bank_name"/></t>
+                    · IBAN: <span t-out="bank.account_number"/>
+                    <t t-if="bank.bank_bic"> · BIC: <span t-out="bank.bank_bic"/></t>
+                </div>
+                <div t-if="company.plcs_register_court or company.plcs_registry or company.plcs_tax_number or company.vat"
+                     t-attf-style="{{'' if bank else 'margin-top: 1.5mm;'}}">
+                    <t t-if="company.plcs_register_court or company.plcs_registry"><span t-out="company.plcs_register_court"/> <span t-out="company.plcs_registry"/></t>
+                    <t t-if="company.plcs_tax_number"> | Steuernummer: <span t-out="company.plcs_tax_number"/></t>
+                    <t t-if="company.vat"> | USt-IdNr.: <span t-out="company.vat"/></t>
+                </div>
+            </div>
+        </div>
+    </template>
+</odoo>

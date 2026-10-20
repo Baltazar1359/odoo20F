@@ -11,3 +11,5 @@ rule_bc_collective_company,Sammelbestellung: Firma,blistercenter.collective.orde
 rule_bc_collective_line_company,Sammelbestellung-Position: Firma,blistercenter.collective.order.line,,crud,"[('company_id', 'in', company_ids)]"
 access_bc_partial_wizard_user,bc.partial.wizard.user,blistercenter.partial.wizard,group_bc_user,crud,
 access_bc_short_wizard_approver,bc.short.wizard.approver,blistercenter.short.wizard,group_bc_approver,crud,
+access_bc_order_sheet_user,bc.order.sheet.user,blistercenter.order.sheet,group_bc_user,crud,
+access_bc_order_sheet_line_user,bc.order.sheet.line.user,blistercenter.order.sheet.line,group_bc_user,crud,

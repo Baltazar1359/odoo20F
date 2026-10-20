@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Nur in Datenbanken mit Demodaten (Odoo.sh-Dev-Builds): Firmendaten wie auf dem PLCS-Briefpapier.
+         Ohne IBAN, Steuernummer und USt-IdNr. – die werden in Odoo eingetragen. -->
+    <function model="res.company" name="_plcs_load_demo"/>
+</odoo>

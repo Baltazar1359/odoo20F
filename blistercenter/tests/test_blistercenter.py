@@ -271,7 +271,7 @@ class TestBlistercenterOrders(BlistercenterCommon):
         self.assertEqual(phone.picking_policy, "one", "Blistercenter: Komplettlieferung als Standard")
         phone.action_confirm()
         action = self.customer_invoice.with_user(self.user_bc).action_bc_new_phone_order()
-        self.assertEqual(action["context"]["default_bc_channel"], "phone")
+        self.assertEqual(action["res_model"], "blistercenter.order.sheet", "1.4.0: Bestellschein (Bestellweg Telefon vorbelegt)")
         self.assertEqual(action["context"]["default_partner_id"], self.customer_invoice.id)
 
     def test_payment_block_prevents_confirm(self):

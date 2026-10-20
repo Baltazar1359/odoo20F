@@ -27,7 +27,7 @@
         <field name="area">sales</field>
         <field name="kind">action</field>
         <field name="name">Telefonbestellung erfassen</field>
-        <field name="description">Neue Bestellung am Telefon aufnehmen</field>
+        <field name="description">Bestellschein: Kunde wählen, Mengen eintragen</field>
         <field name="sequence">5</field>
         <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_sales'), ref('blistercenter.group_bc_approver')])]"/>
     </record>

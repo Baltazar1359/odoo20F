@@ -1,10 +1,10 @@
-# Prüfanleitung Blistercenter (Modul 20.0.1.3.0)
+# Prüfanleitung Blistercenter (Modul 20.0.1.4.0, Briefpapier plcs_layout 20.0.1.0.0)
 
 Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Branch darauf), **nicht Production** – dort ist Blistercenter bewusst nicht installiert (Variante B, 15.10.2026). Falls Blistercenter im Dev-Build fehlt: Apps › „Blistercenter“ installieren. Jeder Push erzeugt eine neue, leere Datenbank; die Dev-Datenbank ist englisch/USD (Odoo-Demofirma).
 
 ## Vorbereitung (einmal, als Administrator)
 
-0. **Testdaten:** Ab 1.3.0 legt das Modul sie in jedem Dev-Build automatisch an (Demodaten): Shop-Sortiment (13 Artikel in 5 Kategorien), Hersteller, drei Testkunden. **Nur für Logo und Produktfotos** zusätzlich das Skript ausführen: Odoo.sh › Branch › SHELL, dann
+0. **Testdaten:** Ab 1.3.0 legt das Modul sie in jedem Dev-Build automatisch an (ab 1.4.0 auch die PLCS-Firmendaten für das Briefpapier, ohne IBAN und Steuerdaten) (Demodaten): Shop-Sortiment (13 Artikel in 5 Kategorien), Hersteller, drei Testkunden. **Nur für Logo und Produktfotos** zusätzlich das Skript ausführen: Odoo.sh › Branch › SHELL, dann
    `odoo-bin shell --no-http < ~/src/user/docs/blistercenter_testdaten/testdaten.py`.
    Legt an: PLCS-Logo (Firma und Shop), Hersteller „AstraZeneca GmbH (Test)“, 20 Arzneimittel mit PZN, GTIN,
    Charge + Verfall, Shop-Freigabe, Fakturierung nach Lieferung, Einkaufskondition und Produktfoto – darunter
@@ -49,5 +49,9 @@ Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Br
 | T22 | Als Kunde (Portalzugang) den Shop öffnen. Nach „desk“ oder einem anderen Artikel (z. B. BYETTA) suchen. | Nur die Kategorien Forxiga, Xigduo, Daxas, Brilique, Tagrisso und deren 13 Artikel. Keine Demoprodukte, Suche ohne Treffer. Telefonbestellung mit BYETTA geht weiter. |
 | T23 | Als Administrator einen Artikel ohne „Im Blistercenter-Shop“ veröffentlichen und seine Shop-Adresse aufrufen. | Seite nicht gefunden (404); in den Warenkorb nicht möglich. Mit Schalter an erscheint er im Shop. |
 | T24 | Benutzer mit nur „Blistercenter: Lager“ anmelden, danach einen mit nur „Bestellannahme“ und einen mit nur „Einkauf“. | Lager: Menü „Lager und Versand“, „Chargen“; Kacheln Wareneingänge, Lieferungen, Endkontrolle, Kurzläufer, Sperren. Bestellannahme: Menü „Kunden“, „Kundenbestellungen“; großer Knopf „Telefonbestellung erfassen“, Neue Bestellungen, Zahlungssperren, Überfällige Rechnungen. Einkauf: Menü „Sammelbestellungen“, „Lieferanten“; Kacheln Zu bestellen, Offene Sammelbestellungen. Keiner sieht „Freigabe Wareneingang (VP)“. |
+| T25 | Als Bestellannahme „Telefonbestellung erfassen“: Kunde wählen, Besteller eintragen, bei zwei Artikeln Mengen, „Bestellung anlegen“. Danach ohne Besteller und ohne Menge versuchen. | Liste mit genau den 13 Artikeln, „Ihr Preis“ mit Kundenrabatt. Auftrag als Entwurf mit zwei Positionen, Bestellweg Telefon, „Angenommen von“. Ohne Besteller bzw. ohne Menge: klare Meldung, kein Auftrag. |
+| T26 | Als Kunde (Portalzugang) anmelden › Karte „Bestellschein“ › Mengen, eigene Bestellnummer, Bemerkung › „Bestellen“. | Danke-Seite mit Bestellnummer. Bei PLCS unter „Neue Bestellungen“: Bestellweg „Online-Bestellschein“, Besteller = Kontakt, Bemerkung im Verlauf, Aufgabe für die Bestellannahme. |
+| T27 | Kunde mit Zahlungssperre bzw. ohne Shopfreischaltung öffnet `/my/bestellschein`. | Hinweis statt Formular; die Karte „Bestellschein“ fehlt auf der Portalstartseite. |
+| T28 | Rechnung, Angebot und Lieferschein als PDF drucken. | PLCS-Briefpapier: Logo rechts, Absenderzeile über der Adresse, Fußzeile in PLCS-Rot mit Firmendaten; „Seite x von y“. Ohne eingetragene IBAN/Steuernummer fehlen diese Zeilen (keine leeren Beschriftungen). |
 
 Alle Regeln (außer den festen) lassen sich in den Einstellungen abschalten. Die Grenze für Kurzläufer ist dort einstellbar (Standard 3 Monate).

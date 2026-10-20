@@ -8,3 +8,4 @@ from . import overview
 from . import account_move
 from . import product
 from . import website
+from . import order_sheet

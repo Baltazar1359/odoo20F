@@ -220,7 +220,7 @@ class ResPartner(models.Model):
         action = self.env["ir.actions.act_window"]._for_xml_id("blistercenter.action_bc_phone_order")
         action["context"] = {
             "default_partner_id": self.commercial_partner_id.id,
-            "default_bc_channel": "phone",
+            "dialog_size": "large",
         }
         return action
 

@@ -5,7 +5,8 @@ Eigene Module für die PLCS GmbH. Die Module liegen direkt im Wurzelverzeichnis,
 | Modul | Inhalt | Stand |
 |---|---|---|
 | `plcs_greenrx` | GreenRX-Wareneingang: Scan je Packung, Boxen, Vorprüfung mit Ampel, KabQ-Drucke, VP-Freigabe | 1.9.2 in `main`/Production; 1.10.0 auf Branch `feat/erfassung-abbrechen` |
-| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Proforma, Rechnung je Lieferung, Rabatt 0/1/2 % auf HAP, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | 1.2.1 in `main`; 1.3.0 (einfache Oberfläche, Shop-Sortiment) auf Branch `feat/blistercenter-einfach`; Test im Dev-Build (in Production nicht installiert) |
+| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Proforma, Rechnung je Lieferung, Rabatt 0/1/2 % auf HAP, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | 1.2.1 in `main`; 1.4.0 (einfache Oberfläche, Shop-Sortiment, Bestellschein Telefon + Portal) auf Branch `feat/blistercenter-einfach`; Test im Dev-Build (in Production nicht installiert) |
+| `plcs_layout` | PLCS-Briefpapier für alle Odoo-Belege: Logo, Absenderzeile, Fußzeile mit Firmendaten aus Odoo, Hinweis (z. B. §52a AMG) | 1.0.0 auf Branch `feat/blistercenter-einfach`; in Production erst nach Freigabe installieren |
 
 **Prüfumgebung:** https://baltazar1359-odoo20.odoo.com (Odoo.sh, Branch `main` = Production). Prüfanleitung: [`docs/PRUEFANLEITUNG.md`](docs/PRUEFANLEITUNG.md), Testpaket: [`docs/testpaket_VTEST1801.pdf`](docs/testpaket_VTEST1801.pdf) (weitere Bögen und Generatoren in der Prüfanleitung).
 
@@ -202,6 +203,10 @@ Testplan zu 1.8.0 mit druckbarem Testpaket: `docs/TESTPLAN_1.8.0.md` und `docs/t
 
 ---
 
+## plcs_layout – PLCS-Briefpapier
+
+Dokumentlayout „PLCS“ nach dem Vorbild der PLCS-Gutschrift, bei der Installation Standard aller Firmen (Einstellungen › Dokumentlayout lässt sich weiter ändern). Alle Angaben aus Odoo: Firmenname, Anschrift, Telefon, E-Mail, USt-IdNr. (Firma › Allgemein) und im Reiter **Briefpapier (PLCS)**: vollständiger Firmenname, Geschäftsführer, Registergericht, Handelsregister, Steuernummer, Bankverbindung, Hinweis auf allen Belegen. **IBAN und Steuerdaten stehen nicht im Code**, sie werden in Odoo eingetragen. Papierformat „PLCS A4“ (Ränder für Logo und Fußzeile). GreenRX-Formblätter (KabQ) haben ihr eigenes Layout und bleiben unverändert. Dev-Builds bekommen die PLCS-Firmendaten als Demodaten. Tests: `--test-tags /plcs_layout`.
+
 ## blistercenter – Großhandel für Blistercenter
 
 Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_REGELN.md).
@@ -209,6 +214,8 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 ### Ablauf (App „Blistercenter“)
 
 **Einfache Oberfläche (1.3.0):** Startseite **Meine Aufgaben**. Jeder Arbeitsbereich (Bestellannahme, Einkauf, Lager) sieht nur seine Kacheln und sein Menü; die Bestellannahme hat oben den großen Knopf „Telefonbestellung erfassen“. Freigabe und Administrator sehen alles. Im **Shop** nur Artikel mit „Im Blistercenter-Shop“ (derzeit Forxiga, Xigduo, Daxas, Brilique, Tagrisso), nach Medikament gruppiert; andere Artikel nur per Telefonbestellung.
+
+**Bestellschein (1.4.0):** „Telefonbestellung erfassen“ öffnet einen Bestellschein: Kunde, Besteller, die Artikel des Shop-Sortiments mit Mengenfeld, „Bestellung anlegen“. Dieselbe Liste haben freigeschaltete Kunden im Kundenportal (`/my/bestellschein`, Karte „Bestellschein“); ihre Bestellung steht bei PLCS unter „Neue Bestellungen“ (Bestellweg „Online-Bestellschein“). Beide Wege nutzen `sale.order._bc_create_from_sheet` mit denselben Prüfungen.
 
 1. **Kunden:** Blistercenter von Hand anlegen, Zahlungsart (Lastschrift über DATEV), Zahlungsziel (7 oder 14 Tage) und Rabatt (0, 1 oder 2 % auf den HAP) setzen (Rolle Freigabe). Portalzugang über den Knopf **Portalzugänge** am Kunden.
 2. **Bestellung:** im Shop oder über **Kundenbestellungen › Telefonbestellung erfassen** (auch Knopf am Kunden). Bestellweg und Besteller sind Pflicht. Preis = HAP (Verkaufspreis am Artikel) minus Kundenrabatt.

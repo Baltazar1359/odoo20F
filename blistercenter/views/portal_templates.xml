@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Online-Bestellschein im Kundenportal (1.4.0) -->
+    <template id="portal_breadcrumbs_order_sheet" inherit_id="portal.portal_breadcrumbs" priority="40">
+        <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
+            <li t-if="page_name == 'bc_order_sheet'" class="breadcrumb-item active">Bestellschein</li>
+        </xpath>
+    </template>
+
+    <template id="portal_order_sheet" name="Blistercenter: Bestellschein">
+        <t t-call="portal.portal_layout">
+            <div class="o_bc_order_sheet mt-3 mb-5">
+                <h2 class="mb-1">Bestellschein</h2>
+                <p class="text-muted" t-if="bc_partner">
+                    <span t-out="bc_partner.name"/> · Mengen eintragen und abschicken. PLCS bestätigt Ihre Bestellung.
+                </p>
+                <div t-if="bc_error" class="alert alert-warning" role="alert" t-out="bc_error"/>
+                <form t-if="bc_partner" action="/my/bestellschein" method="post" class="o_bc_order_sheet_form">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>PZN</th>
+                                    <th>Artikel</th>
+                                    <th class="text-end">HAP</th>
+                                    <th class="text-end" t-if="bc_discount">Ihr Preis (−<t t-out="'%g' % bc_discount"/> %)</th>
+                                    <th class="text-end" style="width: 8rem;">Menge</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="bc_products" t-as="product">
+                                    <td class="text-muted" t-out="product.default_code"/>
+                                    <td t-out="product.name"/>
+                                    <td class="text-end text-nowrap" t-out="product.lst_price" t-options="{'widget': 'monetary', 'display_currency': bc_currency}"/>
+                                    <td class="text-end text-nowrap" t-if="bc_discount" t-out="product.lst_price * (1 - bc_discount / 100)" t-options="{'widget': 'monetary', 'display_currency': bc_currency}"/>
+                                    <td class="text-end">
+                                        <input type="number" min="0" max="9999" step="1" inputmode="numeric"
+                                               class="form-control form-control-sm text-end"
+                                               t-att-name="'qty_%s' % product.id"
+                                               t-att-value="bc_post.get('qty_%s' % product.id) or ''"
+                                               t-att-aria-label="'Menge %s' % product.name" placeholder="0"/>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label" for="bc_client_ref">Ihre Bestellnummer (optional)</label>
+                            <input id="bc_client_ref" type="text" name="client_order_ref" maxlength="64" class="form-control"
+                                   t-att-value="bc_post.get('client_order_ref') or ''"/>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label" for="bc_note">Bemerkung (optional)</label>
+                            <textarea id="bc_note" name="note" rows="2" maxlength="2000" class="form-control" t-out="bc_post.get('note') or ''"/>
+                        </div>
+                    </div>
+                    <p class="text-muted small mt-3 mb-2">Preise netto zzgl. USt. Zahlung wie mit PLCS vereinbart (z. B. Lastschrift). Die Bestellung ist erst nach Bestätigung durch PLCS verbindlich.</p>
+                    <button type="submit" class="btn btn-primary btn-lg">Bestellen</button>
+                </form>
+            </div>
+        </t>
+    </template>
+
+    <template id="portal_order_sheet_thanks" name="Blistercenter: Bestellschein abgeschickt">
+        <t t-call="portal.portal_layout">
+            <div class="mt-3 mb-5">
+                <div t-if="bc_order" class="alert alert-success" role="status">
+                    <h4 class="alert-heading">Danke – Ihre Bestellung ist eingegangen.</h4>
+                    <p class="mb-0">Bestellnummer <b t-out="bc_order.name"/>. PLCS prüft und bestätigt sie.
+                        <a t-att-href="bc_order.get_portal_url()">Bestellung ansehen</a></p>
+                </div>
+                <div t-else="" class="alert alert-warning" role="alert">Diese Bestellung wurde nicht gefunden.</div>
+                <a href="/my/bestellschein" class="btn btn-secondary">Neue Bestellung</a>
+            </div>
+        </t>
+    </template>
+</odoo>

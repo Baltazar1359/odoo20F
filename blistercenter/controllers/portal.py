@@ -1,0 +1,133 @@
+"""Online-Bestellschein im Kundenportal (1.4.0).
+
+Ein Blistercenter meldet sich an, trägt Mengen für die Artikel des Bestellscheins ein und
+schickt ab. Der Auftrag entsteht als „Angebot gesendet“ und erscheint bei PLCS unter
+„Neue Bestellungen“; PLCS bestätigt ihn (dabei greifen alle Regeln wie bei jeder Bestellung).
+"""
+import re
+
+from odoo import http
+from odoo.exceptions import UserError
+from odoo.http import request
+
+from odoo.addons.portal.controllers.portal import CustomerPortal
+
+QTY_KEY = re.compile(r"^qty_(\d+)$")
+
+
+class BlistercenterPortal(CustomerPortal):
+
+    # ------------------------------------------------------------------
+    # Zugang
+    # ------------------------------------------------------------------
+    def _bc_sheet_access(self):
+        """(Kunde, Fehlermeldung). Nur Blistercenter mit Shop-Freischaltung und ohne Zahlungssperre."""
+        env = request.env
+        user = env.user
+        if user._is_public():
+            return None, env._("Bitte melden Sie sich an.")
+        partner = user.partner_id.commercial_partner_id.sudo()
+        company = request.website.company_id if getattr(request, "website", None) else env.company
+        config = env["blistercenter.config"]._get(company)
+        if not partner.bc_is_customer:
+            return None, env._("Der Bestellschein ist nur für Blistercenter-Kunden der PLCS.")
+        if config.rule_shop_requires_enable and not partner.bc_shop_enabled:
+            return None, env._("Ihr Kundenkonto ist für Online-Bestellungen noch nicht freigeschaltet. "
+                               "Bitte wenden Sie sich an PLCS.")
+        if partner.bc_payment_block and config.rule_block_confirm:
+            return None, env._("Für Ihr Kundenkonto ist eine Online-Bestellung derzeit nicht möglich. "
+                               "Bitte wenden Sie sich an PLCS.")
+        return partner, None
+
+    def _bc_company(self):
+        return request.website.company_id if getattr(request, "website", None) else request.env.company
+
+    def _prepare_portal_counter_values(self, counter):
+        if counter == "bc_sheet_count":
+            partner, _error = self._bc_sheet_access()
+            if partner:
+                company = self._bc_company()
+                return "product.product", [
+                    ("bc_shop_product", "=", True), ("sale_ok", "=", True),
+                    ("company_id", "in", [False, company.id])], "sudo"
+            return False, False, False
+        return super()._prepare_portal_counter_values(counter)
+
+    # ------------------------------------------------------------------
+    # Seiten
+    # ------------------------------------------------------------------
+    def _bc_sheet_values(self, partner, error=None, post=None):
+        company = self._bc_company()
+        products = request.env["sale.order"]._bc_sheet_products(company) if partner else request.env["product.product"]
+        discount = float(partner.bc_discount or 0) if partner else 0.0
+        values = self._prepare_portal_layout_values()
+        values.update({
+            "page_name": "bc_order_sheet",
+            "bc_partner": partner,
+            "bc_error": error,
+            "bc_products": products,
+            "bc_discount": discount,
+            "bc_currency": company.currency_id,
+            "bc_post": post or {},
+        })
+        return values
+
+    @http.route("/my/bestellschein", type="http", auth="user", website=True, methods=["GET"], sitemap=False)
+    def bc_order_sheet(self, **kw):
+        partner, error = self._bc_sheet_access()
+        return request.render("blistercenter.portal_order_sheet", self._bc_sheet_values(partner, error))
+
+    @http.route("/my/bestellschein", type="http", auth="user", website=True, methods=["POST"], sitemap=False)
+    def bc_order_sheet_submit(self, **post):
+        partner, error = self._bc_sheet_access()
+        if not partner:
+            return request.render("blistercenter.portal_order_sheet", self._bc_sheet_values(None, error))
+        env = request.env
+        company = self._bc_company()
+        products = env["sale.order"]._bc_sheet_products(company)
+        by_id = {p.id: p for p in products}
+        quantities = []
+        try:
+            for key in post:
+                match = QTY_KEY.match(key)
+                if match and int(match.group(1)) not in by_id:
+                    raise UserError(env._("Ein Artikel steht nicht (mehr) auf dem Bestellschein. Bitte Seite neu laden."))
+            for product in products:
+                raw = (post.get("qty_%s" % product.id) or "").strip()
+                if not raw:
+                    continue
+                if not raw.isdigit():
+                    raise UserError(env._("Menge für %s: bitte eine ganze Zahl eintragen.", product.display_name))
+                quantities.append((product, int(raw)))
+            user_partner = env.user.partner_id.sudo()
+            orderer = user_partner if user_partner != partner and user_partner.commercial_partner_id == partner else None
+            Order = env["sale.order"].sudo().with_company(company)
+            order = Order._bc_create_from_sheet(
+                partner, quantities, "portal", company=company,
+                orderer=orderer, orderer_name=None if orderer else env.user.name,
+                client_ref=post.get("client_order_ref"), note=post.get("note"))
+        except UserError as exc:
+            return request.render("blistercenter.portal_order_sheet",
+                                  self._bc_sheet_values(partner, exc.args[0], post))
+        order.action_quotation_sent()
+        order.message_post(body=env._("Online-Bestellschein abgeschickt von %s.", env.user.name))
+        config = env["blistercenter.config"]._get(company)
+        if config.notify_new_order and config.sales_user_id:
+            order.with_context(mail_activity_quick_update=True).activity_schedule(
+                "mail.mail_activity_data_todo",
+                summary=env._("Online-Bestellung prüfen und bestätigen"),
+                user_id=config.sales_user_id.id,
+            )
+        return request.redirect("/my/bestellschein/danke?ref=%s" % order.id)
+
+    @http.route("/my/bestellschein/danke", type="http", auth="user", website=True, sitemap=False)
+    def bc_order_sheet_thanks(self, ref=None, **kw):
+        partner, error = self._bc_sheet_access()
+        order = request.env["sale.order"]
+        if partner and ref and str(ref).isdigit():
+            candidate = order.sudo().browse(int(ref)).exists()
+            if candidate and candidate.partner_id.commercial_partner_id == partner:
+                order = candidate
+        values = self._bc_sheet_values(partner, error)
+        values.update({"page_name": "bc_order_sheet", "bc_order": order})
+        return request.render("blistercenter.portal_order_sheet_thanks", values)

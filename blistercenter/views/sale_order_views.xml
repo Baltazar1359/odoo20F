@@ -73,14 +73,6 @@
     </record>
 
     <!-- Telefonbestellung: eigenes Formular-Aktion mit Bestellweg Telefon -->
-    <record id="action_bc_phone_order" model="ir.actions.act_window">
-        <field name="name">Telefonbestellung</field>
-        <field name="res_model">sale.order</field>
-        <field name="view_mode">form</field>
-        <field name="view_id" ref="sale.view_order_form"/>
-        <field name="target">current</field>
-        <field name="context">{'default_bc_channel': 'phone'}</field>
-    </record>
 
     <record id="view_bc_sale_order_list" model="ir.ui.view">
         <field name="name">sale.order.list.blistercenter</field>

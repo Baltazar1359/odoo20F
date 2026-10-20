@@ -20,6 +20,7 @@ BC_STATES = [
 
 ORDER_CHANNELS = [
     ("shop", "Shop"),
+    ("portal", "Online-Bestellschein"),
     ("phone", "Telefon"),
     ("email", "E-Mail"),
     ("fax", "Fax"),
@@ -27,6 +28,8 @@ ORDER_CHANNELS = [
 ]
 # Bestellwege, bei denen der Besteller Pflicht ist (keine Anmeldung im Shop)
 CHANNELS_WITH_ORDERER = ("phone", "email", "fax", "other")
+# Online-Bestellwege: der Kunde bestellt selbst, niemand bei PLCS „nimmt an“
+ONLINE_CHANNELS = ("shop", "portal")
 # Nachweis der Teillieferung nur über den Assistenten (Prüfbericht 19.10.2026 R07)
 ORDER_PROTECTED_FIELDS = ("bc_partial_allowed", "bc_partial_note", "bc_partial_by", "bc_partial_date")
 LINE_PROTECTED_FIELDS = ("bc_from_stock", "bc_from_stock_by")
@@ -144,7 +147,7 @@ class SaleOrder(models.Model):
             # Standard bei Blistercentern: Komplettlieferung (Teillieferung nur nach Rücksprache)
             vals.setdefault("picking_policy", "one")
             channel = vals.get("bc_channel") or self.env.context.get("default_bc_channel")
-            if channel and channel != "shop":
+            if channel and channel not in ONLINE_CHANNELS:
                 vals.setdefault("bc_received_by", self.env.uid)
                 vals.setdefault("bc_received_date", fields.Datetime.now())
         return super().create(vals_list)
@@ -160,7 +163,7 @@ class SaleOrder(models.Model):
 
     @api.onchange("bc_channel")
     def _onchange_bc_channel(self):
-        if self.bc_channel and self.bc_channel != "shop" and not self.bc_received_by:
+        if self.bc_channel and self.bc_channel not in ONLINE_CHANNELS and not self.bc_received_by:
             self.bc_received_by = self.env.user
             self.bc_received_date = fields.Datetime.now()
 

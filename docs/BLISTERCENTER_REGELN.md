@@ -1,4 +1,4 @@
-# Blistercenter – Regelkatalog (Stand 20.10.2026, Modul 20.0.1.3.0)
+# Blistercenter – Regelkatalog (Stand 20.10.2026, Modul 20.0.1.4.0)
 
 Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im Shop, per Telefon, E-Mail oder Fax. PLCS bündelt die Mengen in Sammelbestellungen und bestellt manuell beim Hersteller (z. B. AstraZeneca).
 
@@ -62,6 +62,8 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R39 | **Mengen:** Die Auftragsmenge kann nicht unter die Menge in Sammelbestellungen sinken; eine stornierte Sammelbestellung lässt sich nur reaktivieren, wenn die Menge noch frei ist. Die Herstellerbestellung muss die Kundenmengen decken (mehr ist erlaubt). | – |
 | R40 | **Shop-Sortiment** (1.3.0; Einstellungen zeigen die Anzahl und warnen, wenn das Sortiment leer ist): Im Shop erscheinen und bestellbar sind nur Artikel mit „Im Blistercenter-Shop“ (Artikel › Reiter Verkauf/Shop). Alle anderen – auch Odoo-Demoprodukte – sind unsichtbar: keine Liste, keine Produktseite (404), kein Warenkorb, keine Bestätigung einer Shop-Bestellung mit Fremdartikel. Telefonbestellungen dürfen jeden Artikel enthalten. Shop-Kategorien je Medikament ordnen das Sortiment. | ja |
 | R41 | **Arbeitsbereiche** (1.3.0, Startseite in Spalten je Bereich: Bestellannahme, Einkauf, Lager, Freigabe (VP)): Bestellannahme, Einkauf und Lager (Einstellungen › Benutzer, je eine Zeile „Blistercenter: …“). Jeder Bereich sieht nur sein Menü und seine Kacheln auf „Meine Aufgaben“. Freigabe und Administrator sehen alles. Die Bereiche ändern **keine Rechte** (die kommen aus „Benutzer“). Ohne Bereich nur die leere Startseite mit Hinweis. | – |
+| R42 | **Bestellschein** (1.4.0): Telefon-, E-Mail- und Fax-Bestellungen über den Bestellschein: Kunde, Besteller, Liste aller Artikel des Shop-Sortiments mit Mengenfeld. Odoo nimmt nur Artikel des Bestellscheins, ganze Mengen 0–9999, jeden Artikel einmal, mindestens eine Menge. Der Auftrag entsteht als Entwurf; weitere Artikel kann die Bestellannahme danach im Auftrag ergänzen. | – |
+| R43 | **Online-Bestellschein** (1.4.0): Freigeschaltete Blistercenter ohne Zahlungssperre bestellen im Kundenportal über denselben Bestellschein (gleiche Prüfungen, serverseitig). Bestellweg „Online-Bestellschein“, Besteller = angemeldete Person. Der Auftrag steht als „Angebot gesendet“ unter „Neue Bestellungen“; PLCS bestätigt ihn. Die Bestellannahme bekommt eine Aufgabe. | – |
 
 ## B. Entscheidungen 15.10.2026 (Mehrdad)
 
@@ -84,6 +86,13 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 
 - Oberfläche so einfach wie möglich: Startseite „Meine Aufgaben“ mit großen Knöpfen und kurzes Menü je Arbeitsbereich (Bestellannahme, Einkauf, Lager).
 - Shop nur mit den 5 Medikamenten Forxiga, Xigduo, Daxas, Brilique, Tagrisso (13 Artikel), nach Medikament gruppiert; keine Demoprodukte. Übrige Artikel bleiben für Telefonbestellungen, nur nicht im Shop.
+
+### Entscheidungen 20.10.2026, abends (Mehrdad)
+
+- Bestellschein mit den 13 Shop-Artikeln, gleich für alle Kunden, für Telefon und online.
+- Online über den Bestellschein im Kundenportal (nicht über den Shop-Warenkorb).
+- PLCS-Briefpapier nach dem Vorbild der PLCS-Gutschrift für alle Odoo-Belege der Firma (Modul `plcs_layout`).
+- Satz zur Großhandelserlaubnis (§52a AMG): Feld am Unternehmen, Wortlaut liefert PLCS.
 
 ## C. Noch offen
 
