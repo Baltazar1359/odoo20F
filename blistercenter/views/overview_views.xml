@@ -8,7 +8,8 @@
         <field name="model">blistercenter.overview</field>
         <field name="arch" type="xml">
             <kanban create="false" edit="false" delete="false" action="action_open" type="object"
-                    class="o_bc_overview">
+                    class="o_bc_overview" default_group_by="area" group_create="false" group_delete="false"
+                    group_edit="false" records_draggable="false" quick_create="false">
                 <field name="key"/>
                 <field name="kind"/>
                 <field name="count"/>

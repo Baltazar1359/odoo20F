@@ -4,7 +4,7 @@ Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Br
 
 ## Vorbereitung (einmal, als Administrator)
 
-0. **Testdaten (Skript):** Odoo.sh › Branch › SHELL, dann
+0. **Testdaten:** Ab 1.3.0 legt das Modul sie in jedem Dev-Build automatisch an (Demodaten): Shop-Sortiment (13 Artikel in 5 Kategorien), Hersteller, drei Testkunden. **Nur für Logo und Produktfotos** zusätzlich das Skript ausführen: Odoo.sh › Branch › SHELL, dann
    `odoo-bin shell --no-http < ~/src/user/docs/blistercenter_testdaten/testdaten.py`.
    Legt an: PLCS-Logo (Firma und Shop), Hersteller „AstraZeneca GmbH (Test)“, 20 Arzneimittel mit PZN, GTIN,
    Charge + Verfall, Shop-Freigabe, Fakturierung nach Lieferung, Einkaufskondition und Produktfoto – darunter

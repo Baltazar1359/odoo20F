@@ -32,6 +32,11 @@ class BlistercenterOverview(models.Model):
     description = fields.Char(translate=True)
     count = fields.Integer("Anzahl", compute="_compute_count")
     kind = fields.Selection([("task", "Aufgabe"), ("action", "Aktion")], default="task", required=True)
+    area = fields.Selection(
+        [("sales", "Bestellannahme"), ("purchase", "Einkauf"), ("stock", "Lager"),
+         ("approval", "Freigabe (VP)")],
+        string="Bereich", default="approval", required=True,
+        help="Spalte auf der Startseite „Meine Aufgaben“.")
     group_ids = fields.Many2many(
         "res.groups", string="Sichtbar für",
         help="Arbeitsbereiche, die diese Kachel auf ihrer Startseite sehen (Regel R41).")

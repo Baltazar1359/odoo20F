@@ -55,6 +55,9 @@ parallele Buchhaltung und keine doppelten Bestell- oder Lagerdaten an.
         "views/blistercenter_menus.xml",
         "report/bc_proforma.xml",
     ],
+    "demo": [
+        "demo/blistercenter_demo.xml",
+    ],
     "installable": True,
     "application": True,
 }

@@ -238,5 +238,6 @@ Arbeitsbereiche (1.3.0, je eine Zeile im Benutzerformular): **Bestellannahme**, 
 - Proforma: Standardbericht `sale.report_saleorder_pro_forma` mit eigenem Hinweis, für die Rolle Benutzer freigegeben.
 - 1.2.0: Vorkasse entfernt; Migration setzt „Vorkasse“ → „Lastschrift (DATEV)“, „Rechnung“ → „Überweisung“. Bestehende Anzahlungsrechnungen bleiben unverändert.
 - Tests: `odoo-bin ... -i blistercenter --test-enable --test-tags /blistercenter` (1.3.0: neue Tests in `tests/test_einfach.py`).
+- Testdaten (1.3.0): `blistercenter/tools/testdaten.py` ist die einzige Quelle; als Demodaten in jedem Dev-Build automatisch geladen (nie in Production), das Skript `docs/blistercenter_testdaten/testdaten.py` nutzt sie und ergänzt Logo und Fotos.
 - Shop-Sortiment (R40): Domain in `website._product_domain`, Prüfung in `_is_add_to_cart_allowed`, `_cart_add`, Auftragsbestätigung und Produktseite (404). Demodaten-Ausnahme wie bei der Shop-Freischaltung.
 - Nachweisfelder sind serverseitig geschützt (`blistercenter/tools/bc_auth.py`, gleiches Muster wie `plcs_greenrx/tools/grx_auth.py`). Umsetzung Prüfbericht 19.10.2026: `docs/PRUEFBERICHT_2026-10-19.md`.

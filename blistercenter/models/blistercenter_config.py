@@ -93,6 +93,9 @@ class BlistercenterConfig(models.Model):
              "(z. B. Forxiga, Xigduo, Daxas, Brilique, Tagrisso). Alle anderen Artikel, auch "
              "Odoo-Demoprodukte, sind dort unsichtbar. Telefonbestellungen sind nicht betroffen.",
     )
+    shop_product_count = fields.Integer(
+        "Artikel im Shop-Sortiment", compute="_compute_shop_product_count",
+        help="Artikel mit „Im Blistercenter-Shop“ (Regel R40).")
     rule_require_channel = fields.Boolean(
         "Bestellweg und Besteller Pflicht", default=True, tracking=True,
         help="Vor der Bestätigung muss der Bestellweg feststehen. Bei Telefon, E-Mail und Fax ist der Besteller Pflicht.",
@@ -235,6 +238,29 @@ class BlistercenterConfig(models.Model):
             "release_type_id": release.id,
         })
         return True
+
+    def _compute_shop_product_count(self):
+        count = self.env["product.template"].sudo().search_count(
+            [("bc_shop_product", "=", True), ("sale_ok", "=", True)])
+        for config in self:
+            config.shop_product_count = count
+
+    def action_open_shop_products(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.env._("Shop-Sortiment"),
+            "res_model": "product.template",
+            "view_mode": "list,form",
+            "domain": [("bc_shop_product", "=", True)],
+            "context": {"default_bc_shop_product": True},
+        }
+
+    @api.model
+    def _bc_load_demo_data(self):
+        """Demodaten (1.3.0): Shop-Sortiment, Hersteller und Testkunden – nur in Datenbanken mit Demodaten."""
+        from ..tools import testdaten
+        testdaten.load(self.env)
 
     def _bc_check_setup(self):
         """Lager-Einrichtung prüfen (legt sie bei Bedarf an) und die Einstellungen zurückgeben."""

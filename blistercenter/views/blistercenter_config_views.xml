@@ -10,6 +10,11 @@
                         <h1>Einstellungen Blistercenter</h1>
                         <field name="company_id" readonly="1"/>
                     </div>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not rule_shop_only_bc_products or shop_product_count">
+                        <b>Der Shop ist leer.</b> Kein Artikel hat „Im Blistercenter-Shop“. Am Artikel im Reiter
+                        Verkauf/Shop den Schalter setzen (Liste über „Shop-Sortiment“ unten).
+                    </div>
                     <group>
                         <group string="Zuständigkeiten">
                             <field name="sales_user_id"/>
@@ -31,6 +36,12 @@
                         <group string="Regeln: Bestellung und Zahlung">
                             <field name="rule_shop_requires_enable"/>
                             <field name="rule_shop_only_bc_products"/>
+                            <label for="shop_product_count" invisible="not rule_shop_only_bc_products"/>
+                            <div invisible="not rule_shop_only_bc_products">
+                                <field name="shop_product_count" class="oe_inline"/>
+                                <button name="action_open_shop_products" type="object" string="Shop-Sortiment"
+                                        class="btn-link ms-2"/>
+                            </div>
                             <field name="rule_require_channel"/>
                             <field name="rule_block_confirm"/>
                             <field name="rule_block_delivery"/>

@@ -153,6 +153,16 @@ class TestBlistercenterWorkAreas(BlistercenterCommon):
         self.assertEqual(len(self._tiles(self.user_approver)), 13)
         self.assertIn("to_release", self._tiles(self.user_approver))
 
+    def test_start_page_grouped_by_area(self):
+        """Startseite in Spalten je Bereich; jeder sieht nur seine Spalte(n)."""
+        Tile = self.env["blistercenter.overview"]
+        self.assertFalse(Tile.search([("area", "=", False)]))
+        def areas(user):
+            return {area for (area,) in Tile.with_user(user)._read_group([], ["area"])}
+        self.assertEqual(areas(self.only_stock), {"stock"})
+        self.assertEqual(areas(self.only_sales), {"sales"})
+        self.assertEqual(areas(self.user_approver), {"sales", "purchase", "stock", "approval"})
+
     def test_tile_rule_cannot_be_bypassed(self):
         """Negativtest: Lager liest per RPC keine Kachel eines anderen Bereichs."""
         tile = self.env.ref("blistercenter.tile_to_procure")
@@ -191,6 +201,45 @@ class TestBlistercenterWorkAreas(BlistercenterCommon):
         self.assertEqual(areas & self.only_stock.group_ids, self.env.ref("blistercenter.group_bc_stock"),
                          "Wer schon einen Bereich hat, behält genau diesen")
         self.assertFalse(areas & self.user_approver.group_ids, "Freigabe braucht keine Bereiche")
+
+
+@tagged("post_install", "-at_install", "blistercenter")
+class TestBlistercenterDemoData(BlistercenterCommon):
+    """1.3.0: Demodaten bringen das Shop-Sortiment mit (jeder Dev-Build), mehrfach ladbar."""
+
+    def test_demo_loader_assortment(self):
+        Config = self.env["blistercenter.config"]
+        Config._bc_load_demo_data()
+        Config._bc_load_demo_data()  # zweites Mal: keine Duplikate
+        Template = self.env["product.template"]
+        shop = Template.search([("bc_shop_product", "=", True), ("default_code", "!=", False)])
+        demo_codes = {a[0] for a in self._articles()}
+        shop = shop.filtered(lambda t: t.default_code in demo_codes)
+        self.assertEqual(len(shop), 13)
+        self.assertEqual({t.name.split()[0] for t in shop}, {"FORXIGA", "XIGDUO", "DAXAS", "BRILIQUE", "TAGRISSO"})
+        self.assertEqual(set(shop.public_categ_ids.mapped("name")), {"Forxiga", "Xigduo", "Daxas", "Brilique", "Tagrisso"})
+        others = Template.search([("default_code", "in", list(demo_codes)), ("bc_shop_product", "=", False)])
+        self.assertEqual(len(others), 7)
+        self.assertFalse(others.filtered("is_published"), "Übrige Testartikel nicht im Shop")
+        self.assertEqual(Template.search_count([("default_code", "in", list(demo_codes))]), 20, "keine Duplikate")
+        customers = self.env["res.partner"].search([("name", "like", "(Test)"), ("bc_is_customer", "=", True)])
+        self.assertGreaterEqual(len(customers.filtered(lambda p: p.name.startswith("Blistercenter "))), 3)
+        self.assertGreaterEqual(self.config.shop_product_count, 13)
+
+    def _articles(self):
+        from ..tools import testdaten
+        return testdaten.ARTICLES
+
+    def test_demo_loader_not_callable_by_rpc_users(self):
+        """Negativtest: private Methode – über die Weboberfläche nicht aufrufbar."""
+        self.assertTrue(self.env["blistercenter.config"]._bc_load_demo_data.__name__.startswith("_"))
+
+    def test_empty_assortment_warning(self):
+        self.env["product.template"].search([("bc_shop_product", "=", True)]).bc_shop_product = False
+        self.config.invalidate_recordset()
+        self.assertEqual(self.config.shop_product_count, 0)
+        action = self.config.with_user(self.user_manager).action_open_shop_products()
+        self.assertEqual(action["domain"], [("bc_shop_product", "=", True)])
 
 
 @tagged("post_install", "-at_install", "blistercenter")
