@@ -1,10 +1,10 @@
-# Prüfanleitung Blistercenter (Modul 20.0.1.2.0)
+# Prüfanleitung Blistercenter (Modul 20.0.1.2.1)
 
-Testumgebung: Odoo.sh-Dev-Build des Branches `feat/blistercenter-rechnung` (nicht Production). Jeder Push erzeugt eine neue, leere Datenbank.
+Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Branch darauf), **nicht Production** – dort ist Blistercenter bewusst nicht installiert (Variante B, 15.10.2026). Falls Blistercenter im Dev-Build fehlt: Apps › „Blistercenter“ installieren. Jeder Push erzeugt eine neue, leere Datenbank; die Dev-Datenbank ist englisch/USD (Odoo-Demofirma).
 
 ## Vorbereitung (einmal, als Administrator)
 
-0. **Testdaten (Skript):** Odoo.sh › Branch `feat/blistercenter-rechnung` › SHELL, dann
+0. **Testdaten (Skript):** Odoo.sh › Branch › SHELL, dann
    `odoo-bin shell --no-http < ~/src/user/docs/blistercenter_testdaten/testdaten.py`.
    Legt an: PLCS-Logo (Firma und Shop), Hersteller „AstraZeneca GmbH (Test)“, 20 Arzneimittel mit PZN, GTIN,
    Charge + Verfall, Shop-Freigabe, Fakturierung nach Lieferung, Einkaufskondition und Produktfoto – darunter
