@@ -25,8 +25,10 @@ class BlistercenterCommon(AccountTestInvoicingCommon):
                 company_id=cls.company.id, company_ids=[Command.set(cls.company.ids)],
             )
 
-        cls.user_bc = user("bc_user", "blistercenter.group_bc_user")
-        cls.user_bc2 = user("bc_user2", "blistercenter.group_bc_user")
+        # Lagerpersonen mit allen Arbeitsbereichen (1.3.0, wie nach der Migration)
+        all_areas = "blistercenter.group_bc_sales,blistercenter.group_bc_purchase,blistercenter.group_bc_stock"
+        cls.user_bc = user("bc_user", all_areas)
+        cls.user_bc2 = user("bc_user2", all_areas)
         cls.user_approver = user("bc_approver", "blistercenter.group_bc_approver")
         cls.user_approver2 = user("bc_approver2", "blistercenter.group_bc_approver")
         cls.user_manager = user("bc_manager", "blistercenter.group_bc_manager")
@@ -64,6 +66,7 @@ class BlistercenterCommon(AccountTestInvoicingCommon):
             "taxes_id": [Command.clear()],
             "supplier_taxes_id": [Command.clear()],
             "seller_ids": [Command.create({"partner_id": cls.supplier.id, "price": 10.0})],
+            "bc_shop_product": True,
         })
         cls.config = cls.env["blistercenter.config"]._get(cls.company)
         cls.config._bc_check_setup()
@@ -662,7 +665,11 @@ class TestBlistercenterOverview(BlistercenterCommon):
 
     def test_overview_counts(self):
         tiles = {t.key: t for t in self.env["blistercenter.overview"].with_user(self.user_bc).search([])}
-        self.assertEqual(len(tiles), 12)
+        # 1.3.0: alle drei Arbeitsbereiche, aber ohne Freigabe-Kacheln (VP, Buchhaltung)
+        self.assertEqual(len(tiles), 11)
+        self.assertNotIn("to_release", tiles)
+        self.assertNotIn("invoices_to_post", tiles)
+        self.assertEqual(self.env["blistercenter.overview"].with_user(self.user_manager).search_count([]), 13)
         before = {k: t.count for k, t in tiles.items()}
         self._order(self.customer_debit)
         self._order(self.customer_invoice, confirm=False)
@@ -678,6 +685,8 @@ class TestBlistercenterOverview(BlistercenterCommon):
         self.assertEqual(tiles["payment_blocks"].count, before["payment_blocks"] + 1)
         self.assertEqual(tiles["short_dated"].count, before["short_dated"] + 1)
         for tile in tiles.values():
+            if tile.kind == "action":
+                continue
             action = tile.action_open()
             self.env[action["res_model"]].with_user(self.user_bc).search_count(action["domain"])
 

@@ -4,10 +4,11 @@
               web_icon="blistercenter,static/description/icon.png"
               groups="blistercenter.group_bc_user"/>
 
-    <menuitem id="menu_bc_overview" name="Übersicht" parent="menu_bc_root" sequence="1"
+    <menuitem id="menu_bc_overview" name="Meine Aufgaben" parent="menu_bc_root" sequence="1"
               action="action_bc_overview"/>
 
-    <menuitem id="menu_bc_customers" name="Kunden" parent="menu_bc_root" sequence="10"/>
+    <menuitem id="menu_bc_customers" name="Kunden" parent="menu_bc_root" sequence="10"
+              groups="blistercenter.group_bc_sales,blistercenter.group_bc_approver"/>
     <menuitem id="menu_bc_customers_list" name="Blistercenter" parent="menu_bc_customers" sequence="1"
               action="action_bc_customers"/>
     <menuitem id="menu_bc_pricelists" name="Preislisten" parent="menu_bc_customers" sequence="2"
@@ -15,7 +16,8 @@
     <menuitem id="menu_bc_payment_terms" name="Zahlungsbedingungen" parent="menu_bc_customers" sequence="3"
               action="account.action_payment_term_form" groups="blistercenter.group_bc_manager"/>
 
-    <menuitem id="menu_bc_orders" name="Kundenbestellungen" parent="menu_bc_root" sequence="20"/>
+    <menuitem id="menu_bc_orders" name="Kundenbestellungen" parent="menu_bc_root" sequence="20"
+              groups="blistercenter.group_bc_sales,blistercenter.group_bc_approver"/>
     <menuitem id="menu_bc_phone_order" name="Telefonbestellung erfassen" parent="menu_bc_orders" sequence="0"
               action="action_bc_phone_order"/>
     <menuitem id="menu_bc_orders_list" name="Bestellungen" parent="menu_bc_orders" sequence="1"
@@ -27,7 +29,8 @@
     <menuitem id="menu_bc_payments" name="Zahlungen" parent="menu_bc_orders" sequence="4"
               action="action_bc_payments" groups="account.group_account_invoice"/>
 
-    <menuitem id="menu_bc_collective" name="Sammelbestellungen" parent="menu_bc_root" sequence="30"/>
+    <menuitem id="menu_bc_collective" name="Sammelbestellungen" parent="menu_bc_root" sequence="30"
+              groups="blistercenter.group_bc_purchase,blistercenter.group_bc_approver"/>
     <menuitem id="menu_bc_collective_list" name="Sammelbestellungen" parent="menu_bc_collective" sequence="1"
               action="action_bc_collective_orders"/>
     <menuitem id="menu_bc_collective_open" name="Offene Kundenmengen" parent="menu_bc_collective" sequence="2"
@@ -35,17 +38,19 @@
     <menuitem id="menu_bc_purchase" name="Bestellungen beim Hersteller" parent="menu_bc_collective" sequence="3"
               action="action_bc_purchase_orders"/>
 
-    <menuitem id="menu_bc_suppliers" name="Lieferanten" parent="menu_bc_root" sequence="40"/>
+    <menuitem id="menu_bc_suppliers" name="Lieferanten" parent="menu_bc_root" sequence="40"
+              groups="blistercenter.group_bc_purchase,blistercenter.group_bc_approver"/>
     <menuitem id="menu_bc_suppliers_list" name="Hersteller" parent="menu_bc_suppliers" sequence="1"
               action="action_bc_suppliers"/>
     <menuitem id="menu_bc_supplierinfo" name="Einkaufskonditionen" parent="menu_bc_suppliers" sequence="2"
               action="action_bc_supplierinfo"/>
 
-    <menuitem id="menu_bc_stock" name="Lager und Versand" parent="menu_bc_root" sequence="50"/>
+    <menuitem id="menu_bc_stock" name="Lager und Versand" parent="menu_bc_root" sequence="50"
+              groups="blistercenter.group_bc_stock,blistercenter.group_bc_approver"/>
     <menuitem id="menu_bc_receipts" name="Wareneingänge" parent="menu_bc_stock" sequence="1"
               action="action_bc_receipts"/>
     <menuitem id="menu_bc_release" name="Freigabe Wareneingang (VP)" parent="menu_bc_stock" sequence="2"
-              action="action_bc_release"/>
+              action="action_bc_release" groups="blistercenter.group_bc_approver"/>
     <menuitem id="menu_bc_picking" name="Kommissionierung" parent="menu_bc_stock" sequence="3"
               action="action_bc_picking"/>
     <menuitem id="menu_bc_check" name="Endkontrolle" parent="menu_bc_stock" sequence="4"
@@ -55,7 +60,8 @@
     <menuitem id="menu_bc_deliveries" name="Alle Lieferungen" parent="menu_bc_stock" sequence="6"
               action="action_bc_deliveries"/>
 
-    <menuitem id="menu_bc_lots" name="Chargen und Rückverfolgung" parent="menu_bc_root" sequence="60"/>
+    <menuitem id="menu_bc_lots" name="Chargen und Rückverfolgung" parent="menu_bc_root" sequence="60"
+              groups="blistercenter.group_bc_stock,blistercenter.group_bc_approver"/>
     <menuitem id="menu_bc_lots_list" name="Chargen" parent="menu_bc_lots" sequence="1"
               action="action_bc_lots"/>
     <menuitem id="menu_bc_lots_expiry" name="Verfallsdaten" parent="menu_bc_lots" sequence="2"
@@ -65,7 +71,7 @@
     <menuitem id="menu_bc_lots_blocked" name="Sperren" parent="menu_bc_lots" sequence="4"
               action="action_bc_lots_blocked"/>
     <menuitem id="menu_bc_recall" name="Rückrufauswertung" parent="menu_bc_lots" sequence="5"
-              action="action_bc_recall"/>
+              action="action_bc_recall" groups="blistercenter.group_bc_approver"/>
 
     <menuitem id="menu_bc_settings" name="Einstellungen" parent="menu_bc_root" sequence="90"
               action="action_bc_config" groups="blistercenter.group_bc_manager"/>

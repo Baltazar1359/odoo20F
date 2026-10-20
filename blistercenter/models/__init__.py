@@ -6,3 +6,5 @@ from . import purchase_order
 from . import stock
 from . import overview
 from . import account_move
+from . import product
+from . import website

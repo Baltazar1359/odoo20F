@@ -87,6 +87,12 @@ class BlistercenterConfig(models.Model):
         "Shop nur für freigeschaltete Blistercenter", default=True, tracking=True,
         help="Warenkorb und Bestellbestätigung aus dem Shop nur für Kunden mit Shopfreischaltung.",
     )
+    rule_shop_only_bc_products = fields.Boolean(
+        "Shop zeigt nur Blistercenter-Artikel", default=True, tracking=True,
+        help="Im Shop erscheinen und bestellbar sind nur Artikel mit „Im Blistercenter-Shop“ "
+             "(z. B. Forxiga, Xigduo, Daxas, Brilique, Tagrisso). Alle anderen Artikel, auch "
+             "Odoo-Demoprodukte, sind dort unsichtbar. Telefonbestellungen sind nicht betroffen.",
+    )
     rule_require_channel = fields.Boolean(
         "Bestellweg und Besteller Pflicht", default=True, tracking=True,
         help="Vor der Bestätigung muss der Bestellweg feststehen. Bei Telefon, E-Mail und Fax ist der Besteller Pflicht.",

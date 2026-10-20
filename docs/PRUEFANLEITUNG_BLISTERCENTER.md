@@ -1,4 +1,4 @@
-# Prüfanleitung Blistercenter (Modul 20.0.1.2.1)
+# Prüfanleitung Blistercenter (Modul 20.0.1.3.0)
 
 Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Branch darauf), **nicht Production** – dort ist Blistercenter bewusst nicht installiert (Variante B, 15.10.2026). Falls Blistercenter im Dev-Build fehlt: Apps › „Blistercenter“ installieren. Jeder Push erzeugt eine neue, leere Datenbank; die Dev-Datenbank ist englisch/USD (Odoo-Demofirma).
 
@@ -14,8 +14,8 @@ Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Br
    Damit entfallen die Punkte 3–5 unten; Benutzer (Punkt 1) und Portalzugang legt das Skript nicht an.
 
 1. **Benutzer:** mindestens drei Personen anlegen, damit die Vier-Augen-Regeln prüfbar sind:
-   - Lager A und Lager B: Rolle Blistercenter „Benutzer“,
-   - VP: Rolle Blistercenter „Freigabe“.
+   - Lager A und Lager B: Rolle Blistercenter „Benutzer“ und Arbeitsbereiche (Zeilen „Blistercenter: Bestellannahme / Einkauf / Lager“ = Ja; für T1–T21 alle drei),
+   - VP: Rolle Blistercenter „Freigabe“ (sieht alle Bereiche).
 2. **Blistercenter › Einstellungen:** Zuständigkeiten setzen (Bestellungen, Buchhaltung, Sammelbestellungen, VP). Bereich „Lager-Einrichtung“ zeigt Quarantäne, BCIN und BCFRG. Regeln „Zahlungsziel Pflicht“, „Kundenrabatt fest“, „Rechnung je Lieferung“ sind an.
 3. **Hersteller:** Kontakt anlegen, Reiter Blistercenter › „Hersteller“ an.
 4. **Artikel:** lagerfähig, „Nach Losen verfolgen“, „Ablaufdatum“ an, Fakturierung „gelieferte Mengen“, Verkaufspreis = HAP, Einkaufskondition beim Hersteller, **ohne** Route „Auf Auftrag beschaffen“.
@@ -46,5 +46,8 @@ Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Br
 | T19 | Kunde ohne Zahlungsziel: Bestellung bestätigen. | Abgelehnt. Mit 7 oder 14 Tagen: geht, Auftrag zeigt das Zahlungsziel. |
 | T20 | Teillieferung (T12) bestätigen, danach den Rest liefern. | Nach jeder Lieferung genau eine Rechnung im Entwurf über die gelieferte Menge, mit Lieferschein-Nummer und Lastschrift-Hinweis; Aufgabe für die Buchhaltung; Kachel „Rechnungen zu buchen“. |
 | T21 | Rechnung aus T20 buchen, Rechnungsdatum so zurücksetzen, dass das Zahlungsziel überschritten ist. Neue Bestellung und Lieferung öffnen. | Gelber Hinweis „überfällige Rechnung(en)“ mit Betrag in Auftrag, Lieferung und Kunde; Kachel „Überfällige Rechnungen“. Bestätigen und Liefern bleiben möglich. Nach Zahlung verschwindet der Hinweis. |
+| T22 | Als Kunde (Portalzugang) den Shop öffnen. Nach „desk“ oder einem anderen Artikel (z. B. BYETTA) suchen. | Nur die Kategorien Forxiga, Xigduo, Daxas, Brilique, Tagrisso und deren 13 Artikel. Keine Demoprodukte, Suche ohne Treffer. Telefonbestellung mit BYETTA geht weiter. |
+| T23 | Als Administrator einen Artikel ohne „Im Blistercenter-Shop“ veröffentlichen und seine Shop-Adresse aufrufen. | Seite nicht gefunden (404); in den Warenkorb nicht möglich. Mit Schalter an erscheint er im Shop. |
+| T24 | Benutzer mit nur „Blistercenter: Lager“ anmelden, danach einen mit nur „Bestellannahme“ und einen mit nur „Einkauf“. | Lager: Menü „Lager und Versand“, „Chargen“; Kacheln Wareneingänge, Lieferungen, Endkontrolle, Kurzläufer, Sperren. Bestellannahme: Menü „Kunden“, „Kundenbestellungen“; großer Knopf „Telefonbestellung erfassen“, Neue Bestellungen, Zahlungssperren, Überfällige Rechnungen. Einkauf: Menü „Sammelbestellungen“, „Lieferanten“; Kacheln Zu bestellen, Offene Sammelbestellungen. Keiner sieht „Freigabe Wareneingang (VP)“. |
 
 Alle Regeln (außer den festen) lassen sich in den Einstellungen abschalten. Die Grenze für Kurzläufer ist dort einstellbar (Standard 3 Monate).

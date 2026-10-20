@@ -5,7 +5,7 @@ Eigene Module für die PLCS GmbH. Die Module liegen direkt im Wurzelverzeichnis,
 | Modul | Inhalt | Stand |
 |---|---|---|
 | `plcs_greenrx` | GreenRX-Wareneingang: Scan je Packung, Boxen, Vorprüfung mit Ampel, KabQ-Drucke, VP-Freigabe | 1.9.2 in `main`/Production; 1.10.0 auf Branch `feat/erfassung-abbrechen` |
-| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Proforma, Rechnung je Lieferung, Rabatt 0/1/2 % auf HAP, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | 1.2.1 in `main`, Test im Dev-Build (in Production nicht installiert) |
+| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Proforma, Rechnung je Lieferung, Rabatt 0/1/2 % auf HAP, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | 1.2.1 in `main`; 1.3.0 (einfache Oberfläche, Shop-Sortiment) auf Branch `feat/blistercenter-einfach`; Test im Dev-Build (in Production nicht installiert) |
 
 **Prüfumgebung:** https://baltazar1359-odoo20.odoo.com (Odoo.sh, Branch `main` = Production). Prüfanleitung: [`docs/PRUEFANLEITUNG.md`](docs/PRUEFANLEITUNG.md), Testpaket: [`docs/testpaket_VTEST1801.pdf`](docs/testpaket_VTEST1801.pdf) (weitere Bögen und Generatoren in der Prüfanleitung).
 
@@ -208,6 +208,8 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 
 ### Ablauf (App „Blistercenter“)
 
+**Einfache Oberfläche (1.3.0):** Startseite **Meine Aufgaben**. Jeder Arbeitsbereich (Bestellannahme, Einkauf, Lager) sieht nur seine Kacheln und sein Menü; die Bestellannahme hat oben den großen Knopf „Telefonbestellung erfassen“. Freigabe und Administrator sehen alles. Im **Shop** nur Artikel mit „Im Blistercenter-Shop“ (derzeit Forxiga, Xigduo, Daxas, Brilique, Tagrisso), nach Medikament gruppiert; andere Artikel nur per Telefonbestellung.
+
 1. **Kunden:** Blistercenter von Hand anlegen, Zahlungsart (Lastschrift über DATEV), Zahlungsziel (7 oder 14 Tage) und Rabatt (0, 1 oder 2 % auf den HAP) setzen (Rolle Freigabe). Portalzugang über den Knopf **Portalzugänge** am Kunden.
 2. **Bestellung:** im Shop oder über **Kundenbestellungen › Telefonbestellung erfassen** (auch Knopf am Kunden). Bestellweg und Besteller sind Pflicht. Preis = HAP (Verkaufspreis am Artikel) minus Kundenrabatt.
 3. **Proforma:** Knopf „Proforma drucken“ im bestätigten Auftrag (nur Information, keine Buchung).
@@ -226,6 +228,8 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 | Freigabe (VP) | zusätzlich: Shopfreischaltung, Konditionen, Zahlungssperre, Charge entsperren, Freigabe aus der Quarantäne, Kurzläufer freigeben |
 | Administrator | zusätzlich: Einstellungen und Prozessregeln |
 
+Arbeitsbereiche (1.3.0, je eine Zeile im Benutzerformular): **Bestellannahme**, **Einkauf**, **Lager**. Sie steuern nur Menü und Startseite, nicht die Rechte. Beim Update auf 1.3.0 bekommen bestehende Benutzer alle drei Bereiche; danach Überflüssiges abwählen.
+
 ### Technik
 
 - Eigene Lagerorte und Vorgangstypen: `WH/Blistercenter/Quarantäne`, `BCIN` (Eingang), `BCFRG` (Freigabe VP). Werden bei Installation und Update angelegt (idempotent).
@@ -233,5 +237,6 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 - Rechnung je Lieferung über Odoo-Standard (`_create_invoices`, Fakturierung nach gelieferter Menge); Rechnung verweist auf die Lieferung (`bc_picking_id`).
 - Proforma: Standardbericht `sale.report_saleorder_pro_forma` mit eigenem Hinweis, für die Rolle Benutzer freigegeben.
 - 1.2.0: Vorkasse entfernt; Migration setzt „Vorkasse“ → „Lastschrift (DATEV)“, „Rechnung“ → „Überweisung“. Bestehende Anzahlungsrechnungen bleiben unverändert.
-- Tests: `odoo-bin ... -i blistercenter --test-enable --test-tags /blistercenter` (70 Tests, zusammen mit `plcs_greenrx` 207).
+- Tests: `odoo-bin ... -i blistercenter --test-enable --test-tags /blistercenter` (1.3.0: neue Tests in `tests/test_einfach.py`).
+- Shop-Sortiment (R40): Domain in `website._product_domain`, Prüfung in `_is_add_to_cart_allowed`, `_cart_add`, Auftragsbestätigung und Produktseite (404). Demodaten-Ausnahme wie bei der Shop-Freischaltung.
 - Nachweisfelder sind serverseitig geschützt (`blistercenter/tools/bc_auth.py`, gleiches Muster wie `plcs_greenrx/tools/grx_auth.py`). Umsetzung Prüfbericht 19.10.2026: `docs/PRUEFBERICHT_2026-10-19.md`.

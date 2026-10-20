@@ -3,11 +3,14 @@
 Legt an bzw. aktualisiert (beliebig oft ausführbar, keine Duplikate):
 - Firmenlogo und Website-Logo: PLCS-Logo (plcs_logo.png neben diesem Skript),
 - Hersteller „AstraZeneca GmbH (Test)“ mit Kennzeichen „Hersteller (Blistercenter)“,
-- 20 Arzneimittel (PZN, GTIN, Charge + Verfall, im Shop sichtbar, Fakturierung nach Lieferung,
+- 20 Arzneimittel (PZN, GTIN, Charge + Verfall, Fakturierung nach Lieferung,
   Einkaufskondition beim Hersteller, Produktfoto aus dem Internet):
   10 aus der GreenRX-Artikelliste (Preise fiktiv) und die 10 häufigsten Blistercenter-Artikel
   Forxiga, Xigduo, Tagrisso (Angaben PLCS/Mehrdad 19.10.2026; HAP aus dem öffentlichen
   Apothekenverkaufspreis zurückgerechnet, AMPreisV Stand 1.7.2026 – Testwert, nicht Lauer-Taxe),
+- Shop-Sortiment (1.3.0, Entscheidung Mehrdad 20.10.2026): nur die 5 Medikamente Forxiga, Xigduo,
+  Daxas, Brilique, Tagrisso (13 Artikel), je Medikament eine Shop-Kategorie. Die übrigen Artikel
+  bleiben für Telefonbestellungen, erscheinen aber nicht im Shop; Odoo-Demoprodukte ebenso nicht.
 - drei Blistercenter-Testkunden mit Rabatt 0 / 1 / 2 % auf den HAP und Zahlungsziel 14 / 7 / 14 Tage
   (Shop freigeschaltet, ohne Portalzugang).
 
@@ -70,6 +73,9 @@ ARTICLES = [
     ("12743338", "TAGRISSO 80 mg Filmtabletten", "30 St", "ambient", 4715.75, 4479.96, "hap"),
 ]
 
+# Shop-Sortiment: nur diese 5 Medikamente (erstes Wort der Bezeichnung), Reihenfolge = Shop-Kategorien
+SHOP_FAMILIES = ["FORXIGA", "XIGDUO", "DAXAS", "BRILIQUE", "TAGRISSO"]
+
 # Blistercenter-Testkunden: Name, Rabatt auf HAP, Zahlungsziel (XML-ID), Zahlungsart
 CUSTOMERS = [
     ("Blistercenter Musterstadt (Test)", "0", "blistercenter.payment_term_14days", "direct_debit"),
@@ -122,19 +128,30 @@ def run(env):
                   "city": "Hamburg", "country_id": env.ref("base.de").id}
     maker = maker.write(maker_vals) and maker if maker else Partner.create(maker_vals)
 
-    # Shop-Kategorie
-    categ = False
+    # Shop: nur das Blistercenter-Sortiment (Regel R40), je Medikament eine Kategorie
+    config = env["blistercenter.config"]._get(company)
+    if "rule_shop_only_bc_products" in config._fields:
+        config.rule_shop_only_bc_products = True
+    categs = {}
     if "product.public.category" in env:
         Categ = env["product.public.category"]
-        categ = Categ.search([("name", "=", "Arzneimittel")], limit=1) or Categ.create({"name": "Arzneimittel"})
+        for seq, family in enumerate(SHOP_FAMILIES, start=1):
+            label = family.capitalize()
+            categ = Categ.search([("name", "=", label)], limit=1)
+            categs[family] = categ.write({"sequence": seq}) and categ if categ else Categ.create(
+                {"name": label, "sequence": seq})
 
     Product = env["product.product"]
     has_pzn = "plcs_pzn" in Product._fields
     has_temp = "plcs_storage_temp" in Product._fields
     images = 0
+    in_shop_count = 0
     for pzn, name, pack, storage, price, cost, origin in ARTICLES:
         full_name = "%s %s" % (name, pack) if pack else name
         gtin = gtin_from_pzn(pzn)
+        family = name.split()[0].upper()
+        in_shop = family in SHOP_FAMILIES
+        in_shop_count += in_shop
         vals = {
             "name": full_name,
             "default_code": pzn,
@@ -159,9 +176,11 @@ def run(env):
         if has_temp:
             vals["plcs_storage_temp"] = storage
         if "is_published" in Product._fields:
-            vals["is_published"] = True
-        if categ:
-            vals["public_categ_ids"] = [(6, 0, categ.ids)]
+            vals["is_published"] = in_shop
+        if "bc_shop_product" in Product._fields:
+            vals["bc_shop_product"] = in_shop
+        if categs:
+            vals["public_categ_ids"] = [(6, 0, categs[family].ids)] if in_shop else [(5, 0, 0)]
         # Vorhandenen Artikel wiederverwenden (z. B. aus GreenRX/ATIV angelegt), nicht doppelt anlegen
         domain = ["|", ("default_code", "=", pzn), ("barcode", "=", gtin)]
         if has_pzn:
@@ -180,8 +199,8 @@ def run(env):
         if image:
             product.image_1920 = image
             images += 1
-        print("  %s  %s" % (pzn, full_name))
-    report.append("%s Artikel, %s mit Foto" % (len(ARTICLES), images))
+        print("  %s  %s%s" % (pzn, full_name, "  [Shop]" if in_shop else ""))
+    report.append("%s Artikel, davon %s im Shop, %s mit Foto" % (len(ARTICLES), in_shop_count, images))
 
     # Blistercenter-Testkunden (Rabatt 0 / 1 / 2 %, Zahlungsziel 14 / 7 / 14 Tage)
     for index, (cust_name, discount, term_xmlid, payment_model) in enumerate(CUSTOMERS, start=1):

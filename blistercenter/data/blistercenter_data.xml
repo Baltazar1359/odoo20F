@@ -22,74 +22,94 @@
         </record>
     </data>
 
+    <record id="tile_phone_order" model="blistercenter.overview">
+        <field name="key">phone_order</field>
+        <field name="kind">action</field>
+        <field name="name">Telefonbestellung erfassen</field>
+        <field name="description">Neue Bestellung am Telefon aufnehmen</field>
+        <field name="sequence">5</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_sales'), ref('blistercenter.group_bc_approver')])]"/>
+    </record>
     <record id="tile_new_orders" model="blistercenter.overview">
         <field name="key">new_orders</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_sales'), ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Neue Bestellungen</field>
         <field name="description">Eingegangen, noch nicht bestätigt</field>
         <field name="sequence">10</field>
     </record>
     <record id="tile_to_procure" model="blistercenter.overview">
         <field name="key">to_procure</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_purchase'), ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Zu bestellen</field>
         <field name="description">Kundenmengen je Hersteller, noch in keiner Sammelbestellung</field>
         <field name="sequence">15</field>
     </record>
     <record id="tile_invoices_to_post" model="blistercenter.overview">
         <field name="key">invoices_to_post</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Rechnungen zu buchen</field>
         <field name="description">Rechnung je Lieferung, noch Entwurf</field>
         <field name="sequence">82</field>
     </record>
     <record id="tile_overdue_invoices" model="blistercenter.overview">
         <field name="key">overdue_invoices</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_sales'), ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Überfällige Rechnungen</field>
         <field name="description">Gebucht, Zahlungsziel überschritten (nur Hinweis, keine Sperre)</field>
         <field name="sequence">84</field>
     </record>
     <record id="tile_payment_blocks" model="blistercenter.overview">
         <field name="key">payment_blocks</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_sales'), ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Zahlungssperren</field>
         <field name="description">Blistercenter mit Zahlungssperre</field>
         <field name="sequence">30</field>
     </record>
     <record id="tile_open_collective" model="blistercenter.overview">
         <field name="key">open_collective</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_purchase'), ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Offene Sammelbestellungen</field>
         <field name="description">Entwurf oder Anfrage beim Hersteller</field>
         <field name="sequence">50</field>
     </record>
     <record id="tile_open_receipts" model="blistercenter.overview">
         <field name="key">open_receipts</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_stock'), ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Offene Wareneingänge</field>
         <field name="description">Aus Sammelbestellungen</field>
         <field name="sequence">60</field>
     </record>
     <record id="tile_to_release" model="blistercenter.overview">
         <field name="key">to_release</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Freigabe Wareneingang (VP)</field>
         <field name="description">Ware in Quarantäne</field>
         <field name="sequence">65</field>
     </record>
     <record id="tile_open_deliveries" model="blistercenter.overview">
         <field name="key">open_deliveries</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_stock'), ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Offene Lieferungen</field>
         <field name="description">An Blistercenter, noch nicht versendet</field>
         <field name="sequence">70</field>
     </record>
     <record id="tile_to_check" model="blistercenter.overview">
         <field name="key">to_check</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_stock'), ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Endkontrolle offen</field>
         <field name="description">Kommissioniert, zweite Person bestätigt</field>
         <field name="sequence">75</field>
     </record>
     <record id="tile_short_dated" model="blistercenter.overview">
         <field name="key">short_dated</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_stock'), ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Kurzläufer im Bestand</field>
         <field name="description">Restlaufzeit unter der Grenze</field>
         <field name="sequence">78</field>
     </record>
     <record id="tile_blocked_lots" model="blistercenter.overview">
         <field name="key">blocked_lots</field>
+        <field name="group_ids" eval="[(6, 0, [ref('blistercenter.group_bc_stock'), ref('blistercenter.group_bc_approver')])]"/>
         <field name="name">Gesperrte Chargen</field>
         <field name="description">Dürfen nicht versendet werden</field>
         <field name="sequence">80</field>

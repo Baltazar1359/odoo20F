@@ -30,6 +30,7 @@
                         </group>
                         <group string="Regeln: Bestellung und Zahlung">
                             <field name="rule_shop_requires_enable"/>
+                            <field name="rule_shop_only_bc_products"/>
                             <field name="rule_require_channel"/>
                             <field name="rule_block_confirm"/>
                             <field name="rule_block_delivery"/>

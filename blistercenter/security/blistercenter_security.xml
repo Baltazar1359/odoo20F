@@ -39,6 +39,45 @@
         <field name="comment">Zusätzlich: Einstellungen und Prozessregeln der App Blistercenter, Preislisten.</field>
     </record>
 
+    <!-- Arbeitsbereiche (1.3.0): steuern nur, welche Menüs und Aufgaben jemand sieht.
+         Die Rechte kommen weiter aus „Benutzer“ (jeder Bereich schließt ihn ein).
+         Freigabe und Administrator sehen alles. Je Bereich eine eigene Zeile im Benutzerformular. -->
+    <record id="res_groups_privilege_bc_sales" model="res.groups.privilege">
+        <field name="name">Blistercenter: Bestellannahme</field>
+        <field name="category_id" ref="base.module_category_sales"/>
+        <field name="sequence">101</field>
+    </record>
+    <record id="group_bc_sales" model="res.groups">
+        <field name="name">Ja</field>
+        <field name="privilege_id" ref="res_groups_privilege_bc_sales"/>
+        <field name="implied_ids" eval="[(4, ref('group_bc_user'))]"/>
+        <field name="comment">Menü und Aufgaben: Telefonbestellung, Kundenbestellungen, Kunden.</field>
+    </record>
+
+    <record id="res_groups_privilege_bc_purchase" model="res.groups.privilege">
+        <field name="name">Blistercenter: Einkauf</field>
+        <field name="category_id" ref="base.module_category_sales"/>
+        <field name="sequence">102</field>
+    </record>
+    <record id="group_bc_purchase" model="res.groups">
+        <field name="name">Ja</field>
+        <field name="privilege_id" ref="res_groups_privilege_bc_purchase"/>
+        <field name="implied_ids" eval="[(4, ref('group_bc_user'))]"/>
+        <field name="comment">Menü und Aufgaben: Zu bestellen, Sammelbestellungen, Hersteller.</field>
+    </record>
+
+    <record id="res_groups_privilege_bc_stock" model="res.groups.privilege">
+        <field name="name">Blistercenter: Lager</field>
+        <field name="category_id" ref="base.module_category_sales"/>
+        <field name="sequence">103</field>
+    </record>
+    <record id="group_bc_stock" model="res.groups">
+        <field name="name">Ja</field>
+        <field name="privilege_id" ref="res_groups_privilege_bc_stock"/>
+        <field name="implied_ids" eval="[(4, ref('group_bc_user'))]"/>
+        <field name="comment">Menü und Aufgaben: Wareneingang, Kommissionieren, Endkontrolle, Chargen.</field>
+    </record>
+
     <record id="base.user_admin" model="res.users">
         <field name="group_ids" eval="[(4, ref('group_bc_manager'))]"/>
     </record>

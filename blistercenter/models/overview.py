@@ -3,6 +3,7 @@ from dateutil.relativedelta import relativedelta
 from odoo import api, fields, models
 
 TILE_KEYS = [
+    ("phone_order", "Telefonbestellung erfassen"),
     ("new_orders", "Neue Bestellungen"),
     ("invoices_to_post", "Rechnungen zu buchen"),
     ("overdue_invoices", "Überfällige Rechnungen"),
@@ -30,6 +31,10 @@ class BlistercenterOverview(models.Model):
     sequence = fields.Integer(default=10)
     description = fields.Char(translate=True)
     count = fields.Integer("Anzahl", compute="_compute_count")
+    kind = fields.Selection([("task", "Aufgabe"), ("action", "Aktion")], default="task", required=True)
+    group_ids = fields.Many2many(
+        "res.groups", string="Sichtbar für",
+        help="Arbeitsbereiche, die diese Kachel auf ihrer Startseite sehen (Regel R41).")
 
     _key_uniq = models.Constraint("unique(key)", "Jede Kachel gibt es nur einmal.")
 
@@ -38,6 +43,8 @@ class BlistercenterOverview(models.Model):
         self.ensure_one()
         company_ids = self.env.companies.ids
         key = self.key
+        if key == "phone_order":
+            return (False, [], "blistercenter.action_bc_phone_order")
         if key == "new_orders":
             return ("sale.order", [
                 ("bc_is_blistercenter", "=", True), ("company_id", "in", company_ids),
@@ -111,6 +118,8 @@ class BlistercenterOverview(models.Model):
         self.ensure_one()
         model, domain, xmlid = self._get_tile()
         action = self.env["ir.actions.act_window"]._for_xml_id(xmlid)
+        if self.kind == "action":
+            return action
         action.update({
             "name": self.name,
             "domain": domain,

@@ -193,6 +193,13 @@ class SaleOrder(models.Model):
                 "Shop-Bestellungen sind nur für freigeschaltete Blistercenter möglich (%(customer)s ist nicht freigeschaltet).",
                 customer=partner.display_name,
             )
+        if self.website_id and config.rule_shop_only_bc_products and not self._bc_loading_demo_data():
+            outside = self.order_line.filtered(lambda sol: sol._bc_is_goods_line()).product_id.filtered(
+                lambda p: not p.sudo().bc_shop_product)
+            if outside:
+                return self.env._(
+                    "Im Shop gibt es nur das Blistercenter-Sortiment. Nicht im Shop: %(products)s.",
+                    products=", ".join(outside.mapped("display_name")))
         if not is_bc:
             return False
         if config.rule_require_channel:
@@ -246,7 +253,17 @@ class SaleOrder(models.Model):
 
     def _cart_add(self, product_id, quantity=1.0, **kwargs):
         self._bc_check_shop_access()
+        self._bc_check_shop_product(product_id)
         return super()._cart_add(product_id, quantity, **kwargs)
+
+    def _bc_check_shop_product(self, product_id):
+        """Regel R40: in den Warenkorb nur Artikel des Blistercenter-Sortiments."""
+        product = self.env["product.product"].sudo().browse(product_id).exists()
+        for order in self:
+            config = self.env["blistercenter.config"]._get(order.company_id)
+            if config.rule_shop_only_bc_products and product and not product.bc_shop_product:
+                raise UserError(self.env._(
+                    "%s gibt es nicht im Blistercenter-Shop. Bitte wenden Sie sich an PLCS.", product.display_name))
 
     def _bc_check_shop_access(self):
         for order in self:

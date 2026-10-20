@@ -1,4 +1,4 @@
-# Blistercenter – Regelkatalog (Stand 19.10.2026, Modul 20.0.1.2.1)
+# Blistercenter – Regelkatalog (Stand 20.10.2026, Modul 20.0.1.3.0)
 
 Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im Shop, per Telefon, E-Mail oder Fax. PLCS bündelt die Mengen in Sammelbestellungen und bestellt manuell beim Hersteller (z. B. AstraZeneca).
 
@@ -60,6 +60,8 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R37 | **Nachweise nur aus dem Ablauf** (Prüfbericht 19.10.2026): Wer kommissioniert, gebucht, Kurzläufer freigegeben, eine Teillieferung abgestimmt oder „Aus Lagerbestand“ gewählt hat, setzt nur Odoo in der jeweiligen Aktion. Status der Sammelbestellung nur über ihre Übergänge. Direkte Schreibzugriffe (z. B. über die Schnittstelle) werden abgelehnt. | – |
 | R38 | **Kennzeichen „Blistercenter“** entfernt nur die Rolle Freigabe. Ein bestätigter Auftrag bleibt Blistercenter-Auftrag, auch wenn das Kennzeichen später fehlt. | – |
 | R39 | **Mengen:** Die Auftragsmenge kann nicht unter die Menge in Sammelbestellungen sinken; eine stornierte Sammelbestellung lässt sich nur reaktivieren, wenn die Menge noch frei ist. Die Herstellerbestellung muss die Kundenmengen decken (mehr ist erlaubt). | – |
+| R40 | **Shop-Sortiment** (1.3.0): Im Shop erscheinen und bestellbar sind nur Artikel mit „Im Blistercenter-Shop“ (Artikel › Reiter Verkauf/Shop). Alle anderen – auch Odoo-Demoprodukte – sind unsichtbar: keine Liste, keine Produktseite (404), kein Warenkorb, keine Bestätigung einer Shop-Bestellung mit Fremdartikel. Telefonbestellungen dürfen jeden Artikel enthalten. Shop-Kategorien je Medikament ordnen das Sortiment. | ja |
+| R41 | **Arbeitsbereiche** (1.3.0): Bestellannahme, Einkauf und Lager (Einstellungen › Benutzer, je eine Zeile „Blistercenter: …“). Jeder Bereich sieht nur sein Menü und seine Kacheln auf „Meine Aufgaben“. Freigabe und Administrator sehen alles. Die Bereiche ändern **keine Rechte** (die kommen aus „Benutzer“). Ohne Bereich nur die leere Startseite mit Hinweis. | – |
 
 ## B. Entscheidungen 15.10.2026 (Mehrdad)
 
@@ -77,6 +79,11 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | Route „Auf Auftrag beschaffen“ | (Vorschlag) verbieten | R20 |
 | Telefonbestellung | PLCS muss Bestellungen telefonisch bearbeiten können | R18, Menü „Telefonbestellung erfassen“ |
 | Kunden und Portal | PLCS legt Blistercenter von Hand an und erteilt den Portalzugang | Knopf „Portalzugänge“ am Kunden; Hinweis, wenn der Shop frei ist, aber kein Zugang besteht |
+
+### Entscheidungen 20.10.2026 (Mehrdad)
+
+- Oberfläche so einfach wie möglich: Startseite „Meine Aufgaben“ mit großen Knöpfen und kurzes Menü je Arbeitsbereich (Bestellannahme, Einkauf, Lager).
+- Shop nur mit den 5 Medikamenten Forxiga, Xigduo, Daxas, Brilique, Tagrisso (13 Artikel), nach Medikament gruppiert; keine Demoprodukte. Übrige Artikel bleiben für Telefonbestellungen, nur nicht im Shop.
 
 ## C. Noch offen
 
