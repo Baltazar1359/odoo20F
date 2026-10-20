@@ -66,5 +66,6 @@ class ResCompany(models.Model):
             "logo": logo,
         })
         company._plcs_apply_layout()
-        if "website" in self.env:
+        # „website“ gibt es als Modell schon ohne das Website-Modul; das Feld logo erst mit ihm
+        if "website" in self.env and "logo" in self.env["website"]._fields:
             self.env["website"].search([("company_id", "=", company.id)]).write({"logo": logo})

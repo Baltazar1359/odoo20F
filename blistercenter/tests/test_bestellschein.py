@@ -243,13 +243,15 @@ class TestBlistercenterWebsiteBranding(HttpCase):
         company.write({"street": "Fußweg 7", "zip": "66687", "city": "Wadern",
                        "email": "info@plcs-test.example", "phone": "+49 1 23"})
         company.plcs_legal_name = "Pharma-Logistik-Testname GmbH"
-        html = self.url_open("/contactus").text
+        html = self.url_open("/shop").text  # Kopf- und Fußzeile (Inhalt der Kontaktseite bleibt Editor-Sache)
         self.assertIn("Pharma-Logistik-Testname GmbH", html)
         self.assertIn("info@plcs-test.example", html)
         self.assertIn("Fußweg 7", html)
         self.assertIn("/my/bestellschein", html)
         self.assertNotIn("We are a team of passionate people", html)
         self.assertNotIn("info@yourcompany.example.com", html)
+        self.assertNotIn("555-555-5556", html, "Odoo-Demonummer weder in Kopf- noch Fußzeile")
+        self.assertIn("+49 1 23", html)
 
     def test_palette_customized(self):
         self.env["blistercenter.config"]._bc_apply_website_branding()

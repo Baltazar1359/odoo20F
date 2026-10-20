@@ -282,6 +282,10 @@ class BlistercenterConfig(models.Model):
     def _bc_load_demo_data(self):
         """Demodaten (1.3.0): Shop-Sortiment, Hersteller und Testkunden – nur in Datenbanken mit Demodaten."""
         from ..tools import testdaten
+        # Beim Laden der Demodaten die Firmendaten erneut setzen (Demodaten anderer Module setzen den
+        # Firmennamen zurück). Nicht bei direkten Aufrufen, z. B. aus Tests.
+        if self.env.context.get("install_demo"):
+            self.env["res.company"]._plcs_load_demo()
         testdaten.load(self.env)
 
     def _bc_check_setup(self):

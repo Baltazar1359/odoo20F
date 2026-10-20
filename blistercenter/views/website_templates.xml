@@ -39,4 +39,21 @@
             </div>
         </xpath>
     </template>
+
+    <!-- Kopfzeile: Telefon/E-Mail der Firma statt Odoo-Demonummer -->
+    <template id="header_text_plcs" inherit_id="website.header_text_element" name="PLCS-Kopfzeile Kontakt" priority="30">
+        <xpath expr="//li" position="replace">
+            <li t-attf-class="#{_item_class}">
+                <t t-set="plcs_company" t-value="website.company_id.sudo()"/>
+                <div t-attf-class="s_text_block #{_div_class}" data-name="Text">
+                    <a t-if="plcs_company.phone" t-att-href="'tel:%s' % plcs_company.phone" class="nav-link o_nav-link_secondary">
+                        <small><i class="oi oi-1x oi-fw oi-filled me-1" data-icon="phone"/><span class="o_force_ltr" t-out="plcs_company.phone"/></small>
+                    </a>
+                    <a t-if="_txt_elt_content == 'phone_mail' and plcs_company.email" t-att-href="'mailto:%s' % plcs_company.email" class="nav-link o_nav-link_secondary">
+                        <small><i class="oi oi-1x oi-fw oi-filled me-1" data-icon="mail"/><t t-out="plcs_company.email"/></small>
+                    </a>
+                </div>
+            </li>
+        </xpath>
+    </template>
 </odoo>
