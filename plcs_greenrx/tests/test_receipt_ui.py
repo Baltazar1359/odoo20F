@@ -142,3 +142,21 @@ class TestGreenrxManualPackUi(GreenrxUiCase):
         self.assertEqual(man.mapped("manual"), [True])
         self.assertEqual(man.result, "removed")
         self.assertEqual(len(man), 1, "PZN mit falscher Prüfziffer wird nicht erfasst")
+
+
+@tagged("post_install", "-at_install", "plcs_greenrx")
+class TestGreenrxAbortCaptureUi(GreenrxUiCase):
+    """1.10.0: „Erfassung abbrechen“ in der Scan-Oberfläche."""
+
+    def test_abort_capture_button(self):
+        ticket = self._ticket("V-ABORT-1", 2)
+        ticket.with_user(self.admin).grx_start()
+        picking = ticket.picking_id
+        self.assertEqual(ticket.state, "in_progress")
+
+        self.start_tour("/odoo/action-plcs_greenrx.action_grx_app", "plcs_greenrx_abort_capture", login="admin")
+
+        ticket.invalidate_recordset()
+        self.assertEqual(ticket.state, "open")
+        self.assertFalse(ticket.picking_id)
+        self.assertEqual(picking.state, "cancel")

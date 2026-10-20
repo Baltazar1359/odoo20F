@@ -475,6 +475,7 @@
                 </t>
                 <t t-if="this.state.step === 2 and !this.state.askDeviation">
                     <button type="button" class="o_grx_btn o_grx_btn_ghost o_grx_btn_big" t-on-click="() => this.goHome()">Zurück</button>
+                    <button type="button" class="o_grx_btn o_grx_btn_ghost o_grx_btn_big o_grx_abort" t-if="this.canAbort" t-on-click="() => this.abortCapture()">Erfassung abbrechen</button>
                     <button type="button" class="o_grx_btn o_grx_btn_dark o_grx_btn_big" t-if="this.packageBoxes.length" t-on-click="() => this.finishPackage(false)">Paket fertig</button>
                 </t>
                 <t t-if="this.state.step === 3 and this.box">

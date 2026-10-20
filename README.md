@@ -38,7 +38,9 @@ Umgesetzt nach dem Entwurf „PLCS Lager-Oberfläche“ (Handy und PC mit Handsc
    - „Box abschließen“ lehnt ab, wenn die Box seit dem letzten Druck geändert wurde.
 6. **Nächste Box oder Paket fertig:** Bei „Paket fertig“ wird der Eingang gebucht. Grün und Gelb landen in GreenRX/Quarantäne, Rot im GreenRX/Sperrlager. Weicht Soll von Ist ab, ist eine Begründung Pflicht. Ist noch eine Box offen (auch von einer anderen Person), nennt Odoo Box, Schritt und Person. Die Box lässt sich über ihre Box-Nummer (Scan oder Handeingabe) fortsetzen, als VP auch die Box einer anderen Person.
 
-Tasten am PC: **F8** Drucken, **F9** Weiter bzw. Box abschließen, **Esc** Meldung schließen.
+**Erfassung abbrechen** (1.10.0): Wurde ein Retourenschein zu früh oder versehentlich gescannt, steht in Schritt 2 (noch keine Box) der Knopf „Erfassung abbrechen“; im Backend derselbe Knopf am Retourenvorgang. Odoo storniert den leeren Eingang (GRXIN…), setzt den Vorgang zurück auf „Offen“ und vermerkt Person und Eingang im Verlauf. Später lässt sich der Vorgang normal erfassen (neuer Eingang). Nicht möglich, sobald eine Box erfasst ist; eine offene Box vorher mit „Box abbrechen“ abbrechen. Anders als „Stornieren“ ist der Vorgang danach nicht erledigt.
+
+Tasten am PC: **F8** Drucken (Schritt 5), **F9** Weiter bzw. Box abschließen (Schritte 3–5), **Esc** Meldung schließen.
 
 ### Seriennummer und Charge in Odoo
 
@@ -178,6 +180,8 @@ Die automatischen Tests (davon 7 Browser-Tests, die Chrome brauchen) decken ab:
   nur lesende Aufrufe, Webhook (auch über HTTP) und Mengen-/Referenzabgleich.
 - die Befunde des Prüfberichts vom 15.10.2026 (1.9.1, `test_gpt_review.py`, F01–F08), jeweils mit Gegenprobe;
   F03 als Browser-Test mit künstlich verzögerter Serverantwort, F01 als Browser-Test (gesperrte Box per Liste und Scan freigeben).
+- „Erfassung abbrechen“ (1.10.0, `TestGreenrxAbortCapture`): Gutfall, Neustart mit neuem Eingang, offene und
+  abgeschlossene Box, falscher Status, Rolle, fremde Firma; dazu Browser-Test `TestGreenrxAbortCaptureUi`.
 
 Zusätzlich prüft `e2e/playwright_scan_queue.py` mit Playwright gegen einen laufenden Server, dass 5 schnelle Scans alle ankommen:
 

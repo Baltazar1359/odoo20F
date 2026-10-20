@@ -75,6 +75,10 @@ Das PDF ausdrucken oder am PC öffnen und mit Handy-Kamera bzw. Handscanner lese
   - Seriennummer einer erfassten Packung unter Lager › Seriennummern umbenennen: Odoo lehnt das ab.
   - Box drucken, danach den Absender des Vorgangs oder die Lagertemperatur des Artikels ändern: Abschluss verlangt neuen Druck.
   - Vorprüfung durch eine andere Person als den Erfasser: Formblatt nennt bei „Wareneingangsprüfung durchgeführt von“ den Prüfer, in der Anlage bei „Erfasst von“ den Erfasser.
+- **Neu in 1.10.0 – Erfassung abbrechen:**
+  - Retourenschein scannen, in Schritt 2 keine Box scannen, „Erfassung abbrechen“ → bestätigen. Erwartet: zurück auf „Meine Aufgaben“, Vorgang nicht mehr unter „In Erfassung“; im Vorgang (Retourenvorgänge) Status „Offen“, Verlauf nennt Person und stornierten Eingang.
+  - Denselben Retourenschein erneut scannen. Erwartet: normale Erfassung mit neuem Eingang.
+  - Vorgang mit erfasster Box: Knopf fehlt in der App; im Backend lehnt Odoo ab und nennt die Box.
 
 ## Hinweise
 

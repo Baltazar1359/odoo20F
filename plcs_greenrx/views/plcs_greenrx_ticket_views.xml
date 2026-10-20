@@ -32,6 +32,9 @@
                 <header>
                     <button name="action_cancel" type="object" string="Stornieren" invisible="state not in ('open', 'in_progress')"
                             confirm="Ticket wirklich stornieren?"/>
+                    <button name="grx_abort" type="object" string="Erfassung abbrechen" invisible="state != 'in_progress'"
+                            groups="plcs_greenrx.group_grx_user"
+                            confirm="Erfassung abbrechen? Nur ohne Box möglich. Der leere Eingang wird storniert, der Vorgang ist wieder offen."/>
                     <button name="action_ativ_override" type="object" string="Trotzdem erwarten" class="btn-primary"
                             invisible="state not in ('closed', 'cancel') or not ativ_status" groups="stock.group_stock_manager"
                             confirm="Vorgang trotz ATIV-Status als erwartet öffnen? Die Synchronisierung ändert den Status danach nicht mehr."/>

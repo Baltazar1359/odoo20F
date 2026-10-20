@@ -298,6 +298,7 @@ class PlcsGreenrxTicket(models.Model):
             "soll_ist": self._grx_soll_ist(),
             "slip_note": self.slip_note or "",
             "startable": self.state in STARTABLE_STATES,
+            "abortable": self.state == "in_progress" and not self.box_ids.filtered(lambda b: b.state != "cancel"),
             "state_label": dict(self._fields["state"].selection).get(self.state, ""),
             "ativ_status": dict(self._fields["ativ_status"].selection).get(self.ativ_status, "") if self.ativ_status else "",
             "ativ_reason": self.ativ_status_reason or "",
@@ -504,6 +505,43 @@ class PlcsGreenrxTicket(models.Model):
         if self.state == "open":
             self.sudo().state = "in_progress"
         return self._grx_ui_data()
+
+    def grx_abort(self):
+        """Erfassung abbrechen (1.10.0): Vorgang ohne Box zurück auf „Offen“.
+
+        Für Retourenscheine, die zu früh oder versehentlich gescannt wurden. Der leere Eingang
+        wird storniert, der Vorgang kann später normal erfasst werden (neuer Eingang).
+        Nicht möglich, sobald eine Box erfasst ist (offen oder abgeschlossen) oder ein Eingang
+        gebucht ist. Offene Boxen müssen vorher mit „Box abbrechen“ abgebrochen werden.
+        """
+        self.ensure_one()
+        self._grx_check_user()
+        if self.state != "in_progress":
+            raise UserError(self.env._(
+                "Vorgang %s ist nicht in Erfassung und kann nicht abgebrochen werden.", self.name))
+        boxes = self.box_ids.filtered(lambda b: b.state != "cancel")
+        if boxes:
+            raise UserError(self.env._(
+                "Vorgang %(t)s hat schon Boxen (%(b)s). Die Erfassung lässt sich nur ohne Box abbrechen. "
+                "Offene Boxen zuerst mit „Box abbrechen“ abbrechen; abgeschlossene Boxen bleiben.",
+                t=self.name, b=", ".join(boxes.mapped("package_id.name"))))
+        receipts = self._grx_receipts()
+        if receipts.filtered(lambda p: p.state == "done"):
+            raise UserError(self.env._(
+                "Für Vorgang %s ist schon ein Eingang gebucht. Die Erfassung kann nicht abgebrochen werden.",
+                self.name))
+        if receipts.move_ids.filtered(lambda m: m.state != "cancel"):
+            raise UserError(self.env._(
+                "Der Eingang zu Vorgang %s enthält schon Ware. Die Erfassung kann nicht abgebrochen werden.",
+                self.name))
+        to_cancel = receipts.filtered(lambda p: p.state != "cancel")
+        names = ", ".join(to_cancel.mapped("name")) or "-"
+        to_cancel.sudo().action_cancel()
+        self.sudo().write({"state": "open", "picking_id": False})
+        self.sudo().message_post(body=self.env._(
+            "Erfassung abgebrochen von %(user)s. Eingang %(pick)s storniert. Vorgang wieder offen.",
+            user=self.env.user.name, pick=names))
+        return True
 
     def _grx_create_receipt(self, origin):
         self.ensure_one()

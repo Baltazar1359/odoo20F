@@ -916,6 +916,28 @@ export class GreenRxReceiptApp extends Component {
         });
     }
 
+    get canAbort() {
+        const ticket = this.state.ticket;
+        return Boolean(ticket && ticket.abortable && !this.packageBoxes.length && !this.state.box);
+    }
+
+    /** Erfassung abbrechen (1.10.0): Vorgang ohne Box zurück auf „Offen“, leerer Eingang storniert. */
+    async abortCapture() {
+        const ticket = this.state.ticket;
+        if (!ticket) {
+            return;
+        }
+        if (!window.confirm(_t("Erfassung von %s abbrechen? Der leere Eingang wird storniert, der Vorgang ist wieder offen und kann später erfasst werden.", ticket.name))) {
+            return;
+        }
+        await this.flushScans();
+        await this.run(async () => {
+            await this.call("plcs.greenrx.ticket", "grx_abort", [[ticket.id]]);
+            this.notification.add(_t("Erfassung von %s abgebrochen. Der Vorgang ist wieder offen.", ticket.name), { type: "info" });
+            await this.goHome();
+        });
+    }
+
     onDeviationInput(ev) {
         this.state.deviationNote = ev.target.value;
     }
