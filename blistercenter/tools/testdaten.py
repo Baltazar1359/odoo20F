@@ -145,6 +145,17 @@ def load(env, log=None):
         products[pzn] = product
         log("  %s  %s%s" % (pzn, full_name, "  [Shop]" if in_shop else ""))
 
+    if categs:
+        # Andere Shop-Kategorien (z. B. Odoo-Demo „Desks“, „Furniture“) ohne Sortimentsartikel aus der
+        # Kategorieleiste nehmen. Kunden sehen leere Kategorien ohnehin nicht, interne Benutzer schon.
+        Categ = env["product.public.category"]
+        ours = Categ.browse([c.id for c in categs.values()])
+        for categ in Categ.search([("id", "not in", ours.ids), ("parent_id", "=", False)]):
+            if not env["product.template"].search_count([
+                    ("public_categ_ids", "child_of", categ.id), ("bc_shop_product", "=", True)]):
+                categ.not_in_shop = True
+        ours.write({"not_in_shop": False})
+
     for index, (cust_name, discount, term_xmlid, payment_model) in enumerate(CUSTOMERS, start=1):
         customer = Partner.search([("name", "=", cust_name)], limit=1)
         cust_vals = {"name": cust_name, "is_company": True, "bc_is_customer": True,

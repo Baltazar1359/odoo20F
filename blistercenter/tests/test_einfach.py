@@ -208,6 +208,8 @@ class TestBlistercenterDemoData(BlistercenterCommon):
     """1.3.0: Demodaten bringen das Shop-Sortiment mit (jeder Dev-Build), mehrfach ladbar."""
 
     def test_demo_loader_assortment(self):
+        Categ = self.env["product.public.category"]
+        foreign = Categ.create({"name": "Desks (Demo)"})
         Config = self.env["blistercenter.config"]
         Config._bc_load_demo_data()
         Config._bc_load_demo_data()  # zweites Mal: keine Duplikate
@@ -225,6 +227,8 @@ class TestBlistercenterDemoData(BlistercenterCommon):
         customers = self.env["res.partner"].search([("name", "like", "(Test)"), ("bc_is_customer", "=", True)])
         self.assertGreaterEqual(len(customers.filtered(lambda p: p.name.startswith("Blistercenter "))), 3)
         self.assertGreaterEqual(self.config.shop_product_count, 13)
+        self.assertTrue(foreign.not_in_shop, "Fremde Kategorie ohne Sortiment nicht in der Kategorieleiste")
+        self.assertFalse(shop.public_categ_ids.filtered("not_in_shop"))
 
     def _articles(self):
         from ..tools import testdaten
