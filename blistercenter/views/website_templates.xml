@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- 1.4.0: Website-/Portal-Fußzeile im PLCS-Design statt Odoo-Demotext.
+         Angaben aus der Firma der Website (Einstellungen › Unternehmen), nichts fest im Code.
+         Im Website-Editor weiter änderbar. -->
+    <template id="footer_plcs" inherit_id="website.footer_custom" name="PLCS-Fußzeile" priority="30">
+        <xpath expr="//div[@id='footer']" position="replace">
+            <t t-set="plcs_company" t-value="website.company_id.sudo()"/>
+            <div id="footer" class="oe_structure oe_structure_solo border text-break" t-ignore="true" t-if="not no_footer"
+                 style="--box-border-left-width: 0px; --box-border-right-width: 0px;">
+                <section class="s_text_block pt32 pb16" data-snippet="s_text_block" data-name="Container">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-lg-5 pt16 pb16">
+                                <h5 class="o_plcs_footer_name" t-out="plcs_company.plcs_legal_name or plcs_company.name"/>
+                                <p class="mb-0">
+                                    <t t-if="plcs_company.street"><span t-out="plcs_company.street"/><br/></t>
+                                    <t t-if="plcs_company.zip or plcs_company.city"><span t-out="plcs_company.zip"/> <span t-out="plcs_company.city"/></t>
+                                </p>
+                            </div>
+                            <div class="col-lg-4 pt16 pb16">
+                                <h5>Kontakt</h5>
+                                <ul class="list-unstyled mb-0">
+                                    <li t-if="plcs_company.phone"><a t-att-href="'tel:%s' % plcs_company.phone"><span class="o_force_ltr" t-out="plcs_company.phone"/></a></li>
+                                    <li t-if="plcs_company.email"><a t-att-href="'mailto:%s' % plcs_company.email" t-out="plcs_company.email"/></li>
+                                    <li><a href="/contactus">Kontaktformular</a></li>
+                                </ul>
+                            </div>
+                            <div class="col-lg-3 pt16 pb16">
+                                <h5>Für Blistercenter</h5>
+                                <ul class="list-unstyled mb-0">
+                                    <li><a href="/my">Kundenkonto</a></li>
+                                    <li><a href="/my/bestellschein">Bestellschein</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </xpath>
+    </template>
+</odoo>

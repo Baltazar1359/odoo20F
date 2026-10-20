@@ -217,6 +217,8 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 
 **Bestellschein (1.4.0):** „Telefonbestellung erfassen“ öffnet einen Bestellschein: Kunde, Besteller, die Artikel des Shop-Sortiments mit Mengenfeld, „Bestellung anlegen“. Dieselbe Liste haben freigeschaltete Kunden im Kundenportal (`/my/bestellschein`, Karte „Bestellschein“); ihre Bestellung steht bei PLCS unter „Neue Bestellungen“ (Bestellweg „Online-Bestellschein“). Beide Wege nutzen `sale.order._bc_create_from_sheet` mit denselben Prüfungen.
 
+**Website und Kundenportal im PLCS-Design (1.4.0):** Fußzeile mit den Firmendaten (statt Odoo-Demotext) und PLCS-Farben (Rot #9c0000, Grau #828282). Die Farben setzt Odoo einmalig bei Installation bzw. Update auf 1.4.0, danach im Website-Editor änderbar. Blistercenter setzt `plcs_layout` voraus (wird mitinstalliert).
+
 1. **Kunden:** Blistercenter von Hand anlegen, Zahlungsart (Lastschrift über DATEV), Zahlungsziel (7 oder 14 Tage) und Rabatt (0, 1 oder 2 % auf den HAP) setzen (Rolle Freigabe). Portalzugang über den Knopf **Portalzugänge** am Kunden.
 2. **Bestellung:** im Shop oder über **Kundenbestellungen › Telefonbestellung erfassen** (auch Knopf am Kunden). Bestellweg und Besteller sind Pflicht. Preis = HAP (Verkaufspreis am Artikel) minus Kundenrabatt.
 3. **Proforma:** Knopf „Proforma drucken“ im bestätigten Auftrag (nur Information, keine Buchung).

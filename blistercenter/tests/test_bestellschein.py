@@ -231,3 +231,28 @@ class TestBlistercenterPortalOrderSheet(HttpCase):
             return self.make_jsonrpc_request("/my/counters", {"counters": {"bc_sheet_count": "client_category"}})
         self.assertGreater(count(self.portal_user).get("bc_sheet_count", 0), 0)
         self.assertEqual(count(self.other_user).get("bc_sheet_count", 0), 0)
+
+
+@tagged("post_install", "-at_install", "blistercenter")
+class TestBlistercenterWebsiteBranding(HttpCase):
+    """1.4.0: Website-Fußzeile mit Firmendaten statt Odoo-Demotext, PLCS-Farben einmalig gesetzt."""
+
+    def test_footer_shows_company_data(self):
+        website = self.env["website"].search([], order="id", limit=1)
+        company = website.company_id
+        company.write({"street": "Fußweg 7", "zip": "66687", "city": "Wadern",
+                       "email": "info@plcs-test.example", "phone": "+49 1 23"})
+        company.plcs_legal_name = "Pharma-Logistik-Testname GmbH"
+        html = self.url_open("/contactus").text
+        self.assertIn("Pharma-Logistik-Testname GmbH", html)
+        self.assertIn("info@plcs-test.example", html)
+        self.assertIn("Fußweg 7", html)
+        self.assertIn("/my/bestellschein", html)
+        self.assertNotIn("We are a team of passionate people", html)
+        self.assertNotIn("info@yourcompany.example.com", html)
+
+    def test_palette_customized(self):
+        self.env["blistercenter.config"]._bc_apply_website_branding()
+        attachments = self.env["ir.attachment"].search([("url", "like", "user_color_palette.scss")])
+        self.assertTrue(attachments)
+        self.assertIn("#9c0000", attachments[:1].raw.decode())

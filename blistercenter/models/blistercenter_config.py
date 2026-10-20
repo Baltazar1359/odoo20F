@@ -257,6 +257,28 @@ class BlistercenterConfig(models.Model):
         }
 
     @api.model
+    def _bc_apply_website_branding(self):
+        """PLCS-Farben für Website und Kundenportal (1.4.0). Nur einmal (Installation, Update auf 1.4.0),
+        damit spätere Änderungen im Website-Editor erhalten bleiben."""
+        if "website" not in self.env:
+            return
+        palette = {
+            "o-color-1": "#9c0000",  # PLCS-Rot (Briefpapier)
+            "o-color-2": "#828282",  # PLCS-Grau (Logo)
+            "o-color-3": "#f4f4f4",
+            "o-color-4": "#ffffff",
+            "o-color-5": "#222222",
+        }
+        Assets = self.env["website.assets"]
+        for website in self.env["website"].search([]):
+            Assets.with_context(website_id=website.id).make_scss_customization(
+                "/website/static/src/scss/options/colors/user_color_palette.scss", palette)
+            company = website.company_id
+            if company.logo and not website.logo:
+                from odoo.tools.binary import BinaryBytes
+                website.logo = BinaryBytes(company.logo.content)
+
+    @api.model
     def _bc_load_demo_data(self):
         """Demodaten (1.3.0): Shop-Sortiment, Hersteller und Testkunden – nur in Datenbanken mit Demodaten."""
         from ..tools import testdaten

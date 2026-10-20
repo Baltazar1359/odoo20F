@@ -37,6 +37,7 @@ parallele Buchhaltung und keine doppelten Bestell- oder Lagerdaten an.
         "account",
         "website_sale",
         "product_expiry",
+        "plcs_layout",
     ],
     "data": [
         "security/blistercenter_security.xml",
@@ -56,11 +57,13 @@ parallele Buchhaltung und keine doppelten Bestell- oder Lagerdaten an.
         "views/blistercenter_menus.xml",
         "report/bc_proforma.xml",
         "views/portal_templates.xml",
+        "views/website_templates.xml",
         "data/portal_entry_data.xml",
     ],
     "demo": [
         "demo/blistercenter_demo.xml",
     ],
+    "post_init_hook": "_bc_post_init",
     "installable": True,
     "application": True,
 }
