@@ -287,6 +287,8 @@ class BlistercenterConfig(models.Model):
         if self.env.context.get("install_demo"):
             self.env["res.company"]._plcs_load_demo()
         testdaten.load(self.env)
+        # Nur PLCS-Arzneimittel als Waren: Odoo-Demomöbel usw. archivieren (Entscheidung 21.10.2026)
+        testdaten.archive_foreign_demo_products(self.env)
 
     def _bc_check_setup(self):
         """Lager-Einrichtung prüfen (legt sie bei Bedarf an) und die Einstellungen zurückgeben."""

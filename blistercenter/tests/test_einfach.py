@@ -233,6 +233,25 @@ class TestBlistercenterDemoData(BlistercenterCommon):
         from ..tools import testdaten
         return testdaten.ARTICLES
 
+    def test_foreign_demo_products_archived(self):
+        """Odoo-Demowaren (z. B. Möbel) werden archiviert; PLCS-Artikel und Dienstleistungen bleiben."""
+        from ..tools import testdaten
+        Template = self.env["product.template"]
+        chair = Template.create({"name": "Demo-Stuhl", "type": "consu", "sale_ok": True})
+        service = Template.create({"name": "Demo-Hotel", "type": "service"})
+        own = Template.create({"name": "Eigener Artikel ohne XML-ID", "type": "consu"})
+        for rec, name in ((chair, "demo_chair_x"), (service, "demo_service_x")):
+            self.env["ir.model.data"].create({"module": "product", "name": name,
+                                              "model": "product.template", "res_id": rec.id})
+        self.env["ir.model.data"].create({"module": "product", "name": "demo_pzn_x", "model": "product.template",
+                                          "res_id": self.product.product_tmpl_id.id})
+        archived = testdaten.archive_foreign_demo_products(self.env)
+        self.assertIn(chair, archived)
+        self.assertFalse(chair.active)
+        self.assertFalse(service.active, "Demo-Dienstleistung ohne Bezug zu PLCS")
+        self.assertTrue(own.active, "Ohne fremde XML-ID: von Hand angelegt, bleibt")
+        self.assertTrue(self.product.product_tmpl_id.active, "Sortimentsartikel bleibt")
+
     def test_demo_loader_not_callable_by_rpc_users(self):
         """Negativtest: private Methode – über die Weboberfläche nicht aufrufbar."""
         self.assertTrue(self.env["blistercenter.config"]._bc_load_demo_data.__name__.startswith("_"))

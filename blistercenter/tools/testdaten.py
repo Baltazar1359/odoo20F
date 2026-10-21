@@ -176,3 +176,36 @@ def load(env, log=None):
                             "email": "kontakt%s@blistercenter.example" % index, "function": "Einkauf"})
         log("  Kunde: %s – Rabatt %s %%, %s" % (cust_name, discount, env.ref(term_xmlid).name))
     return products
+
+
+OWN_MODULES = ("blistercenter", "plcs_greenrx", "plcs_layout")
+
+
+def archive_foreign_demo_products(env):
+    """Odoo-Demoprodukte ohne Bezug zu PLCS (Tische, Stühle, Möbel, Hotel …) archivieren (1.4.0).
+
+    Nur Artikel aus den Demodaten anderer Module (erkennbar an ihrer XML-ID). Aktiv bleiben die
+    Artikel, die Odoo intern braucht: Versandarten und das Anzahlungsprodukt. Archivieren statt
+    löschen: Demo-Aufträge verweisen auf die Artikel. Gibt die archivierten Vorlagen zurück.
+    """
+    Template = env["product.template"].with_context(active_test=False)
+    data = env["ir.model.data"].sudo().search([
+        ("model", "in", ("product.template", "product.product")),
+        ("module", "not in", OWN_MODULES),
+    ])
+    template_ids = set(data.filtered(lambda d: d.model == "product.template").mapped("res_id"))
+    variants = env["product.product"].with_context(active_test=False).browse(
+        data.filtered(lambda d: d.model == "product.product").mapped("res_id")).exists()
+    template_ids |= set(variants.product_tmpl_id.ids)
+    protected = Template.browse()
+    if "delivery.carrier" in env:
+        protected |= env["delivery.carrier"].with_context(active_test=False).search([]).product_id.product_tmpl_id
+    deposit_id = env["ir.config_parameter"].sudo().get_str("sale.default_deposit_product_id")
+    if deposit_id and deposit_id.isdigit():
+        protected |= env["product.product"].with_context(active_test=False).browse(int(deposit_id)).exists().product_tmpl_id
+    templates = Template.browse(list(template_ids)).exists().filtered(
+        lambda t: t.active and t not in protected and not t.bc_shop_product
+        and not ("plcs_pzn" in t._fields and t.plcs_pzn))
+    templates.write({"active": False, "is_published": False} if "is_published" in templates._fields
+                    else {"active": False})
+    return templates
