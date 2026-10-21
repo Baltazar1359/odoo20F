@@ -393,7 +393,9 @@ class BlistercenterConfig(models.Model):
         Pricelist = self.env["product.pricelist"].with_context(active_test=False)
         pricelists = Pricelist.search([("company_id", "in", [company.id, False]), ("currency_id", "!=", euro.id)])
         pricelists.write({"currency_id": euro.id})
-        pricelists.filtered(lambda p: p.name == "USD").name = "Standard (EUR)"
+        # Demo-Preisliste „USD“ rechnet bereits in Euro: Namen angleichen
+        Pricelist.search([("company_id", "in", [company.id, False]), ("name", "=", "USD"),
+                          ("currency_id", "=", euro.id)]).name = "Standard (EUR)"
         # Eine Preisliste im Shop, kein Preislisten-/Währungswähler (Demo-Preislisten „Benelux“ usw. archivieren)
         if "selectable" in Pricelist._fields:
             own = Pricelist.search([("company_id", "in", [company.id, False]), ("active", "=", True)])

@@ -95,3 +95,4 @@ class TestPlcsGermany(TransactionCase):
         if "product.pricelist" in self.env:
             pricelists = self.env["product.pricelist"].search([("company_id", "in", [company.id, False])])
             self.assertFalse(pricelists.filtered(lambda p: p.currency_id.name == "USD"), "Preislisten in Euro")
+            self.assertFalse(pricelists.filtered(lambda p: p.name == "USD"), "kein Preislistenname „USD“")
