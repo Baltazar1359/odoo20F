@@ -2,6 +2,8 @@
 
 Grundlage: Gespräch mit Herrn Krebs (PLCS), Entscheidungen 19.10.2026. Jede Regel mit Negativtest.
 """
+from datetime import timedelta
+
 from odoo import Command
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import tagged
@@ -156,7 +158,10 @@ class TestBlistercenterBilling(BlistercenterCommon):
         self.assertEqual(first.bc_invoice_ids, invoice_1)
         self.assertEqual(invoice_1.invoice_line_ids.quantity, 2, "Nur die gelieferte Menge")
         self.assertEqual(invoice_1.invoice_line_ids.discount, 2.0)
-        self.assertEqual(invoice_1.invoice_payment_term_id, self.term_14)
+        # Zahlungsziel ab Proforma (21.10.2026): Rechnung übernimmt die Fälligkeit der Proforma
+        self.assertFalse(invoice_1.invoice_payment_term_id)
+        self.assertEqual(invoice_1.invoice_date_due, order.bc_proforma_due_date)
+        self.assertEqual(order.bc_proforma_due_date, order.bc_proforma_date + timedelta(days=14))
         self.assertIn("SEPA-Lastschrift", str(invoice_1.narration))
         self.assertIn(first.name, str(invoice_1.narration))
         self.assertTrue(invoice_1.activity_ids.filtered(lambda a: a.user_id == self.user_accounting))

@@ -17,6 +17,13 @@ QTY_KEY = re.compile(r"^qty_(\d+)$")
 
 class BlistercenterPortal(CustomerPortal):
 
+    def _show_report(self, model, report_type, report_ref, download=False):
+        """Bestätigte Blistercenter-Bestellung: im Portal die Proforma-Rechnung statt des Auftrags (1.5.0)."""
+        if (report_ref == "sale.action_report_saleorder" and model._name == "sale.order" and len(model) == 1
+                and model.bc_is_blistercenter and model.state == "sale"):
+            report_ref = "blistercenter.action_report_bc_proforma"
+        return super()._show_report(model, report_type, report_ref, download=download)
+
     # ------------------------------------------------------------------
     # Zugang
     # ------------------------------------------------------------------

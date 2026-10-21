@@ -9,3 +9,4 @@ from . import account_move
 from . import product
 from . import website
 from . import order_sheet
+from . import account_chart_template

@@ -5,7 +5,7 @@ Eigene Module für die PLCS GmbH. Die Module liegen direkt im Wurzelverzeichnis,
 | Modul | Inhalt | Stand |
 |---|---|---|
 | `plcs_greenrx` | GreenRX-Wareneingang: Scan je Packung, Boxen, Vorprüfung mit Ampel, KabQ-Drucke, VP-Freigabe | 1.9.2 in `main`/Production; 1.10.0 auf Branch `feat/erfassung-abbrechen` |
-| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Proforma, Rechnung je Lieferung, Rabatt 0/1/2 % auf HAP, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | 1.2.1 in `main`; 1.4.0 (einfache Oberfläche, Shop-Sortiment, Bestellschein Telefon + Portal) auf Branch `feat/blistercenter-einfach`; Test im Dev-Build (in Production nicht installiert) |
+| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Proforma, Rechnung je Lieferung, Rabatt 0/1/2 % auf HAP, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | 1.2.1 in `main`; 1.5.0 (einfache Oberfläche, Shop-Sortiment, Bestellschein Telefon + Portal, Proforma bei Bestätigung, USt 19 %/Export 0 %, Packungsfotos) auf Branch `feat/blistercenter-einfach`; Test im Dev-Build (in Production nicht installiert) |
 | `plcs_layout` | PLCS-Briefpapier für alle Odoo-Belege: Logo, Absenderzeile, Fußzeile mit Firmendaten aus Odoo, Hinweis (z. B. §52a AMG) | 1.0.0 auf Branch `feat/blistercenter-einfach`; in Production erst nach Freigabe installieren |
 
 **Prüfumgebung:** https://baltazar1359-odoo20.odoo.com (Odoo.sh, Branch `main` = Production). Prüfanleitung: [`docs/PRUEFANLEITUNG.md`](docs/PRUEFANLEITUNG.md), Testpaket: [`docs/testpaket_VTEST1801.pdf`](docs/testpaket_VTEST1801.pdf) (weitere Bögen und Generatoren in der Prüfanleitung).
@@ -217,11 +217,13 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 
 **Bestellschein (1.4.0):** „Telefonbestellung erfassen“ öffnet einen Bestellschein: Kunde, Besteller, die Artikel des Shop-Sortiments mit Mengenfeld, „Bestellung anlegen“. Dieselbe Liste haben freigeschaltete Kunden im Kundenportal (`/my/bestellschein`, Karte „Bestellschein“); ihre Bestellung steht bei PLCS unter „Neue Bestellungen“ (Bestellweg „Online-Bestellschein“). Beide Wege nutzen `sale.order._bc_create_from_sheet` mit denselben Prüfungen.
 
+**Umsatzsteuer und Packungsfotos (1.5.0):** Inland 19 %, Export 0 % (Nicht-EU) und EU mit USt-IdNr. 0 % über die automatische Steuerzuordnung (Production: deutscher Kontenrahmen von Odoo; Blistercenter schaltet die Erkennung für Nicht-EU und EU ohne USt-IdNr. ein). Packungsfotos je PZN über Einstellungen › „Packungsfotos laden“ (Bildquelle einstellbar); Dev-Builds laden sie automatisch.
+
 **Website und Kundenportal im PLCS-Design (1.4.0):** Fußzeile mit den Firmendaten (statt Odoo-Demotext) und PLCS-Farben (Rot #9c0000, Grau #828282). Die Farben setzt Odoo einmalig bei Installation bzw. Update auf 1.4.0, danach im Website-Editor änderbar. Blistercenter setzt `plcs_layout` voraus (wird mitinstalliert).
 
 1. **Kunden:** Blistercenter von Hand anlegen, Zahlungsart (Lastschrift über DATEV), Zahlungsziel (7 oder 14 Tage) und Rabatt (0, 1 oder 2 % auf den HAP) setzen (Rolle Freigabe). Portalzugang über den Knopf **Portalzugänge** am Kunden.
 2. **Bestellung:** im Shop oder über **Kundenbestellungen › Telefonbestellung erfassen** (auch Knopf am Kunden). Bestellweg und Besteller sind Pflicht. Preis = HAP (Verkaufspreis am Artikel) minus Kundenrabatt.
-3. **Proforma:** Knopf „Proforma drucken“ im bestätigten Auftrag (nur Information, keine Buchung).
+3. **Proforma (1.5.0):** Bei der Bestätigung geht die Proforma-Rechnung per E-Mail an das Blistercenter; zahlbar bis Bestätigung + 7/14 Tage, Versand wartet nicht. Knöpfe „Proforma drucken“/„Proforma senden“. Keine Buchung.
 4. **Zu bestellen:** offene Kundenmengen je Hersteller. PLCS entscheidet, wann bestellt wird: markieren, „Zur Sammelbestellung“, dann „Anfrage erstellen“ und im Einkauf manuell bestellen. Ausnahme: „Aus Lagerbestand liefern“.
 5. **Lager und Versand › Wareneingänge:** Ware mit Charge und Verfall buchen. Sie landet in der Quarantäne (WH/Blistercenter/Quarantäne).
 6. **Freigabe Wareneingang (VP):** eine andere Person mit Rolle Freigabe bestätigt. Kurzläufer (Rest unter 3 Monaten) vorher mit „Kurzläufer freigeben“.

@@ -1,5 +1,14 @@
+import logging
+import re
+
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
+
+_logger = logging.getLogger(__name__)
+
+# Packungsfotos per PZN (1.5.0, Entscheidung 21.10.2026). Platzhalter: {pzn} und Teile {a}{b}{c} (2/3/3 Ziffern)
+DEFAULT_PRODUCT_IMAGE_URL = "https://cdn.shop-apotheke.com/images/600x0/D{a}/{b}/{c}/D{pzn}-p10.jpg"
+IMAGE_MAX_BYTES = 5 * 1024 * 1024
 
 # Seit 1.2.0: Rechnung je Lieferung mit Zahlungsziel; Vorkasse entfällt.
 PAYMENT_MODELS = [
@@ -109,6 +118,16 @@ class BlistercenterConfig(models.Model):
     rule_require_payment_term = fields.Boolean(
         "Zahlungsziel am Kunden Pflicht", default=True, tracking=True,
         help="Ohne Zahlungsbedingung (z. B. 7 oder 14 Tage) lässt sich eine Blistercenter-Bestellung nicht bestätigen.",
+    )
+    rule_send_proforma = fields.Boolean(
+        "Proforma-Rechnung bei Bestätigung senden", default=True, tracking=True,
+        help="Bei der Bestätigung bekommt das Blistercenter statt einer Auftragsbestätigung die Proforma-Rechnung "
+             "als PDF per E-Mail. Zahlbar bis: Bestätigung plus Zahlungsziel. Der Versand wartet nicht auf die Zahlung.",
+    )
+    product_image_url = fields.Char(
+        "Bildquelle Packungsfotos (PZN)", default=DEFAULT_PRODUCT_IMAGE_URL, tracking=True,
+        help="Adresse eines Packungsfotos je PZN. Platzhalter: {pzn} (8 Ziffern) sowie {a}, {b}, {c} "
+             "(PZN geteilt in 2, 3 und 3 Ziffern). Bildrechte: Die Quelle wählt PLCS.",
     )
     rule_customer_discount = fields.Boolean(
         "Kundenrabatt auf den HAP fest", default=True, tracking=True,
@@ -278,6 +297,72 @@ class BlistercenterConfig(models.Model):
                 from odoo.tools.binary import BinaryBytes
                 website.logo = BinaryBytes(company.logo.content)
 
+    # ------------------------------------------------------------------
+    # Umsatzsteuer: Inland 19 %, Export 0 % (1.5.0, Entscheidung 21.10.2026)
+    # ------------------------------------------------------------------
+    @api.model
+    def _bc_setup_tax_positions(self, company=None):
+        """Deutscher Kontenrahmen (SKR03/SKR04): Steuerzuordnung für Kunden im Ausland automatisch.
+
+        Odoo bringt mit l10n_de 19 % für Inland und 0 % für Ausfuhr (Nicht-EU) bzw. innergemeinschaftliche
+        Lieferung (EU mit USt-IdNr.). Automatisch erkannt werden aber nur Inland und EU mit USt-IdNr.
+        Hier zusätzlich: EU ohne USt-IdNr. (bleibt 19 %) und Nicht-EU (Ausfuhr 0 %) nach Lieferland.
+        Nur Schalter „Automatisch erkennen“ und Ländergruppe; Steuern und Konten bleiben wie von Odoo.
+        """
+        company = company or self.env.company
+        template = company.chart_template or ""
+        if not template.startswith("de_skr"):
+            return False
+        Chart = self.env["account.chart.template"].with_company(company)
+        skr = template[len("de_"):]
+        eu_vat = Chart.ref("fiscal_position_eu_vat_id_partner_%s" % skr, raise_if_not_found=False)
+        eu_no_id = Chart.ref("fiscal_position_eu_no_id_partner_%s" % skr, raise_if_not_found=False)
+        non_eu = Chart.ref("fiscal_position_non_eu_partner_%s" % skr, raise_if_not_found=False)
+        eu_group = (eu_vat and eu_vat.country_group_id) or self.env.ref("base.europe")
+        if eu_no_id and not eu_no_id.auto_apply:
+            eu_no_id.write({"auto_apply": True, "country_group_id": eu_no_id.country_group_id.id or eu_group.id})
+        if non_eu and not non_eu.auto_apply:
+            non_eu.auto_apply = True
+        return True
+
+    @api.model
+    def _bc_demo_taxes(self):
+        """Nur Dev-Builds: Der Odoo-Demokontenrahmen (generisch, 15 %) bekommt deutsche Sätze –
+        19 % USt, 0 % Ausfuhr (Nicht-EU), 0 % EU mit USt-IdNr. – mit automatischer Zuordnung wie im SKR03.
+        Production erhält das aus dem deutschen Kontenrahmen (siehe _bc_setup_tax_positions)."""
+        company = self.env.company
+        if self._bc_setup_tax_positions(company):
+            return company.account_sale_tax_id
+        Tax = self.env["account.tax"].with_company(company)
+        Fpos = self.env["account.fiscal.position"].with_company(company)
+        europe = self.env.ref("base.europe")
+
+        def fpos(name, sequence, **vals):
+            rec = Fpos.search([("company_id", "=", company.id), ("name", "=", name)], limit=1)
+            return rec or Fpos.create({"name": name, "sequence": sequence, "auto_apply": True,
+                                       "company_id": company.id, **vals})
+
+        def tax(name, amount, **vals):
+            rec = Tax.search([("company_id", "=", company.id), ("name", "=", name),
+                              ("type_tax_use", "=", "sale")], limit=1)
+            return rec or Tax.create({"name": name, "amount": amount, "amount_type": "percent",
+                                      "type_tax_use": "sale", "company_id": company.id, **vals})
+
+        inland = fpos("Geschäftspartner Inland", 10, country_id=self.env.ref("base.de").id)
+        eu_vat = fpos("Geschäftspartner EU (mit USt-ID)", 20, country_group_id=europe.id, vat_required=True)
+        eu_no_id = fpos("Geschäftspartner EU (ohne USt-ID)", 40, country_group_id=europe.id)
+        non_eu = fpos("Geschäftspartner Ausland (Nicht-EU)", 50)
+        # Zuordnungen des Demokontenrahmens (z. B. „Foreign Trade“) nicht mehr automatisch anwenden
+        Fpos.search([("company_id", "=", company.id), ("auto_apply", "=", True),
+                     ("id", "not in", (inland | eu_vat | eu_no_id | non_eu).ids)]).auto_apply = False
+        ust19 = tax("19% USt", 19.0, invoice_label="19 % USt")
+        tax("0% Ausfuhr", 0.0, invoice_label="0 % steuerfreie Ausfuhr",
+            fiscal_position_ids=[(6, 0, non_eu.ids)], original_tax_ids=[(6, 0, ust19.ids)])
+        tax("0% EU", 0.0, invoice_label="0 % steuerfreie innergemeinschaftliche Lieferung",
+            fiscal_position_ids=[(6, 0, eu_vat.ids)], original_tax_ids=[(6, 0, ust19.ids)])
+        company.account_sale_tax_id = ust19
+        return ust19
+
     @api.model
     def _bc_demo_euro(self):
         """Nur Dev-Builds (Demodaten): Firma und Preislisten in Euro (Hinweis 21.10.2026).
@@ -310,11 +395,21 @@ class BlistercenterConfig(models.Model):
                 german = self.env["res.lang"]._lang_get("de_DE")
                 for website in self.env["website"].search([]):
                     website.write({"language_ids": [(4, german.id)], "default_lang_id": german.id})
-        testdaten.load(self.env)
-        if self.env.context.get("install_demo"):
+        demo = self.env.context.get("install_demo")
+        ust19 = False
+        if demo:
             self._bc_demo_euro()
+            ust19 = self._bc_demo_taxes()
+        products = testdaten.load(self.env)
+        if demo:
             # Belege an die Testkunden auf Deutsch drucken
             self.env["res.partner"].search([("bc_is_customer", "=", True)]).lang = "de_DE"
+            if ust19:
+                for product in products.values():
+                    product.taxes_id = [(6, 0, ust19.ids)]
+            # Packungsfotos per PZN (Entscheidung 21.10.2026); ohne Internet bleiben die Artikel ohne Foto
+            templates = self.env["product.template"].browse([p.product_tmpl_id.id for p in products.values()])
+            self._bc_fetch_product_images(templates.filtered("bc_shop_product"))
         # Nur PLCS-Arzneimittel als Waren: Odoo-Demomöbel usw. archivieren (Entscheidung 21.10.2026)
         testdaten.archive_foreign_demo_products(self.env)
 
@@ -328,6 +423,72 @@ class BlistercenterConfig(models.Model):
                 "Das Blistercenter-Lager ist für %(company)s nicht eingerichtet (kein Lager gefunden).",
                 company=self.company_id.name))
         return self
+
+    # ------------------------------------------------------------------
+    # Packungsfotos
+    # ------------------------------------------------------------------
+    @api.model
+    def _bc_product_pzn(self, template):
+        pzn = ("plcs_pzn" in template._fields and template.plcs_pzn) or template.default_code or ""
+        return pzn if re.fullmatch(r"\d{8}", pzn) else False
+
+    @api.model
+    def _bc_fetch_product_images(self, templates, force=False, timeout=10):
+        """Packungsfoto je PZN aus der eingestellten Bildquelle laden (nur JPEG/PNG bis 5 MB).
+
+        Artikel mit Foto bleiben unverändert (außer force). Ohne Internetverbindung bricht der Lauf nach dem
+        ersten Verbindungsfehler ab. Gibt (Artikel mit neuem Foto, Liste der Artikel ohne Foto) zurück.
+        """
+        import requests
+        from odoo.tools.binary import BinaryBytes
+
+        done = self.env["product.template"]
+        missing = []
+        pending = templates.filtered(lambda t: force or not t.image_1920)
+        for index, template in enumerate(pending):
+            pattern = self._get(template.company_id or self.env.company).product_image_url or DEFAULT_PRODUCT_IMAGE_URL
+            pzn = self._bc_product_pzn(template)
+            if not pzn:
+                missing.append(template.display_name)
+                continue
+            url = pattern.format(pzn=pzn, a=pzn[:2], b=pzn[2:5], c=pzn[5:])
+            try:
+                res = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0 (PLCS Odoo)"})
+            except requests.ConnectionError as exc:
+                _logger.info("Packungsfotos: keine Verbindung zu %s (%s)", url, exc)
+                missing.extend(pending[index:].mapped("display_name"))
+                break
+            except requests.RequestException as exc:
+                _logger.info("Packungsfoto %s nicht geladen: %s", pzn, exc)
+                missing.append(template.display_name)
+                continue
+            data = res.content or b""
+            is_image = data[:3] == b"\xff\xd8\xff" or data[:8] == b"\x89PNG\r\n\x1a\n"
+            if res.status_code != 200 or not is_image or len(data) > IMAGE_MAX_BYTES:
+                _logger.info("Packungsfoto %s nicht geladen (HTTP %s, %s Bytes)", pzn, res.status_code, len(data))
+                missing.append(template.display_name)
+                continue
+            template.image_1920 = BinaryBytes(data)
+            done |= template
+        return done, missing
+
+    def action_load_product_images(self):
+        """Knopf „Packungsfotos laden“: fehlende Fotos des Shop-Sortiments per PZN laden."""
+        if not self.env.user.has_group("blistercenter.group_bc_manager"):
+            raise AccessError(self.env._("Die Einstellungen darf nur die Rolle „Blistercenter Administrator“ ändern."))
+        self.ensure_one()
+        templates = self.env["product.template"].sudo().search([
+            ("bc_shop_product", "=", True), ("company_id", "in", [self.company_id.id, False])])
+        done, missing = self.sudo()._bc_fetch_product_images(templates)
+        message = self.env._("%(count)s Packungsfotos geladen.", count=len(done))
+        if missing:
+            message += " " + self.env._("Ohne Foto: %(names)s", names=", ".join(missing))
+        self.message_post(body=message)
+        return {
+            "type": "ir.actions.client", "tag": "display_notification",
+            "params": {"title": self.env._("Packungsfotos"), "message": message,
+                       "type": "warning" if missing else "success", "sticky": bool(missing)},
+        }
 
     def action_setup_stock(self):
         if not self.env.user.has_group("blistercenter.group_bc_manager"):

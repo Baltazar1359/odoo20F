@@ -42,10 +42,15 @@
                                 <button name="action_open_shop_products" type="object" string="Shop-Sortiment"
                                         class="btn-link ms-2"/>
                             </div>
+                            <field name="product_image_url" invisible="not rule_shop_only_bc_products"/>
+                            <button name="action_load_product_images" type="object" string="Packungsfotos laden"
+                                    class="btn-secondary" colspan="2" invisible="not rule_shop_only_bc_products"
+                                    help="Lädt für Shop-Artikel ohne Foto das Packungsfoto über die PZN."/>
                             <field name="rule_require_channel"/>
                             <field name="rule_block_confirm"/>
                             <field name="rule_block_delivery"/>
                             <field name="rule_require_payment_term"/>
+                            <field name="rule_send_proforma"/>
                             <field name="rule_customer_discount"/>
                             <field name="rule_invoice_per_delivery"/>
                             <field name="rule_forbid_mto_route"/>

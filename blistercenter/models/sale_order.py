@@ -76,6 +76,17 @@ class SaleOrder(models.Model):
     bc_received_by = fields.Many2one("res.users", "Angenommen von", tracking=True, copy=False)
     bc_received_date = fields.Datetime("Angenommen am", tracking=True, copy=False)
 
+    # Proforma-Rechnung bei Bestätigung (1.5.0, Entscheidung 21.10.2026)
+    bc_untaxed_products = fields.Char(
+        "Artikel ohne Umsatzsteuer", compute="_compute_bc_untaxed_products",
+        help="Warenpositionen ohne Steuer. Inland 19 %, Export 0 % über die Steuerzuordnung des Kunden.")
+    bc_proforma_date = fields.Date("Proforma vom", readonly=True, copy=False, tracking=True)
+    bc_proforma_due_date = fields.Date(
+        "Zahlbar bis", readonly=True, copy=False, tracking=True,
+        help="Fälligkeit der Proforma: Tag der Bestätigung plus Zahlungsziel des Kunden (z. B. 7 oder 14 Tage). "
+             "Die Rechnungen je Lieferung übernehmen dieses Datum. Der Versand wartet nicht auf die Zahlung.",
+    )
+
     # Teillieferung nur nach Rücksprache
     bc_partial_allowed = fields.Boolean("Teillieferung erlaubt", readonly=True, tracking=True, copy=False)
     bc_partial_note = fields.Char("Vermerk Teillieferung", readonly=True, tracking=True, copy=False)
@@ -290,6 +301,11 @@ class SaleOrder(models.Model):
         res = super()._action_confirm()
         for order in self.filtered("bc_is_blistercenter"):
             config = self.env["blistercenter.config"]._get(order.company_id)
+            if not order.bc_proforma_date:
+                today = fields.Date.context_today(order)
+                order.sudo().write({"bc_proforma_date": today, "bc_proforma_due_date": order._bc_proforma_due(today)})
+            if config.rule_send_proforma and not order._bc_loading_demo_data():
+                order._bc_send_proforma()
             if config.notify_new_order and config.sales_user_id:
                 # Aufgabe ohne E-Mail-Benachrichtigung (mail_activity_quick_update)
                 order.sudo().with_context(mail_activity_quick_update=True).activity_schedule(
@@ -302,6 +318,40 @@ class SaleOrder(models.Model):
     # ------------------------------------------------------------------
     # Proforma und Rechnung je Lieferung
     # ------------------------------------------------------------------
+    @api.depends("order_line.tax_ids", "order_line.product_id", "bc_is_blistercenter")
+    def _compute_bc_untaxed_products(self):
+        for order in self:
+            lines = order.order_line.filtered(lambda sol: sol._bc_is_goods_line() and not sol.tax_ids) \
+                if order.bc_is_blistercenter else order.order_line.browse()
+            order.bc_untaxed_products = ", ".join(lines.product_id.mapped("display_name")) or False
+
+    def _bc_proforma_due(self, date_ref):
+        """Fälligkeit ab Proforma-Datum nach dem Zahlungsziel des Auftrags (7 oder 14 Tage netto)."""
+        self.ensure_one()
+        lines = self.payment_term_id.line_ids
+        if not lines:
+            return date_ref
+        return max(line._get_due_date(date_ref) for line in lines)
+
+    def _bc_send_proforma(self):
+        """Proforma-Rechnung als PDF per E-Mail an den Kunden (statt Auftragsbestätigung)."""
+        template = self.env.ref("blistercenter.mail_template_bc_proforma", raise_if_not_found=False)
+        for order in self:
+            if not template or not order.partner_id.email:
+                order.message_post(body=self.env._(
+                    "Proforma nicht per E-Mail versendet: %(customer)s hat keine E-Mail-Adresse. "
+                    "Bitte „Proforma drucken“ und auf anderem Weg senden.", customer=order.partner_id.display_name))
+                continue
+            order.with_context(proforma=True).message_post_with_source(
+                template, message_type="comment", subtype_xmlid="mail.mt_comment")
+
+    def action_bc_send_proforma(self):
+        for order in self:
+            if not order.bc_is_blistercenter or order.state != "sale":
+                raise UserError(self.env._("Proforma nur für bestätigte Blistercenter-Bestellungen."))
+        self._bc_send_proforma()
+        return True
+
     def action_bc_print_proforma(self):
         """Proforma-Rechnung drucken: nur Information über Menge und Preis, keine Buchung, kein Versand."""
         for order in self:
@@ -339,11 +389,17 @@ class SaleOrder(models.Model):
         if not invoice:
             return invoice
         delivery_note = Markup("<p>%s</p>") % self.env._("Lieferung: %(picking)s", picking=picking.name)
-        invoice.write({
-            "bc_picking_id": picking.id,
-            "narration": delivery_note if is_html_empty(invoice.narration) else Markup("%s%s") % (
-                invoice.narration, delivery_note),
-        })
+        vals = {"bc_picking_id": picking.id}
+        if order.bc_proforma_due_date:
+            # Zahlungsziel zählt ab der Proforma (Entscheidung 21.10.2026): Rechnung übernimmt die Fälligkeit
+            due = order.bc_proforma_due_date
+            vals.update({"invoice_payment_term_id": False, "invoice_date_due": due})
+            delivery_note += Markup("<p>%s</p>") % self.env._(
+                "Zahlbar bis %(due)s gemäß Proforma vom %(date)s.",
+                due=due.strftime("%d.%m.%Y"), date=order.bc_proforma_date.strftime("%d.%m.%Y"))
+        vals["narration"] = delivery_note if is_html_empty(invoice.narration) else Markup("%s%s") % (
+            invoice.narration, delivery_note)
+        invoice.write(vals)
         self.message_post(body=self.env._(
             "Rechnung %(invoice)s zur Lieferung %(picking)s als Entwurf angelegt.",
             invoice=invoice.display_name or "-", picking=picking.name))

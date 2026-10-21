@@ -1,4 +1,4 @@
-# Blistercenter – Regelkatalog (Stand 20.10.2026, Modul 20.0.1.4.0)
+# Blistercenter – Regelkatalog (Stand 21.10.2026, Modul 20.0.1.5.0)
 
 Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im Shop, per Telefon, E-Mail oder Fax. PLCS bündelt die Mengen in Sammelbestellungen und bestellt manuell beim Hersteller (z. B. AstraZeneca).
 
@@ -8,13 +8,13 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 
 1. **Kunde anlegen** (von Hand): Kennzeichen „Blistercenter“, Zahlungsart (Lastschrift über DATEV), **Zahlungsziel 7 oder 14 Tage**, **Rabatt 0, 1 oder 2 % auf den HAP**. Portalzugang über den Knopf „Portalzugänge“ am Kunden (Standard-Assistent von Odoo; er verschickt die Einladung, wenn man sie dort auslöst).
 2. **Bestellung**: im Shop (nur freigeschaltete Blistercenter) oder als **Telefonbestellung** (Menü Kundenbestellungen › Telefonbestellung erfassen, oder Knopf am Kunden).
-3. **Proforma-Rechnung**: Knopf „Proforma drucken“ im bestätigten Auftrag. Nur Information über Menge und Preis, keine Buchung, kein automatischer Versand.
+3. **Proforma-Rechnung** (ab 1.5.0): Bei der Bestätigung schickt Odoo die Proforma als PDF per E-Mail an das Blistercenter. **Zahlbar bis = Bestätigung + 7/14 Tage.** Der Versand wartet nicht auf die Zahlung. Keine Buchung.
 4. **Zu bestellen / Sammelbestellung**: PLCS sieht offene Kundenmengen je Hersteller und entscheidet selbst, wann bestellt wird: bündeln → Anfrage beim Hersteller → manuell bestellen. Odoo bestellt nie automatisch.
 5. **Wareneingang** in die **Blistercenter-Quarantäne** (Vorgangstyp BCIN).
 6. **Freigabe durch die VP** (Vorgangstyp BCFRG) in den Bestand. Kurzläufer brauchen eine zusätzliche Freigabe.
 7. **Ware fest je Kunde**: Nach der Freigabe reservieren die Lieferungen genau die Ware aus ihrer Sammelbestellung.
 8. **Kommissionierung** (Person 1) → **Endkontrolle** und Bestätigung (Person 2) → Lieferung (komplett oder, nach Rücksprache, als Teillieferung).
-9. **Rechnung je Lieferung**: Nach jeder Lieferung legt Odoo die Rechnung über die gelieferte Menge als Entwurf an. Die Buchhaltung bucht und versendet sie.
+9. **Rechnung je Lieferung**: Nach jeder Lieferung legt Odoo die Rechnung über die gelieferte Menge als Entwurf an (19 % USt, Export 0 %; Fälligkeit wie Proforma). Die Buchhaltung bucht und versendet sie.
 10. **Zahlung per Lastschrift über DATEV**: Mandat und Einzug nur in DATEV. PLCS bucht die Zahlung später in Odoo ein.
 
 ## A. Regeln im Modul
@@ -49,7 +49,7 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R26 | **Ware fest je Kunde:** Lieferungen an Blistercenter warten auf die Ware ihrer Sammelbestellung und reservieren nur diese (kein Zugriff auf freien Bestand). Ausnahme je Position: **„Aus Lagerbestand liefern“** (nur, solange die Position nicht gebündelt ist). | ja |
 | R27 | **Endkontrolle durch zweite Person:** Erst „Kommissionierung abgeschlossen“ melden, dann bestätigt eine andere Person. Jede Änderung nach dem Kommissionieren (Menge, Charge, Lagerplatz) setzt die Meldung zurück. | ja |
 | R28 | **Teillieferung nur nach Rücksprache:** Standard ist Komplettlieferung. Eine Teillieferung muss in der Bestellung mit Vermerk erlaubt sein (wer, wann, mit wem abgestimmt). | ja |
-| R29 | **Proforma-Rechnung** aus dem bestätigten Auftrag (Knopf „Proforma drucken“). Aufdruck „Proforma – keine Rechnung“. Keine Buchung, kein automatischer Versand. Standard-Proforma von Odoo, für die Rolle Blistercenter freigegeben. | – |
+| R29 | **Proforma-Rechnung** (ab 1.5.0 siehe R44): Knopf „Proforma drucken“ bzw. „Proforma senden“ am bestätigten Auftrag. Aufdruck „Proforma – keine Rechnung“ mit „Zahlbar bis“. Keine Buchung. Standard-Proforma von Odoo, für die Rolle Blistercenter freigegeben. | – |
 | R30 | **Zu bestellen:** Kein automatischer Einkauf. Liste und Kachel „Zu bestellen“ zeigen offene Kundenmengen **je Hersteller** (aus der Einkaufskondition). PLCS bündelt und bestellt manuell. | – |
 | R31 | **Zahlungsziel Pflicht:** Ohne Zahlungsbedingung am Kunden lässt sich die Bestellung nicht bestätigen. Das Modul legt „7 Tage netto“ und „14 Tage netto“ an; der Auftrag übernimmt das Ziel des Kunden. | ja |
 | R32 | **Rechnung je Lieferung:** Nach jeder Lieferung legt Odoo die Rechnung über die **gelieferte Menge** als Entwurf an (mit Verweis auf die Lieferung) und gibt der Buchhaltung eine Aufgabe. Kein Buchen, keine E-Mail. Artikel müssen „Fakturierung: gelieferte Mengen“ haben, sonst ist die Bestätigung gesperrt. | ja |
@@ -64,6 +64,9 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R41 | **Arbeitsbereiche** (1.3.0, Startseite in Spalten je Bereich: Bestellannahme, Einkauf, Lager, Freigabe (VP)): Bestellannahme, Einkauf und Lager (Einstellungen › Benutzer, je eine Zeile „Blistercenter: …“). Jeder Bereich sieht nur sein Menü und seine Kacheln auf „Meine Aufgaben“. Freigabe und Administrator sehen alles. Die Bereiche ändern **keine Rechte** (die kommen aus „Benutzer“). Ohne Bereich nur die leere Startseite mit Hinweis. | – |
 | R42 | **Bestellschein** (1.4.0): Telefon-, E-Mail- und Fax-Bestellungen über den Bestellschein: Kunde, Besteller, Liste aller Artikel des Shop-Sortiments mit Mengenfeld. Odoo nimmt nur Artikel des Bestellscheins, ganze Mengen 0–9999, jeden Artikel einmal, mindestens eine Menge. Der Auftrag entsteht als Entwurf; weitere Artikel kann die Bestellannahme danach im Auftrag ergänzen. | – |
 | R43 | **Online-Bestellschein** (1.4.0): Freigeschaltete Blistercenter ohne Zahlungssperre bestellen im Kundenportal über denselben Bestellschein (gleiche Prüfungen, serverseitig). Bestellweg „Online-Bestellschein“, Besteller = angemeldete Person. Der Auftrag steht als „Angebot gesendet“ unter „Neue Bestellungen“; PLCS bestätigt ihn. Die Bestellannahme bekommt eine Aufgabe. | – |
+| R44 | **Proforma statt Auftragsbestätigung** (1.5.0): Bei der Bestätigung geht die Proforma-Rechnung als PDF per E-Mail an den Kunden (ohne E-Mail-Adresse: Hinweis im Verlauf). **Zahlbar bis = Tag der Bestätigung + Zahlungsziel (7/14 Tage).** Der Versand wartet nicht auf die Zahlung. Die Rechnung je Lieferung (R32) bleibt und übernimmt dieses Fälligkeitsdatum. Im Portal zeigt der bestätigte Auftrag die Proforma. | ja |
+| R45 | **Umsatzsteuer** (1.5.0): Inland 19 %, Ausfuhr in Drittländer 0 %, EU mit USt-IdNr. 0 % (innergemeinschaftlich), EU ohne USt-IdNr. 19 %. Automatisch über die Steuerzuordnung nach Land des Kunden (Odoo-Kontenrahmen SKR03/SKR04; Blistercenter schaltet „Automatisch erkennen“ für Nicht-EU und EU ohne USt-IdNr. ein). Auftrag mit Warenposition ohne Steuer zeigt einen Hinweis. | – |
+| R46 | **Packungsfotos** (1.5.0): Foto je PZN aus einer einstellbaren Bildquelle (Standard: Bild-CDN einer Online-Apotheke). Knopf „Packungsfotos laden“ (nur Administrator) lädt fehlende Fotos des Shop-Sortiments, nur JPEG/PNG bis 5 MB. Dev-Builds laden sie automatisch. Bildrechte klärt PLCS. | – |
 
 ## B. Entscheidungen 15.10.2026 (Mehrdad)
 
@@ -97,6 +100,9 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 ### Entscheidungen 21.10.2026 (Mehrdad)
 
 - Nur Arzneimittel als Waren: Odoo-Demoprodukte ohne PLCS-Bezug (Möbel usw.) werden in Dev-Builds archiviert.
+- Umsatzsteuer 19 %, Export 0 % (R45).
+- Bei Bestellung keine Auftragsbestätigung, sondern Proforma-Rechnung; Zahlung innerhalb 7 bzw. 14 Tagen ab Proforma; Versand wartet nicht; Rechnung je Lieferung bleibt (R44).
+- Packungsfotos aus dem Internet per PZN (R46); Mehrdad: Quelle Online-Shops, Bildrechte bei PLCS.
 - PLCS sitzt in Deutschland: Währung **Euro** und Sprache **Deutsch** als Standard. Production war bereits so eingestellt (EUR, Deutschland, alle Benutzer Deutsch, Zeitzone Europe/Berlin; geprüft 21.10.). Dev-Builds stellen Firma (Land, Währung), Benutzer, Testkunden und Website beim Laden der Demodaten auf Deutschland/EUR/Deutsch um. Der Kontenrahmen im Dev-Build bleibt der Odoo-Demokontenrahmen (siehe C.7).
 
 ## C. Noch offen

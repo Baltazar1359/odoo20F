@@ -3,3 +3,4 @@ from . import test_billing
 from . import test_pruefbericht_1019
 from . import test_einfach
 from . import test_bestellschein
+from . import test_proforma_steuer

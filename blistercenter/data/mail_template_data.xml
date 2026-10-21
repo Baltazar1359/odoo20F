@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- 1.5.0: Proforma-Rechnung bei Bestätigung statt Auftragsbestätigung (Entscheidung 21.10.2026).
+         noupdate: Text darf PLCS unter Einstellungen › Technisch › E-Mail-Vorlagen anpassen. -->
+    <data noupdate="1">
+        <record id="mail_template_bc_proforma" model="mail.template">
+            <field name="name">Blistercenter: Proforma-Rechnung</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="subject">Proforma-Rechnung {{ object.name }} – {{ object.company_id.name }}</field>
+            <field name="email_from">{{ (object.company_id.email_formatted or user.email_formatted) }}</field>
+            <field name="use_default_to" eval="True"/>
+            <field name="lang">{{ object.partner_id.lang }}</field>
+            <field name="report_template_ids" eval="[(4, ref('blistercenter.action_report_bc_proforma'))]"/>
+            <field name="description">Geht bei der Bestätigung einer Blistercenter-Bestellung an den Kunden.</field>
+            <field name="email_layout_xmlid">mail.mail_notification_light</field>
+            <field name="body_html" type="html">
+<div style="margin: 0px; padding: 0px; font-size: 13px;">
+    <p>Guten Tag,</p>
+    <p>
+        vielen Dank für Ihre Bestellung<t t-if="object.client_order_ref"> (Ihre Bestellnummer
+        <t t-out="object.client_order_ref or ''">4711</t>)</t>.
+        Anbei erhalten Sie die Proforma-Rechnung <strong t-out="object.name or ''">S00052</strong>
+        über <strong t-out="format_amount(object.amount_total, object.currency_id) or ''">100,00 €</strong>.
+    </p>
+    <p t-if="object.bc_proforma_due_date">
+        Zahlbar bis <strong t-out="format_date(object.bc_proforma_due_date) or ''">01.01.2027</strong>.
+        <t t-if="object.bc_payment_model == 'direct_debit'">Der Betrag wird zu diesem Datum per SEPA-Lastschrift
+        eingezogen. Bitte nicht überweisen.</t>
+    </p>
+    <p>
+        Die Ware liefern wir, sobald sie bei uns eingetroffen und freigegeben ist. Mit jeder Lieferung erhalten
+        Sie die Rechnung.
+    </p>
+    <p>Bei Fragen erreichen Sie uns unter <t t-out="object.company_id.phone or ''">+49 (0)6424 801344</t>.</p>
+    <p>Mit freundlichen Grüßen<br/><t t-out="object.company_id.name or ''">PLCS GmbH</t></p>
+</div>
+            </field>
+            <field name="auto_delete" eval="True"/>
+        </record>
+    </data>
+</odoo>

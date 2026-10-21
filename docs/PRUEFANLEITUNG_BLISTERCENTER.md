@@ -1,6 +1,6 @@
-# Prüfanleitung Blistercenter (Modul 20.0.1.4.0, Briefpapier plcs_layout 20.0.1.0.0)
+# Prüfanleitung Blistercenter (Modul 20.0.1.5.0, Briefpapier plcs_layout 20.0.1.0.0)
 
-Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Branch darauf), **nicht Production** – dort ist Blistercenter bewusst nicht installiert (Variante B, 15.10.2026). Falls Blistercenter im Dev-Build fehlt: Apps › „Blistercenter“ installieren. Jeder Push erzeugt eine neue, leere Datenbank; die Dev-Datenbank ist englisch/USD (Odoo-Demofirma).
+Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Branch darauf), **nicht Production** – dort ist Blistercenter bewusst nicht installiert (Variante B, 15.10.2026). Falls Blistercenter im Dev-Build fehlt: Apps › „Blistercenter“ installieren. Jeder Push erzeugt eine neue, leere Datenbank; die Dev-Datenbank steht ab 21.10. auf Deutsch und Euro (PLCS GmbH, Deutschland); Steuersätze im Dev-Build: 19 % USt, 0 % Ausfuhr und EU mit USt-IdNr. (Production: deutscher Kontenrahmen).
 
 ## Vorbereitung (einmal, als Administrator)
 
@@ -53,5 +53,9 @@ Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Br
 | T26 | Als Kunde (Portalzugang) anmelden › Karte „Bestellschein“ › Mengen, eigene Bestellnummer, Bemerkung › „Bestellen“. | Danke-Seite mit Bestellnummer. Bei PLCS unter „Neue Bestellungen“: Bestellweg „Online-Bestellschein“, Besteller = Kontakt, Bemerkung im Verlauf, Aufgabe für die Bestellannahme. |
 | T27 | Kunde mit Zahlungssperre bzw. ohne Shopfreischaltung öffnet `/my/bestellschein`. | Hinweis statt Formular; die Karte „Bestellschein“ fehlt auf der Portalstartseite. |
 | T28 | Rechnung, Angebot und Lieferschein als PDF drucken. | PLCS-Briefpapier: Logo rechts, Absenderzeile über der Adresse, Fußzeile in PLCS-Rot mit Firmendaten; „Seite x von y“. Ohne eingetragene IBAN/Steuernummer fehlen diese Zeilen (keine leeren Beschriftungen). |
+| T29 | Kunde mit E-Mail-Adresse und 7 bzw. 14 Tagen Zahlungsziel: Bestellung bestätigen. Kunde ohne E-Mail: ebenso. | Im Verlauf die E-Mail „Proforma-Rechnung …“ mit PDF; im Auftrag „Proforma vom“ (heute) und „Zahlbar bis“ (+7/+14 Tage). Ohne E-Mail: Hinweis im Verlauf, Knopf „Proforma drucken“. „Proforma senden“ schickt erneut. Im Portal zeigt der Auftrag die Proforma. Versand wartet nicht auf die Zahlung. |
+| T30 | Lieferung aus T29 bestätigen, Rechnung öffnen. | Rechnung (Entwurf) mit Fälligkeit = „Zahlbar bis“ der Proforma, Hinweis „gemäß Proforma vom …“, 19 % USt. |
+| T31 | Kunde mit Land Schweiz (Drittland), danach Österreich ohne und mit USt-IdNr.: Bestellung anlegen. | Schweiz: Steuerzuordnung „Ausland (Nicht-EU)“, 0 % Ausfuhr. Österreich ohne USt-IdNr.: 19 %. Mit USt-IdNr.: 0 % EU. Inland: 19 %. Position ohne Steuer → gelber Hinweis im Auftrag. |
+| T32 | Shop als Kunde öffnen; als Administrator Einstellungen › „Packungsfotos laden“. | Die 13 Shop-Artikel zeigen ihr Packungsfoto (per PZN). Artikel mit Foto bleiben unverändert; Meldung nennt Artikel ohne Foto. |
 
 Alle Regeln (außer den festen) lassen sich in den Einstellungen abschalten. Die Grenze für Kurzläufer ist dort einstellbar (Standard 3 Monate).
