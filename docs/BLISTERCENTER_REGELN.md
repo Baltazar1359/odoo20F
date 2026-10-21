@@ -67,6 +67,8 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R44 | **Proforma statt Auftragsbestätigung** (1.5.0): Bei der Bestätigung geht die Proforma-Rechnung als PDF per E-Mail an den Kunden (ohne E-Mail-Adresse: Hinweis im Verlauf). **Zahlbar bis = Tag der Bestätigung + Zahlungsziel (7/14 Tage).** Der Versand wartet nicht auf die Zahlung. Die Rechnung je Lieferung (R32) bleibt und übernimmt dieses Fälligkeitsdatum. Im Portal zeigt der bestätigte Auftrag die Proforma. | ja |
 | R45 | **Umsatzsteuer** (1.5.0): Inland 19 %, Ausfuhr in Drittländer 0 %, EU mit USt-IdNr. 0 % (innergemeinschaftlich), EU ohne USt-IdNr. 19 %. Automatisch über die Steuerzuordnung nach Land des Kunden (Odoo-Kontenrahmen SKR03/SKR04; Blistercenter schaltet „Automatisch erkennen“ für Nicht-EU und EU ohne USt-IdNr. ein). Auftrag mit Warenposition ohne Steuer zeigt einen Hinweis. | – |
 | R46 | **Packungsfotos** (1.5.0): Foto je PZN aus einer einstellbaren Bildquelle (Standard: Bild-CDN einer Online-Apotheke). Knopf „Packungsfotos laden“ (nur Administrator) lädt fehlende Fotos des Shop-Sortiments, nur JPEG/PNG bis 5 MB. Dev-Builds laden sie automatisch. Bildrechte klärt PLCS. | – |
+| R47 | **Gleiche Charge mehrfach** (21.10.2026): Kommt eine Charge erneut vom Hersteller, bucht Odoo auf die vorhandene Charge (eine Charge, Rückverfolgung und Rückruf über alle Eingänge und Kunden). Quarantäne und VP-Freigabe gelten je Eingang. **Abweichendes Verfallsdatum** bei bekannter Charge: nur Hinweis im Wareneingang, nach dem Buchen im Verlauf und als Aufgabe für die VP; Odoo behält das Datum der vorhandenen Charge. **Gesperrte Charge** im Eingang: wird in die Quarantäne gebucht (Hinweis, Verlauf, Aufgabe VP); Freigabe und Versand bleiben gesperrt. | – |
+| R48 | **DataMatrix-Scan im Wareneingang** (21.10.2026): Knopf „Scannen (DataMatrix)“. Artikel über NTIN/PZN, Charge und Verfall aus dem Code (GS1 und IFA). Jeder Scan = eine Packung; Menge pro Charge änderbar. Nur Artikel dieses Wareneingangs. Gebucht wird danach wie gewohnt. | – |
 
 ## B. Entscheidungen 15.10.2026 (Mehrdad)
 
@@ -102,6 +104,7 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 - Nur Arzneimittel als Waren: Odoo-Demoprodukte ohne PLCS-Bezug (Möbel usw.) werden in Dev-Builds archiviert.
 - Tagrisso (40 mg und 80 mg) nicht mehr im Blistercenter-Shop und -Bestellschein; Artikel bleiben bestehen. Sortiment: Forxiga, Xigduo, Daxas, Brilique (11 Artikel).
 - Preise: Verkaufspreis bleibt der HAP (Rabatt 0/1/2 % darauf), gerechnet aus dem aktuellen AVP nach AMPreisV (Stand ABDA Mai 2026); AVP zusätzlich anzeigen.
+- Chargen: gleiche Charge vom Hersteller ist der Normalfall; abweichendes Verfallsdatum nur warnen (R47); alle Packungen haben DataMatrix → Scan im Wareneingang (R48). Gesperrte Charge im Eingang: Entscheidung offen, heute Buchung in die Quarantäne mit Hinweis.
 - Umsatzsteuer 19 %, Export 0 % (R45).
 - Bei Bestellung keine Auftragsbestätigung, sondern Proforma-Rechnung; Zahlung innerhalb 7 bzw. 14 Tagen ab Proforma; Versand wartet nicht; Rechnung je Lieferung bleibt (R44).
 - Packungsfotos aus dem Internet per PZN (R46); Mehrdad: Quelle Online-Shops, Bildrechte bei PLCS.

@@ -54,6 +54,7 @@ parallele Buchhaltung und keine doppelten Bestell- oder Lagerdaten an.
         "wizard/recall_views.xml",
         "wizard/bc_wizards_views.xml",
         "wizard/order_sheet_views.xml",
+        "wizard/receipt_scan_views.xml",
         "views/blistercenter_menus.xml",
         "report/bc_proforma.xml",
         "data/mail_template_data.xml",

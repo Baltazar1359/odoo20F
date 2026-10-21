@@ -13,6 +13,9 @@
                 <button name="action_bc_mark_picked" type="object" string="Kommissionierung abgeschlossen"
                         class="oe_highlight" groups="blistercenter.group_bc_user"
                         invisible="bc_kind != 'delivery' or bc_picked_by or state not in ('assigned', 'confirmed', 'waiting')"/>
+                <button name="action_bc_scan" type="object" string="Scannen (DataMatrix)" class="oe_highlight"
+                        groups="blistercenter.group_bc_user"
+                        invisible="bc_kind != 'receipt' or state in ('done', 'cancel', 'draft')"/>
                 <button name="action_bc_short_approve" type="object" string="Kurzläufer freigeben"
                         class="oe_highlight" groups="blistercenter.group_bc_approver"
                         invisible="not bc_short_open or state in ('done', 'cancel')"/>
@@ -27,6 +30,12 @@
                      groups="blistercenter.group_bc_user">
                     Kurzläufer: <field name="bc_short_lot_ids" widget="many2many_tags" class="d-inline"/>.
                     Restlaufzeit unter der Grenze; die VP muss zusätzlich freigeben.
+                </div>
+                <field name="bc_lot_warning" invisible="1"/>
+                <div class="alert alert-warning mb-0" role="alert" invisible="not bc_lot_warning"
+                     groups="blistercenter.group_bc_user">
+                    <strong>Hinweis zu Chargen:</strong> <field name="bc_lot_warning" class="d-inline"/>
+                    Das Buchen bleibt möglich; der Hinweis kommt in den Verlauf und die VP bekommt eine Aufgabe.
                 </div>
                 <field name="bc_overdue_count" invisible="1"/>
                 <div class="alert alert-warning mb-0" role="alert"

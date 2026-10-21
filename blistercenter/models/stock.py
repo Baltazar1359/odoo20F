@@ -1,4 +1,5 @@
 from dateutil.relativedelta import relativedelta
+from markupsafe import Markup
 
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
@@ -198,6 +199,10 @@ class StockPicking(models.Model):
         string="Kurzläufer freigegeben", readonly=True, copy=False,
     )
     bc_short_approved_by = fields.Many2one("res.users", "Kurzläufer freigegeben von", readonly=True, copy=False)
+    bc_lot_warning = fields.Text(
+        "Hinweise zu Chargen", compute="_compute_bc_lot_warning",
+        help="Wareneingang: bekannte Charge mit anderem Verfallsdatum oder gesperrte Charge. Nur Hinweis, "
+             "das Buchen bleibt möglich (Entscheidung 21.10.2026).")
     bc_short_approved_date = fields.Datetime("Kurzläufer freigegeben am", readonly=True, copy=False)
     bc_short_reason = fields.Char("Begründung Kurzläufer", readonly=True, copy=False)
     bc_partial_allowed = fields.Boolean(related="sale_id.bc_partial_allowed", string="Teillieferung erlaubt")
@@ -254,6 +259,76 @@ class StockPicking(models.Model):
         allowed = self.env.user.has_group("blistercenter.group_bc_approver")
         for picking in self:
             picking.bc_can_release = allowed
+
+    @api.depends("bc_kind", "state", "move_line_ids.lot_id", "move_line_ids.lot_name",
+                 "move_line_ids.expiration_date", "move_line_ids.product_id")
+    def _compute_bc_lot_warning(self):
+        for picking in self:
+            open_receipt = picking.bc_kind == "receipt" and picking.state not in ("done", "cancel")
+            picking.bc_lot_warning = "\n".join(picking._bc_lot_warnings()) if open_receipt else False
+
+    def _bc_lot_warnings(self):
+        """Hinweise zu Chargen im Wareneingang (nur Hinweis, keine Sperre).
+
+        Dieselbe Charge kommt oft mehrfach vom Hersteller; Odoo bucht sie auf die vorhandene Charge und
+        behält deren Verfallsdatum. Ein abweichend eingegebenes Datum wird sonst stillschweigend übergangen.
+        """
+        self.ensure_one()
+        notes = []
+        seen = set()
+        Lot = self.env["stock.lot"].sudo()
+        for line in self.move_line_ids:
+            name = line.lot_id.name or line.lot_name
+            if not (name and line.product_id):
+                continue
+            lot = line.lot_id or Lot.search([
+                ("product_id", "=", line.product_id.id), ("name", "=", name),
+                ("company_id", "in", [line.company_id.id, False])], limit=1)
+            if not lot:
+                continue
+            typed = line.expiration_date and line.expiration_date.date()
+            known = lot.expiration_date and lot.expiration_date.date()
+            if lot.bc_blocked and ("blocked", lot.id) not in seen:
+                seen.add(("blocked", lot.id))
+                notes.append(self.env._(
+                    "Charge %(lot)s (%(product)s) ist gesperrt (%(reason)s). Nach dem Eingang bleibt sie in der "
+                    "Quarantäne; Freigabe und Versand sind gesperrt.",
+                    lot=lot.name, product=line.product_id.display_name, reason=lot.bc_block_reason or "-"))
+            if typed and known and typed != known and ("date", lot.id, typed) not in seen:
+                seen.add(("date", lot.id, typed))
+                notes.append(self.env._(
+                    "Charge %(lot)s (%(product)s): Verfall eingegeben %(typed)s, die vorhandene Charge hat "
+                    "%(known)s. Odoo behält %(known)s – bitte mit der Packung vergleichen.",
+                    lot=lot.name, product=line.product_id.display_name,
+                    typed=typed.strftime("%d.%m.%Y"), known=known.strftime("%d.%m.%Y")))
+        return notes
+
+    def _bc_post_lot_notes(self, notes):
+        """Hinweise nach dem Buchen im Verlauf festhalten; die VP bekommt eine Aufgabe zur Prüfung."""
+        self.ensure_one()
+        body = Markup("<p><strong>%s</strong></p><ul>%s</ul>") % (
+            self.env._("Hinweise zu Chargen beim Wareneingang"),
+            Markup("").join(Markup("<li>%s</li>") % note for note in notes))
+        self.sudo().message_post(body=body)
+        vp = self._bc_config().vp_user_id
+        if vp:
+            self.sudo().with_context(mail_activity_quick_update=True).activity_schedule(
+                "mail.mail_activity_data_todo", user_id=vp.id,
+                summary=self.env._("Chargen-Hinweis im Wareneingang %(picking)s prüfen", picking=self.name))
+
+    def action_bc_scan(self):
+        """DataMatrix-Codes der Packungen scannen: Artikel, Charge und Verfall werden übernommen."""
+        self.ensure_one()
+        if self.bc_kind != "receipt" or self.state in ("done", "cancel"):
+            raise UserError(self.env._("Scannen ist nur in offenen Blistercenter-Wareneingängen möglich."))
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.env._("Wareneingang scannen"),
+            "res_model": "blistercenter.receipt.scan",
+            "view_mode": "form",
+            "target": "new",
+            "context": {"default_picking_id": self.id, "dialog_size": "large"},
+        }
 
     # ------------------------------------------------------------------
     # Hilfsfunktionen
@@ -442,6 +517,7 @@ class StockPicking(models.Model):
 
     def _action_done(self):
         self._bc_check_before_done()
+        lot_notes = {p.id: p._bc_lot_warnings() for p in self if p.bc_kind == "receipt"}
         res = super(StockPicking, bc_auth.grant(self, "in_done"))._action_done()
         done = self.filtered(lambda p: p.state == "done")
         bc_done = done.filtered("bc_kind")
@@ -457,6 +533,8 @@ class StockPicking(models.Model):
                 bc_auth.grant(outgoing.sudo(), "in_done").write({
                     "bc_picked_by": self.env.uid, "bc_picked_date": fields.Datetime.now()})
         done.filtered(lambda p: p.bc_kind == "receipt")._bc_create_release()
+        for picking in done.filtered(lambda p: lot_notes.get(p.id)):
+            picking._bc_post_lot_notes(lot_notes[picking.id])
         self.purchase_id.bc_collective_ids._bc_update_done()
         done.filtered(lambda p: p.bc_kind == "delivery" and p.sale_id)._bc_invoice_after_delivery()
         return res

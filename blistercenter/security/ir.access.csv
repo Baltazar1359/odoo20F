@@ -13,3 +13,5 @@ access_bc_partial_wizard_user,bc.partial.wizard.user,blistercenter.partial.wizar
 access_bc_short_wizard_approver,bc.short.wizard.approver,blistercenter.short.wizard,group_bc_approver,crud,
 access_bc_order_sheet_user,bc.order.sheet.user,blistercenter.order.sheet,group_bc_user,crud,
 access_bc_order_sheet_line_user,bc.order.sheet.line.user,blistercenter.order.sheet.line,group_bc_user,crud,
+access_bc_receipt_scan_user,bc.receipt.scan.user,blistercenter.receipt.scan,group_bc_user,crud,
+access_bc_receipt_scan_line_user,bc.receipt.scan.line.user,blistercenter.receipt.scan.line,group_bc_user,crud,
