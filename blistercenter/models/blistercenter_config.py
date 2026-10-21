@@ -279,6 +279,25 @@ class BlistercenterConfig(models.Model):
                 website.logo = BinaryBytes(company.logo.content)
 
     @api.model
+    def _bc_demo_euro(self):
+        """Nur Dev-Builds (Demodaten): Firma und Preislisten in Euro (Hinweis 21.10.2026).
+
+        Die Odoo-Demodaten von „account“ laden für die Hauptfirma fest den US-Kontenrahmen und buchen
+        in USD; danach sperrt Odoo den Währungswechsel. In der Wegwerf-Datenbank wird die Währung
+        deshalb direkt umgestellt (die Demobuchungen behalten ihre Zahlen). Production ist bereits EUR;
+        dort legt Odoo beim Installieren der Buchhaltung den deutschen Kontenrahmen in Euro an.
+        """
+        euro = self.env.ref("base.EUR")
+        company = self.env.company
+        if company.currency_id != euro:
+            self.env.flush_all()
+            self.env.cr.execute("UPDATE res_company SET currency_id = %s WHERE id = %s", (euro.id, company.id))
+            self.env.invalidate_all()
+        pricelists = self.env["product.pricelist"].with_context(active_test=False).search(
+            [("company_id", "in", [company.id, False]), ("currency_id", "!=", euro.id)])
+        pricelists.write({"currency_id": euro.id})
+
+    @api.model
     def _bc_load_demo_data(self):
         """Demodaten (1.3.0): Shop-Sortiment, Hersteller und Testkunden – nur in Datenbanken mit Demodaten."""
         from ..tools import testdaten
@@ -286,7 +305,16 @@ class BlistercenterConfig(models.Model):
         # Firmennamen zurück). Nicht bei direkten Aufrufen, z. B. aus Tests.
         if self.env.context.get("install_demo"):
             self.env["res.company"]._plcs_load_demo()
+            # PLCS sitzt in Deutschland: Website und Kundenportal auf Deutsch (Hinweis 21.10.2026)
+            if "website" in self.env and "default_lang_id" in self.env["website"]._fields:
+                german = self.env["res.lang"]._lang_get("de_DE")
+                for website in self.env["website"].search([]):
+                    website.write({"language_ids": [(4, german.id)], "default_lang_id": german.id})
         testdaten.load(self.env)
+        if self.env.context.get("install_demo"):
+            self._bc_demo_euro()
+            # Belege an die Testkunden auf Deutsch drucken
+            self.env["res.partner"].search([("bc_is_customer", "=", True)]).lang = "de_DE"
         # Nur PLCS-Arzneimittel als Waren: Odoo-Demomöbel usw. archivieren (Entscheidung 21.10.2026)
         testdaten.archive_foreign_demo_products(self.env)
 

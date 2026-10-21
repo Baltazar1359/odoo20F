@@ -94,6 +94,11 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 - PLCS-Briefpapier nach dem Vorbild der PLCS-Gutschrift für alle Odoo-Belege der Firma (Modul `plcs_layout`).
 - Satz zur Großhandelserlaubnis (§52a AMG): Feld am Unternehmen, Wortlaut liefert PLCS.
 
+### Entscheidungen 21.10.2026 (Mehrdad)
+
+- Nur Arzneimittel als Waren: Odoo-Demoprodukte ohne PLCS-Bezug (Möbel usw.) werden in Dev-Builds archiviert.
+- PLCS sitzt in Deutschland: Währung **Euro** und Sprache **Deutsch** als Standard. Production war bereits so eingestellt (EUR, Deutschland, alle Benutzer Deutsch, Zeitzone Europe/Berlin; geprüft 21.10.). Dev-Builds stellen Firma (Land, Währung), Benutzer, Testkunden und Website beim Laden der Demodaten auf Deutschland/EUR/Deutsch um. Der Kontenrahmen im Dev-Build bleibt der Odoo-Demokontenrahmen (siehe C.7).
+
 ## C. Noch offen
 
 1. ~~Zahlungssperre automatisch?~~ Entschieden 19.10.: bei überfälligen Rechnungen nur Hinweis (R36). Die manuelle Zahlungssperre bleibt.
@@ -102,5 +107,5 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 4. **Online-Zahlung im Shop:** nicht vorgesehen (Lastschrift über DATEV). Im Shop keinen Zahlungsanbieter aktivieren.
 5. **Zu wenig geliefert:** Liefert der Hersteller weniger als bestellt, reicht die Ware nicht für alle Kunden der Sammelbestellung. Die Reihenfolge legt heute Odoo fest. Soll PLCS die Verteilung selbst bestimmen?
 6. Aufbewahrung und Validierung (Change Control) mit QMB abstimmen.
-7. **DATEV-Export:** Der Export ist Teil von Odoo Enterprise (Buchhaltungsberichte). Im Dev-Build prüfen; Kontenrahmen (SKR03) erst nach Freigabe einrichten.
+7. **DATEV-Export und Kontenrahmen:** Der Export ist Teil von Odoo Enterprise (Buchhaltungsberichte). Production (Firma in Deutschland, EUR): Mit dem Merge installiert Odoo die Buchhaltung und dabei automatisch die deutsche Lokalisierung `l10n_de` mit **SKR03** (EUR, USt 19 %/7 %); lokal nachgestellt am 21.10. Dev-Builds nutzen weiter den Odoo-Demokontenrahmen (generisch, 15 %), nur auf Euro umgestellt. **Vor dem Merge mit dem Steuerberater klären: SKR03 oder SKR04?** Ein Wechsel nach den ersten Buchungen ist aufwendig.
 8. **HAP:** Testwerte aus dem Apothekenverkaufspreis gerechnet. Für den Echtbetrieb echte HAP von PLCS übernehmen.

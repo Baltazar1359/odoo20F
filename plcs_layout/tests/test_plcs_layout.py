@@ -74,3 +74,24 @@ class TestPlcsLayout(TransactionCase):
         self.assertNotIn("Steuernummer", html)
         self.assertNotIn("Geschäftsführer", html)
         self.assertNotIn("o_plcs_note", self._raw())
+
+
+@tagged("post_install", "-at_install", "plcs_layout")
+class TestPlcsGermany(TransactionCase):
+    """Dev-Builds (Demodaten): PLCS sitzt in Deutschland – Euro und Deutsch (Hinweis 21.10.2026)."""
+
+    def test_demo_euro_and_german(self):
+        if not self.env["ir.module.module"].search([("name", "=", "plcs_layout"), ("demo", "=", True)]):
+            self.skipTest("nur mit Demodaten (Dev-Build)")
+        company = self.env.ref("base.main_company")
+        self.assertEqual(company.currency_id, self.env.ref("base.EUR"))
+        self.assertEqual(company.country_id, self.env.ref("base.de"))
+        self.assertTrue(self.env["res.lang"]._lang_get("de_DE").active)
+        self.assertEqual(self.env.ref("base.user_admin").lang, "de_DE")
+        self.assertEqual(self.env.ref("base.user_admin").tz, "Europe/Berlin")
+        if "website" in self.env and "default_lang_id" in self.env["website"]._fields:
+            for website in self.env["website"].search([("company_id", "=", company.id)]):
+                self.assertEqual(website.default_lang_id.code, "de_DE")
+        if "product.pricelist" in self.env:
+            pricelists = self.env["product.pricelist"].search([("company_id", "in", [company.id, False])])
+            self.assertFalse(pricelists.filtered(lambda p: p.currency_id.name == "USD"), "Preislisten in Euro")

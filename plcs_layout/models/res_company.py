@@ -52,8 +52,27 @@ class ResCompany(models.Model):
         company = self.env.company
         with file_open("plcs_layout/static/img/plcs_logo.png", "rb") as fh:
             logo = BinaryBytes(fh.read())
+        # PLCS sitzt in Deutschland: Euro und Deutsch als Standard. plcs_layout wird vor
+        # product/account geladen, daher gibt es hier noch keine Buchungen, die den Wechsel sperren.
+        # Wiederholter Aufruf (Blistercenter-Demodaten) ändert nur, was noch abweicht.
+        euro = self.env.ref("base.EUR")
+        if not euro.active:
+            euro.active = True
+        Lang = self.env["res.lang"].with_context(active_test=False)
+        if not Lang.search([("code", "=", "de_DE"), ("active", "=", True)]):
+            Lang._activate_lang("de_DE")
+            self.env["ir.module.module"].search([("state", "=", "installed")])._update_translations("de_DE")
+        self.env["res.users"].with_context(active_test=False).search(
+            [("share", "=", False), "|", ("lang", "!=", "de_DE"), ("tz", "!=", "Europe/Berlin")]
+        ).write({"lang": "de_DE", "tz": "Europe/Berlin"})
+        company.partner_id.lang = "de_DE"
+        has_entries = "account.move.line" in self.env and self.env["account.move.line"].sudo().search_count(
+            [("company_id", "=", company.id)], limit=1)
+        if company.currency_id != euro and not has_entries:
+            company.currency_id = euro
         company.write({
             "name": "PLCS GmbH",
+            "country_id": self.env.ref("base.de").id,
             "plcs_legal_name": "Pharma-Logistik-Consulting-Services GmbH",
             "street": "Im Schachen 2/208",
             "zip": "66687",
