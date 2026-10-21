@@ -10,6 +10,11 @@ class ProductTemplate(models.Model):
              "(Regel „Shop zeigt nur Blistercenter-Artikel“ in den Blistercenter-Einstellungen). "
              "Telefonbestellungen sind davon nicht betroffen.")
 
+    bc_avp = fields.Float(
+        "AVP", digits="Product Price", tracking=True,
+        help="Apothekenverkaufspreis inkl. 19 % USt (Information). Der Verkaufspreis an Blistercenter ist "
+             "der HAP; der Kundenrabatt (0/1/2 %) gilt auf den HAP.")
+
     def _bc_shop_allowed(self, website=None):
         """Darf der Artikel im Shop erscheinen und bestellt werden? (Regel R40)"""
         self.ensure_one()

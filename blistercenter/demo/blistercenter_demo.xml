@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- 1.3.0: Testdaten nur in Datenbanken mit Demodaten (z. B. Odoo.sh-Dev-Builds), nie in Production.
-         Shop-Sortiment Forxiga, Xigduo, Daxas, Brilique, Tagrisso (13 Artikel) in 5 Shop-Kategorien,
+         Shop-Sortiment Forxiga, Xigduo, Daxas, Brilique (11 Artikel, Tagrisso seit 21.10. nicht mehr) in 4 Shop-Kategorien,
          weitere Testartikel ohne Shop, Hersteller „AstraZeneca GmbH (Test)“, drei Testkunden (0/1/2 %).
          Gleiche Quelle wie docs/blistercenter_testdaten/testdaten.py (tools/testdaten.py). -->
     <function model="blistercenter.config" name="_bc_load_demo_data"/>

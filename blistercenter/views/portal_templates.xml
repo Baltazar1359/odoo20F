@@ -23,6 +23,7 @@
                                 <tr>
                                     <th>PZN</th>
                                     <th>Artikel</th>
+                                    <th class="text-end text-muted">AVP</th>
                                     <th class="text-end">HAP</th>
                                     <th class="text-end" t-if="bc_discount">Ihr Preis (−<t t-out="'%g' % bc_discount"/> %)</th>
                                     <th class="text-end" style="width: 8rem;">Menge</th>
@@ -32,6 +33,9 @@
                                 <tr t-foreach="bc_products" t-as="product">
                                     <td class="text-muted" t-out="product.default_code"/>
                                     <td t-out="product.name"/>
+                                    <td class="text-end text-nowrap text-muted">
+                                        <t t-if="product.bc_avp" t-out="product.bc_avp" t-options="{'widget': 'monetary', 'display_currency': bc_currency}"/>
+                                    </td>
                                     <td class="text-end text-nowrap" t-out="product.lst_price" t-options="{'widget': 'monetary', 'display_currency': bc_currency}"/>
                                     <td class="text-end text-nowrap" t-if="bc_discount" t-out="product.lst_price * (1 - bc_discount / 100)" t-options="{'widget': 'monetary', 'display_currency': bc_currency}"/>
                                     <td class="text-end">

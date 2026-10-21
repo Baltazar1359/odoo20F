@@ -76,6 +76,7 @@ class BlistercenterOrderSheetLine(models.TransientModel):
     product_id = fields.Many2one("product.product", "Artikel", required=True, readonly=True)
     default_code = fields.Char(related="product_id.default_code", string="PZN")
     product_name = fields.Char(related="product_id.name", string="Artikel")
+    price_avp = fields.Float(related="product_id.bc_avp", string="AVP", digits="Product Price")
     price_hap = fields.Float(related="product_id.lst_price", string="HAP", digits="Product Price")
     price_customer = fields.Float("Ihr Preis", compute="_compute_price_customer", digits="Product Price")
     qty = fields.Integer("Menge", default=0)

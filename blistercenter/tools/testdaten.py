@@ -4,38 +4,64 @@ Demodaten werden nur in Datenbanken mit Demodaten geladen (z. B. Odoo.sh-Dev-Bui
 Production. Das Skript ``docs/blistercenter_testdaten/testdaten.py`` nutzt dieselben Listen und
 ergänzt Logo und Produktfotos.
 
-Shop-Sortiment (Entscheidung Mehrdad 20.10.2026): nur Forxiga, Xigduo, Daxas, Brilique, Tagrisso.
+Shop-Sortiment (Entscheidung Mehrdad 20.10.2026, Tagrisso entfernt 21.10.2026): Forxiga, Xigduo, Daxas, Brilique.
+
+Preise (Entscheidung 21.10.2026): Verkaufspreis bleibt der HAP (Rabatt 0/1/2 % darauf, R34), gerechnet aus dem
+aktuellen AVP; der AVP steht zusätzlich am Artikel (Feld „AVP“) und in der Shop-Beschreibung.
 """
 
-# PZN, Bezeichnung, Packung, Lagerung, Verkaufspreis (= HAP), Testpreis Einkauf, Herkunft des Preises
-# Herkunft: "fiktiv" = Testpreis; "hap" = HAP aus dem AVP zurückgerechnet (Recherche 19.10.2026)
+
+def hap_from_avp(avp):
+    """HAP (Abgabepreis des Herstellers) aus dem AVP eines verschreibungspflichtigen Fertigarzneimittels.
+
+    Preisbildung nach AMPreisV (ABDA, Zahlen Daten Fakten 2026, Stand Mai 2026):
+    AEP = HAP + 3,15 % (höchstens 37,80 €) + 0,73 €;
+    AVP = (AEP + 3 % + 8,35 € + 0,21 € Notdienst + 0,20 € pDL) + 19 % USt.
+    Rückrechnung, auf Cent gerundet (Abweichung ±1 Cent möglich). Für den Echtbetrieb HAP von PLCS.
+    """
+    net = avp / 1.19
+    aep = (net - 8.35 - 0.21 - 0.20) / 1.03
+    hap = (aep - 0.73) / 1.0315
+    if hap * 0.0315 > 37.80:
+        hap = aep - 0.73 - 37.80
+    return round(hap, 2)
+
+
+# PZN, Bezeichnung, Packung, Lagerung, AVP (Shop Apotheke, abgerufen 21.10.2026; None = außer Handel /
+# kein Preis gefunden), Testpreis HAP falls kein AVP. Einkaufspreis fiktiv: HAP − 5 %.
+ARTICLES_RAW = [
+    ("07560038", "BRILIQUE 90 mg Filmtabletten", "100 St", "ambient", 168.87, None),
+    ("11366951", "BRILIQUE 60 mg Filmtabletten", "60 St", "ambient", 106.15, None),
+    ("16015541", "BYDUREON 2 mg Depot-Injektionssuspension i.e. Fertigpen BCise", "", "cool", None, 150.00),
+    ("00839027", "BYETTA 10 µg Injektionslösung i.e. Fertigpen", "1 St", "cool", None, 110.00),
+    ("00837270", "BYETTA 5 µg Injektionslösung i.e. Fertigpen", "1 St", "cool", None, 100.00),
+    ("18063573", "CALQUENCE 100 mg Filmtabletten", "60 St", "ambient", 6181.90, None),
+    ("13475319", "DAXAS 250 Mikrogramm Tabletten", "28 St", "ambient", 72.45, None),
+    ("13570710", "BEVESPI Aerosphere 7,2 µg/5 µg Druckgasinhalation 120 Hub", "1 St", "ambient", 99.70, None),
+    ("13592290", "AERODUR Turbohaler ohne Treibgas 120 ED", "", "ambient", 24.69, None),
+    ("04424530", "BAMBEC Tabletten", "", "ambient", None, 20.00),
+    # Häufigste Blistercenter-Artikel (alle ambient)
+    ("10330224", "FORXIGA 5 mg Filmtabletten", "28 St (N2)", "ambient", 76.41, None),
+    ("16033349", "FORXIGA 5 mg Filmtabletten", "98 St (N3)", "ambient", 237.21, None),
+    ("10330193", "FORXIGA 10 mg Filmtabletten", "28 St (N2)", "ambient", 76.41, None),
+    ("10330201", "FORXIGA 10 mg Filmtabletten", "98 St (N3)", "ambient", 237.21, None),
+    ("10126297", "XIGDUO 5 mg/850 mg Filmtabletten", "56 St (N2)", "ambient", 54.22, None),
+    ("10126564", "XIGDUO 5 mg/850 mg Filmtabletten", "196 St (N3)", "ambient", 159.53, None),
+    ("10126587", "XIGDUO 5 mg/1000 mg Filmtabletten", "56 St (N2)", "ambient", 54.22, None),
+    ("10126593", "XIGDUO 5 mg/1000 mg Filmtabletten", "196 St (N3)", "ambient", 159.53, None),
+    ("12743321", "TAGRISSO 40 mg Filmtabletten", "30 St", "ambient", 5838.52, None),
+    ("12743338", "TAGRISSO 80 mg Filmtabletten", "30 St", "ambient", 5838.52, None),
+]
+
+# PZN, Bezeichnung, Packung, Lagerung, Verkaufspreis (= HAP), Einkaufspreis, AVP (oder None)
 ARTICLES = [
-    ("07560038", "BRILIQUE 90 mg Filmtabletten", "100 St", "ambient", 120.00, 96.00, "fiktiv"),
-    ("11366951", "BRILIQUE 60 mg Filmtabletten", "60 St", "ambient", 80.00, 64.00, "fiktiv"),
-    ("16015541", "BYDUREON 2 mg Depot-Injektionssuspension i.e. Fertigpen BCise", "", "cool", 150.00, 120.00, "fiktiv"),
-    ("00839027", "BYETTA 10 µg Injektionslösung i.e. Fertigpen", "1 St", "cool", 110.00, 88.00, "fiktiv"),
-    ("00837270", "BYETTA 5 µg Injektionslösung i.e. Fertigpen", "1 St", "cool", 100.00, 80.00, "fiktiv"),
-    ("18063573", "CALQUENCE 100 mg Filmtabletten", "60 St", "ambient", 500.00, 400.00, "fiktiv"),
-    ("13475319", "DAXAS 250 Mikrogramm Tabletten", "28 St", "ambient", 40.00, 32.00, "fiktiv"),
-    ("13570710", "BEVESPI Aerosphere 7,2 µg/5 µg Druckgasinhalation 120 Hub", "1 St", "ambient", 60.00, 48.00, "fiktiv"),
-    ("13592290", "AERODUR Turbohaler ohne Treibgas 120 ED", "", "ambient", 30.00, 24.00, "fiktiv"),
-    ("04424530", "BAMBEC Tabletten", "", "ambient", 20.00, 16.00, "fiktiv"),
-    # Häufigste Blistercenter-Artikel (alle ambient). Einkaufspreis fiktiv (HAP − 5 %).
-    ("10330224", "FORXIGA 5 mg Filmtabletten", "28 St (N2)", "ambient", 50.87, 48.33, "hap"),
-    ("16033349", "FORXIGA 5 mg Filmtabletten", "98 St (N3)", "ambient", 178.06, 169.16, "hap"),
-    ("10330193", "FORXIGA 10 mg Filmtabletten", "28 St (N2)", "ambient", 50.87, 48.33, "hap"),
-    ("10330201", "FORXIGA 10 mg Filmtabletten", "98 St (N3)", "ambient", 178.06, 169.16, "hap"),
-    ("10126297", "XIGDUO 5 mg/850 mg Filmtabletten", "56 St (N2)", "ambient", 33.32, 31.65, "hap"),
-    ("10126564", "XIGDUO 5 mg/850 mg Filmtabletten", "196 St (N3)", "ambient", 116.62, 110.79, "hap"),
-    # 10126587: Preis nicht direkt gefunden, gleicher Preis wie 5/850 mg 56 St angenommen (vor Echtbetrieb prüfen)
-    ("10126587", "XIGDUO 5 mg/1000 mg Filmtabletten", "56 St (N2)", "ambient", 33.32, 31.65, "hap"),
-    ("10126593", "XIGDUO 5 mg/1000 mg Filmtabletten", "196 St (N3)", "ambient", 116.62, 110.79, "hap"),
-    ("12743321", "TAGRISSO 40 mg Filmtabletten", "30 St", "ambient", 4715.75, 4479.96, "hap"),
-    ("12743338", "TAGRISSO 80 mg Filmtabletten", "30 St", "ambient", 4715.75, 4479.96, "hap"),
+    (pzn, name, pack, storage, hap_from_avp(avp) if avp else price,
+     round((hap_from_avp(avp) if avp else price) * 0.95, 2) if avp else round(price * 0.8, 2), avp)
+    for pzn, name, pack, storage, avp, price in ARTICLES_RAW
 ]
 
 # Shop-Sortiment: nur diese 5 Medikamente (erstes Wort der Bezeichnung), Reihenfolge = Shop-Kategorien
-SHOP_FAMILIES = ["FORXIGA", "XIGDUO", "DAXAS", "BRILIQUE", "TAGRISSO"]
+SHOP_FAMILIES = ["FORXIGA", "XIGDUO", "DAXAS", "BRILIQUE"]
 
 # Blistercenter-Testkunden: Name, Rabatt auf HAP, Zahlungsziel (XML-ID), Zahlungsart
 CUSTOMERS = [
@@ -96,7 +122,7 @@ def load(env, log=None):
     has_temp = "plcs_storage_temp" in Product._fields
     has_website = "is_published" in Product._fields
     products = {}
-    for pzn, name, pack, storage, price, cost, origin in ARTICLES:
+    for pzn, name, pack, storage, price, cost, avp in ARTICLES:
         full_name = "%s %s" % (name, pack) if pack else name
         gtin = gtin_from_pzn(pzn)
         family = family_of(name)
@@ -115,10 +141,11 @@ def load(env, log=None):
             "standard_price": cost,
             "invoice_policy": "delivery",
             "bc_shop_product": in_shop,
-            "description_sale": "Testartikel (PZN %s). %s%s" % (
+            "bc_avp": avp or 0.0,
+            "description_sale": "PZN %s. %s%s" % (
                 pzn,
-                "HAP aus dem Apothekenverkaufspreis gerechnet (Testwert, nicht Lauer-Taxe)."
-                if origin == "hap" else "Preis fiktiv.",
+                ("AVP %s € (Apothekenverkaufspreis inkl. 19 %% USt)." % ("%.2f" % avp).replace(".", ","))
+                if avp else "Außer Handel bzw. ohne AVP – Preis fiktiv.",
                 " Kühl lagern (2–8 °C)." if storage == "cool" else ""),
         }
         if has_pzn:

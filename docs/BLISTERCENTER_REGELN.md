@@ -55,7 +55,7 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R32 | **Rechnung je Lieferung:** Nach jeder Lieferung legt Odoo die Rechnung über die **gelieferte Menge** als Entwurf an (mit Verweis auf die Lieferung) und gibt der Buchhaltung eine Aufgabe. Kein Buchen, keine E-Mail. Artikel müssen „Fakturierung: gelieferte Mengen“ haben, sonst ist die Bestätigung gesperrt. | ja |
 | R33 | **Lastschrift über DATEV:** Zahlungsart „Lastschrift (DATEV)“ am Kunden. Rechnung (und Proforma) tragen den Hinweis auf den SEPA-Lastschrifteinzug. Mandat nur in DATEV, keine Mandatsreferenz in Odoo. | – |
 | R34 | **Rabatt je Kunde:** Verkaufspreis = **HAP** (Verkaufspreis am Artikel). Je Kunde **0, 1 oder 2 %** auf alle Artikel, andere Werte nicht möglich. Ein abweichender Rabatt in einer Position sperrt die Bestätigung. Der Preis zum Zeitpunkt des Auftrags gilt. | ja |
-| R35 | **Preise von Hand:** keine Lauer-Taxe. HAP am Artikel, Einkaufspreis je Hersteller und Artikel als Einkaufskondition. | – |
+| R35 | **Preise von Hand:** keine Lauer-Taxe. HAP am Artikel (Verkaufspreis), **AVP als Information am Artikel** (ab 1.5.0; im Bestellschein und in der Shop-Beschreibung). Einkaufspreis je Hersteller und Artikel als Einkaufskondition. | – |
 | R36 | **Überfällige Rechnungen:** Auftrag, Lieferung und Kunde zeigen einen deutlichen Hinweis (Anzahl, Betrag). **Keine Sperre.** Kachel „Überfällige Rechnungen“. | – |
 | R37 | **Nachweise nur aus dem Ablauf** (Prüfbericht 19.10.2026): Wer kommissioniert, gebucht, Kurzläufer freigegeben, eine Teillieferung abgestimmt oder „Aus Lagerbestand“ gewählt hat, setzt nur Odoo in der jeweiligen Aktion. Status der Sammelbestellung nur über ihre Übergänge. Direkte Schreibzugriffe (z. B. über die Schnittstelle) werden abgelehnt. | – |
 | R38 | **Kennzeichen „Blistercenter“** entfernt nur die Rolle Freigabe. Ein bestätigter Auftrag bleibt Blistercenter-Auftrag, auch wenn das Kennzeichen später fehlt. | – |
@@ -100,6 +100,8 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 ### Entscheidungen 21.10.2026 (Mehrdad)
 
 - Nur Arzneimittel als Waren: Odoo-Demoprodukte ohne PLCS-Bezug (Möbel usw.) werden in Dev-Builds archiviert.
+- Tagrisso (40 mg und 80 mg) nicht mehr im Blistercenter-Shop und -Bestellschein; Artikel bleiben bestehen. Sortiment: Forxiga, Xigduo, Daxas, Brilique (11 Artikel).
+- Preise: Verkaufspreis bleibt der HAP (Rabatt 0/1/2 % darauf), gerechnet aus dem aktuellen AVP nach AMPreisV (Stand ABDA Mai 2026); AVP zusätzlich anzeigen.
 - Umsatzsteuer 19 %, Export 0 % (R45).
 - Bei Bestellung keine Auftragsbestätigung, sondern Proforma-Rechnung; Zahlung innerhalb 7 bzw. 14 Tagen ab Proforma; Versand wartet nicht; Rechnung je Lieferung bleibt (R44).
 - Packungsfotos aus dem Internet per PZN (R46); Mehrdad: Quelle Online-Shops, Bildrechte bei PLCS.
@@ -114,4 +116,4 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 5. **Zu wenig geliefert:** Liefert der Hersteller weniger als bestellt, reicht die Ware nicht für alle Kunden der Sammelbestellung. Die Reihenfolge legt heute Odoo fest. Soll PLCS die Verteilung selbst bestimmen?
 6. Aufbewahrung und Validierung (Change Control) mit QMB abstimmen.
 7. **DATEV-Export und Kontenrahmen:** Der Export ist Teil von Odoo Enterprise (Buchhaltungsberichte). Production (Firma in Deutschland, EUR): Mit dem Merge installiert Odoo die Buchhaltung und dabei automatisch die deutsche Lokalisierung `l10n_de` mit **SKR03** (EUR, USt 19 %/7 %); lokal nachgestellt am 21.10. Dev-Builds nutzen weiter den Odoo-Demokontenrahmen (generisch, 15 %), nur auf Euro umgestellt. **Vor dem Merge mit dem Steuerberater klären: SKR03 oder SKR04?** Ein Wechsel nach den ersten Buchungen ist aufwendig.
-8. **HAP:** Testwerte aus dem Apothekenverkaufspreis gerechnet. Für den Echtbetrieb echte HAP von PLCS übernehmen.
+8. **HAP:** Testwerte aus dem AVP gerechnet (Shop Apotheke, 21.10.2026; Formel AMPreisV, Abweichung ±1 Cent). Bydureon, Byetta und Bambec ohne AVP (außer Handel) – Preis fiktiv. Für den Echtbetrieb echte HAP von PLCS übernehmen.

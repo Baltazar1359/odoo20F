@@ -216,18 +216,38 @@ class TestBlistercenterDemoData(BlistercenterCommon):
         shop = Template.search([("bc_shop_product", "=", True), ("default_code", "!=", False)])
         demo_codes = {a[0] for a in self._articles()}
         shop = shop.filtered(lambda t: t.default_code in demo_codes)
-        self.assertEqual(len(shop), 13)
-        self.assertEqual({t.name.split()[0] for t in shop}, {"FORXIGA", "XIGDUO", "DAXAS", "BRILIQUE", "TAGRISSO"})
-        self.assertEqual(set(shop.public_categ_ids.mapped("name")), {"Forxiga", "Xigduo", "Daxas", "Brilique", "Tagrisso"})
+        # Tagrisso aus dem Blistercenter-Sortiment entfernt (Entscheidung 21.10.2026)
+        self.assertEqual(len(shop), 11)
+        self.assertEqual({t.name.split()[0] for t in shop}, {"FORXIGA", "XIGDUO", "DAXAS", "BRILIQUE"})
+        self.assertEqual(set(shop.public_categ_ids.mapped("name")), {"Forxiga", "Xigduo", "Daxas", "Brilique"})
         others = Template.search([("default_code", "in", list(demo_codes)), ("bc_shop_product", "=", False)])
-        self.assertEqual(len(others), 7)
+        self.assertEqual(len(others), 9)
+        self.assertIn("12743338", others.mapped("default_code"), "Tagrisso 80 mg nicht im Shop")
+        # Preise: HAP aus dem AVP, AVP am Artikel (21.10.2026)
+        forxiga = shop.filtered(lambda t: t.default_code == "10330224")
+        self.assertEqual(forxiga.bc_avp, 76.41)
+        self.assertAlmostEqual(forxiga.list_price, 51.48, places=2)
+        self.assertIn("AVP 76,41", forxiga.description_sale)
+        self.assertFalse(shop.filtered(lambda t: not t.bc_avp), "jeder Shop-Artikel mit AVP")
         self.assertFalse(others.filtered("is_published"), "Übrige Testartikel nicht im Shop")
         self.assertEqual(Template.search_count([("default_code", "in", list(demo_codes))]), 20, "keine Duplikate")
         customers = self.env["res.partner"].search([("name", "like", "(Test)"), ("bc_is_customer", "=", True)])
         self.assertGreaterEqual(len(customers.filtered(lambda p: p.name.startswith("Blistercenter "))), 3)
-        self.assertGreaterEqual(self.config.shop_product_count, 13)
+        self.assertGreaterEqual(self.config.shop_product_count, 11)
         self.assertTrue(foreign.not_in_shop, "Fremde Kategorie ohne Sortiment nicht in der Kategorieleiste")
         self.assertFalse(shop.public_categ_ids.filtered("not_in_shop"))
+
+    def test_hap_from_avp(self):
+        """Rückrechnung nach AMPreisV: ABDA-Beispiel HAP 50,00 € → AVP 74,54 €; Höchstbetrag 37,80 €."""
+        from ..tools import testdaten
+        self.assertEqual(testdaten.hap_from_avp(74.54), 50.00)
+        self.assertEqual(testdaten.hap_from_avp(5838.52), 4716.38, "Großhandelszuschlag gedeckelt")
+
+        def avp(hap):
+            aep = hap + min(hap * 0.0315, 37.80) + 0.73
+            return round((aep * 1.03 + 8.35 + 0.21 + 0.20) * 1.19, 2)
+        for price in (10.58, 51.48, 178.67, 4716.38):
+            self.assertAlmostEqual(testdaten.hap_from_avp(avp(price)), price, delta=0.011)
 
     def _articles(self):
         from ..tools import testdaten
