@@ -320,4 +320,26 @@
             </list>
         </field>
     </record>
+
+    <!-- Prüfbericht 21.10.2026: Verfall laut Packung (Scan) neben dem Verfall der Charge -->
+    <record id="view_stock_move_line_operation_tree_bc_scan" model="ir.ui.view">
+        <field name="name">stock.move.line.operation.list.blistercenter.scan</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="product_expiry.view_stock_move_line_operation_tree_expiry"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='expiration_date']" position="after">
+                <field name="bc_scanned_expiry" optional="show" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="view_stock_move_line_detailed_operation_tree_bc_scan" model="ir.ui.view">
+        <field name="name">stock.move.line.detailed.list.blistercenter.scan</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="product_expiry.view_stock_move_line_detailed_operation_tree_expiry"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='expiration_date']" position="after">
+                <field name="bc_scanned_expiry" optional="show" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
 </odoo>

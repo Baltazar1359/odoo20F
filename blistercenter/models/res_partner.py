@@ -78,15 +78,17 @@ class ResPartner(models.Model):
         self.ensure_one()
         if not self.commercial_partner_id.id:
             return self.env["account.move"]
+        # Nur Rechnungen der aktuellen Firma: Betrag in einer Währung (Prüfbericht 21.10.2026)
         return self.env["account.move"].sudo().search([
             ("commercial_partner_id", "=", self.commercial_partner_id.id),
+            ("company_id", "=", self.env.company.id),
             ("move_type", "=", "out_invoice"),
             ("state", "=", "posted"),
             ("payment_state", "in", ("not_paid", "partial")),
             ("invoice_date_due", "<", fields.Date.context_today(self)),
         ])
 
-    @api.depends_context("uid")
+    @api.depends_context("uid", "allowed_company_ids")
     def _compute_bc_overdue(self):
         for partner in self:
             invoices = partner._bc_overdue_invoices() if partner.commercial_partner_id.bc_is_customer else False

@@ -124,6 +124,17 @@ class StockMoveLine(models.Model):
     _inherit = "stock.move.line"
 
     bc_expiration_date = fields.Datetime(related="lot_id.expiration_date", string="Verfall")
+    bc_scanned_expiry = fields.Date(
+        "Verfall laut Packung", readonly=True, copy=False,
+        help="Verfallsdatum aus dem DataMatrix-Scan. Bleibt erhalten, auch wenn Odoo die Zeile auf eine "
+             "vorhandene Charge mit anderem Datum bucht (Prüfbericht 21.10.2026).")
+
+    def _bc_typed_expiry(self):
+        """Verfall, den der Wareneingang für diese Zeile erfasst hat (Scan oder Eingabe), als Datum."""
+        self.ensure_one()
+        if self.bc_scanned_expiry:
+            return self.bc_scanned_expiry
+        return self.expiration_date.date() if self.expiration_date else False
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -132,6 +143,8 @@ class StockMoveLine(models.Model):
         return lines
 
     def write(self, vals):
+        # Nachweis aus dem Scan nur über den Scan-Assistenten ändern
+        bc_auth.check_protected(self, vals, ("bc_scanned_expiry",), name="scan")
         pickings = self.picking_id if PICK_RELEVANT_FIELDS & set(vals) else self.env["stock.picking"]
         res = super().write(vals)
         pickings._bc_reset_picked()
@@ -218,7 +231,8 @@ class StockPicking(models.Model):
     def _compute_bc_overdue(self):
         """Nur Hinweis auf überfällige Rechnungen des Kunden; der Versand bleibt möglich."""
         for picking in self:
-            partner = (picking.sale_id.partner_id or picking.partner_id).commercial_partner_id
+            partner = (picking.sale_id.partner_id or picking.partner_id).commercial_partner_id.with_company(
+                picking.company_id or self.env.company)
             if picking.bc_kind == "delivery" and partner.bc_is_customer:
                 picking.bc_overdue_count = partner.bc_overdue_count
                 picking.bc_overdue_amount = partner.bc_overdue_amount
@@ -261,7 +275,7 @@ class StockPicking(models.Model):
             picking.bc_can_release = allowed
 
     @api.depends("bc_kind", "state", "move_line_ids.lot_id", "move_line_ids.lot_name",
-                 "move_line_ids.expiration_date", "move_line_ids.product_id")
+                 "move_line_ids.expiration_date", "move_line_ids.bc_scanned_expiry", "move_line_ids.product_id")
     def _compute_bc_lot_warning(self):
         for picking in self:
             open_receipt = picking.bc_kind == "receipt" and picking.state not in ("done", "cancel")
@@ -286,7 +300,7 @@ class StockPicking(models.Model):
                 ("company_id", "in", [line.company_id.id, False])], limit=1)
             if not lot:
                 continue
-            typed = line.expiration_date and line.expiration_date.date()
+            typed = line._bc_typed_expiry()
             known = lot.expiration_date and lot.expiration_date.date()
             if lot.bc_blocked and ("blocked", lot.id) not in seen:
                 seen.add(("blocked", lot.id))

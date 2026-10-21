@@ -5,12 +5,17 @@ schickt ab. Der Auftrag entsteht als „Angebot gesendet“ und erscheint bei PL
 „Neue Bestellungen“; PLCS bestätigt ihn (dabei greifen alle Regeln wie bei jeder Bestellung).
 """
 import re
+import uuid
+
+from psycopg2 import IntegrityError
 
 from odoo import http
 from odoo.exceptions import UserError
 from odoo.http import request
 
 from odoo.addons.portal.controllers.portal import CustomerPortal
+
+from ..models.order_sheet import TOKEN_RE
 
 QTY_KEY = re.compile(r"^qty_(\d+)$")
 
@@ -46,6 +51,11 @@ class BlistercenterPortal(CustomerPortal):
                                "Bitte wenden Sie sich an PLCS.")
         return partner, None
 
+    @staticmethod
+    def _bc_reuse_token(post):
+        token = ((post or {}).get("bc_submit_token") or "").strip()
+        return token if TOKEN_RE.match(token) else None
+
     def _bc_company(self):
         return request.website.company_id if getattr(request, "website", None) else request.env.company
 
@@ -76,6 +86,8 @@ class BlistercenterPortal(CustomerPortal):
             "bc_discount": discount,
             "bc_currency": company.currency_id,
             "bc_post": post or {},
+            # Neue Kennung je Anzeige; nach einem Fehler bleibt die abgeschickte Kennung (noch unverbraucht)
+            "bc_submit_token": self._bc_reuse_token(post) or uuid.uuid4().hex,
         })
         return values
 
@@ -91,6 +103,12 @@ class BlistercenterPortal(CustomerPortal):
             return request.render("blistercenter.portal_order_sheet", self._bc_sheet_values(None, error))
         env = request.env
         company = self._bc_company()
+        # Ohne Kennung (Seite von vor 1.5.1 im Browser) wie bisher, nur ohne Schutz vor Wiederholung
+        token = (post.get("bc_submit_token") or "").strip() or None
+        done = env["sale.order"]._bc_find_submitted(partner, token)
+        if done:
+            # Wiederholtes Absenden (Doppelklick, Neuladen, Verbindungsabbruch): keine zweite Bestellung
+            return request.redirect("/my/bestellschein/danke?ref=%s" % done.id)
         products = env["sale.order"]._bc_sheet_products(company)
         by_id = {p.id: p for p in products}
         quantities = []
@@ -109,10 +127,14 @@ class BlistercenterPortal(CustomerPortal):
             user_partner = env.user.partner_id.sudo()
             orderer = user_partner if user_partner != partner and user_partner.commercial_partner_id == partner else None
             Order = env["sale.order"].sudo().with_company(company)
-            order = Order._bc_create_from_sheet(
-                partner, quantities, "portal", company=company,
-                orderer=orderer, orderer_name=None if orderer else env.user.name,
-                client_ref=post.get("client_order_ref"), note=post.get("note"))
+            with env.cr.savepoint():
+                order = Order._bc_create_from_sheet(
+                    partner, quantities, "portal", company=company,
+                    orderer=orderer, orderer_name=None if orderer else env.user.name,
+                    client_ref=post.get("client_order_ref"), note=post.get("note"), submit_token=token)
+        except IntegrityError:
+            # Gleichzeitig zweimal abgeschickt: die andere Anfrage hat die Bestellung schon angelegt
+            return request.redirect("/my/orders")
         except UserError as exc:
             return request.render("blistercenter.portal_order_sheet",
                                   self._bc_sheet_values(partner, exc.args[0], post))

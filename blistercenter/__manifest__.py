@@ -1,6 +1,6 @@
 {
     "name": "Blistercenter",
-    "version": "20.0.1.5.0",
+    "version": "20.0.1.5.1",
     "summary": "PLCS-Großhandel für Blistercenter: Kunden, Shop-Bestellungen, Sammelbestellungen beim Hersteller, Versand, Chargen und Rückruf",
     "description": """
 Blistercenter – Großhandel der PLCS GmbH
@@ -62,6 +62,11 @@ parallele Buchhaltung und keine doppelten Bestell- oder Lagerdaten an.
         "views/website_templates.xml",
         "data/portal_entry_data.xml",
     ],
+    "assets": {
+        "web.assets_frontend": [
+            "blistercenter/static/src/js/order_sheet.js",
+        ],
+    },
     "demo": [
         "demo/blistercenter_demo.xml",
     ],

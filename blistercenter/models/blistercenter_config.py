@@ -132,7 +132,7 @@ class BlistercenterConfig(models.Model):
     rule_customer_discount = fields.Boolean(
         "Kundenrabatt auf den HAP fest", default=True, tracking=True,
         help="Jede Warenposition bekommt den Rabatt des Kunden (0, 1 oder 2 %) auf den Verkaufspreis (HAP). "
-             "Ein abweichender Rabatt in der Position verhindert die Bestätigung.",
+             "Ein abweichender Rabatt oder ein Preis ungleich HAP in der Position verhindert die Bestätigung.",
     )
     rule_invoice_per_delivery = fields.Boolean(
         "Rechnung je Lieferung", default=True, tracking=True,

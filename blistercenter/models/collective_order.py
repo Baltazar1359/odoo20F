@@ -145,7 +145,7 @@ class BlistercenterCollectiveOrder(models.Model):
                     "Die Bestellung %(po)s ist schon bestätigt. Bitte erst dort stornieren.", po=order.purchase_id.name,
                 ))
             if order.purchase_id and order.purchase_id.state != "cancel":
-                order.purchase_id.button_cancel()
+                bc_auth.grant(order.purchase_id, "collective").button_cancel()
             bc_auth.grant(order, "collective").state = "cancel"
         return True
 

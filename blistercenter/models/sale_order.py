@@ -35,6 +35,13 @@ ORDER_PROTECTED_FIELDS = ("bc_partial_allowed", "bc_partial_note", "bc_partial_b
 LINE_PROTECTED_FIELDS = ("bc_from_stock", "bc_from_stock_by")
 
 
+class InvoiceQty(dict):
+    """Mengen je Auftragsposition für die Rechnung einer Lieferung (Befund 3, 21.10.2026).
+
+    Ein Python-Objekt im Kontext: ein RPC-Aufruf kann es nicht erzeugen (Kontextwerte von außen sind JSON).
+    """
+
+
 class SaleOrder(models.Model):
     _inherit = "sale.order"
 
@@ -105,7 +112,7 @@ class SaleOrder(models.Model):
     def _compute_bc_overdue(self):
         """Hinweis auf überfällige Rechnungen des Kunden. Sperrt nichts (Entscheidung PLCS 19.10.2026)."""
         for order in self:
-            partner = order.partner_id.commercial_partner_id
+            partner = order.partner_id.commercial_partner_id.with_company(order.company_id or self.env.company)
             if order.bc_is_blistercenter and partner:
                 order.bc_overdue_count = partner.bc_overdue_count
                 order.bc_overdue_amount = partner.bc_overdue_amount
@@ -236,6 +243,20 @@ class SaleOrder(models.Model):
                     "„Fakturierung: gelieferte Mengen“ einstellen.",
                     products=", ".join(wrong.mapped("display_name")))
         if config.rule_customer_discount:
+            # Befund 4 (21.10.2026): Grundpreis = HAP des Artikels, wie im Bestellschein angezeigt.
+            # Eine Kundenpreisliste mit eigenen Regeln oder fremder Währung darf ihn nicht verändern.
+            if goods and self.currency_id != self.company_id.currency_id:
+                return self.env._(
+                    "%(order)s: Blistercenter-Bestellungen laufen in %(currency)s (Preisliste des Kunden prüfen).",
+                    order=self.name, currency=self.company_id.currency_id.name)
+            wrong = goods.filtered(lambda sol: sol.currency_id.compare_amounts(
+                sol.price_unit, sol.product_id.uom_id._compute_price(sol.product_id.lst_price, sol.product_uom_id)) != 0)
+            if wrong:
+                return self.env._(
+                    "%(order)s: Der Preis muss dem HAP des Artikels entsprechen (Rabatt des Kunden kommt als "
+                    "Rabatt dazu). Abweichend in: %(products)s. Bitte „Preise aktualisieren“ oder die Preisliste "
+                    "des Kunden prüfen.",
+                    order=self.name, products=", ".join(wrong.product_id.mapped("display_name")))
             expected = float(partner.bc_discount or 0)
             wrong = goods.filtered(lambda sol: sol.currency_id.compare_amounts(sol.discount, expected) != 0)
             if wrong:
@@ -377,17 +398,48 @@ class SaleOrder(models.Model):
             vals["narration"] = text if is_html_empty(narration) else Markup("%s%s") % (text, narration)
         return vals
 
+    def _bc_picking_invoice_qty(self, picking):
+        """Gelieferte Menge je Auftragsposition in genau dieser Lieferung (Einheit der Auftragsposition)."""
+        self.ensure_one()
+        qty = {}
+        for move in picking.move_ids.filtered(lambda m: m.state == "done" and m.sale_line_id.order_id == self):
+            line = move.sale_line_id
+            if not line._bc_is_goods_line():
+                continue
+            done = move.uom_id._compute_quantity(move.quantity, line.product_uom_id)
+            if move.location_dest_id.usage != "customer":
+                done = -done
+            qty[line.id] = qty.get(line.id, 0.0) + done
+        return InvoiceQty({line_id: q for line_id, q in qty.items() if q > 0})
+
+    def _get_invoiceable_lines(self, final=False):
+        """Rechnung je Lieferung: nur Warenpositionen dieser Lieferung (Prüfbericht 21.10.2026 Befund 3)."""
+        lines = super()._get_invoiceable_lines(final=final)
+        limits = self.env.context.get("bc_invoice_qty")
+        if not isinstance(limits, InvoiceQty):
+            return lines
+        return lines.filtered(lambda sol: not sol._bc_is_goods_line() or limits.get(sol.id, 0) > 0)
+
     def _bc_invoice_delivery(self, picking):
-        """Rechnung über die mit dieser Lieferung gelieferte Menge als Entwurf (kein Buchen, kein Versand)."""
+        """Rechnung über die mit dieser Lieferung gelieferte Menge als Entwurf (kein Buchen, kein Versand).
+
+        Die Menge kommt aus den Bewegungen der Lieferung, nicht aus allen offenen Mengen des Auftrags:
+        Werden zwei Lieferungen zusammen gebucht oder ist eine ältere Menge noch nicht abgerechnet, bekommt
+        jede Lieferung trotzdem nur ihre eigene Rechnung über ihre eigene Menge.
+        """
         self.ensure_one()
         config = self.env["blistercenter.config"]._get(self.company_id)
         order = self.sudo()
-        if not order.order_line.filtered(lambda sol: sol._bc_is_goods_line() and sol.qty_to_invoice > 0):
+        if picking.sudo().bc_invoice_ids.filtered(lambda inv: inv.state != "cancel"):
+            return self.env["account.move"]  # schon abgerechnet (Aufruf wiederholt)
+        limits = order._bc_picking_invoice_qty(picking)
+        if not any(sol.qty_to_invoice > 0 for sol in order.order_line.filtered(lambda l: l.id in limits)):
             return self.env["account.move"]
         # Ohne Zuweisungs-E-Mail an den Verkäufer; die Buchhaltung bekommt eine Aufgabe in Odoo
-        invoice = order.with_context(mail_auto_subscribe_no_notify=True)._create_invoices()
+        invoice = order.with_context(mail_auto_subscribe_no_notify=True, bc_invoice_qty=limits)._create_invoices()
         if not invoice:
             return invoice
+        invoice = invoice.with_context(bc_invoice_qty=None)
         delivery_note = Markup("<p>%s</p>") % self.env._("Lieferung: %(picking)s", picking=picking.name)
         vals = {"bc_picking_id": picking.id}
         if order.bc_proforma_due_date:
@@ -403,6 +455,12 @@ class SaleOrder(models.Model):
         self.message_post(body=self.env._(
             "Rechnung %(invoice)s zur Lieferung %(picking)s als Entwurf angelegt.",
             invoice=invoice.display_name or "-", picking=picking.name))
+        rest = order.order_line.filtered(lambda sol: sol._bc_is_goods_line() and sol.qty_to_invoice > 0)
+        if rest:
+            self.message_post(body=self.env._(
+                "Gelieferte Menge ohne Rechnung: %(products)s. Die Rechnung zur Lieferung %(picking)s enthält "
+                "nur deren Menge. Bitte prüfen (z. B. gelöschter Rechnungsentwurf).",
+                products=", ".join(rest.mapped("product_id.display_name")), picking=picking.name))
         picking.message_post(body=self.env._(
             "Rechnung %(invoice)s als Entwurf angelegt.", invoice=invoice.display_name or "-"))
         if config.accounting_user_id:
@@ -521,6 +579,13 @@ class SaleOrderLine(models.Model):
             config = self.env["blistercenter.config"]._get(line.order_id.company_id or self.env.company)
             if config.rule_customer_discount:
                 line.discount = float(partner.bc_discount or 0)
+
+    def _prepare_invoice_line(self, **optional_values):
+        res = super()._prepare_invoice_line(**optional_values)
+        limits = self.env.context.get("bc_invoice_qty")
+        if isinstance(limits, InvoiceQty) and self._bc_is_goods_line() and self.id in limits:
+            res["quantity"] = min(self.qty_to_invoice, limits[self.id])
+        return res
 
     def _bc_is_goods_line(self):
         self.ensure_one()

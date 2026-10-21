@@ -15,8 +15,11 @@
                     <span t-out="bc_partner.name"/> · Mengen eintragen und abschicken. PLCS bestätigt Ihre Bestellung.
                 </p>
                 <div t-if="bc_error" class="alert alert-warning" role="alert" t-out="bc_error"/>
-                <form t-if="bc_partner" action="/my/bestellschein" method="post" class="o_bc_order_sheet_form">
+                <form t-if="bc_partner" action="/my/bestellschein" method="post" class="o_bc_order_sheet_form"
+                      t-att-data-bc-currency="bc_currency.name" t-att-data-bc-discount="bc_discount">
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <!-- Einmal-Kennung: dasselbe Absenden zweimal ergibt nur eine Bestellung -->
+                    <input type="hidden" name="bc_submit_token" t-att-value="bc_submit_token"/>
                     <div class="table-responsive">
                         <table class="table table-sm align-middle">
                             <thead>
@@ -42,6 +45,7 @@
                                         <input type="number" min="0" max="9999" step="1" inputmode="numeric"
                                                class="form-control form-control-sm text-end"
                                                t-att-name="'qty_%s' % product.id"
+                                               t-att-data-bc-price="product.lst_price"
                                                t-att-value="bc_post.get('qty_%s' % product.id) or ''"
                                                t-att-aria-label="'Menge %s' % product.name" placeholder="0"/>
                                     </td>
@@ -59,6 +63,10 @@
                             <label class="form-label" for="bc_note">Bemerkung (optional)</label>
                             <textarea id="bc_note" name="note" rows="2" maxlength="2000" class="form-control" t-out="bc_post.get('note') or ''"/>
                         </div>
+                    </div>
+                    <div class="d-flex justify-content-end gap-4 mt-3 fs-5" aria-live="polite">
+                        <span>Packungen: <b class="o_bc_sum_qty">0</b></span>
+                        <span>Summe netto: <b class="o_bc_sum_net">–</b></span>
                     </div>
                     <p class="text-muted small mt-3 mb-2">Preise netto zzgl. USt. Zahlung wie mit PLCS vereinbart (z. B. Lastschrift). Die Bestellung ist erst nach Bestätigung durch PLCS verbindlich.</p>
                     <button type="submit" class="btn btn-primary btn-lg">Bestellen</button>

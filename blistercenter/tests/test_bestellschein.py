@@ -150,7 +150,10 @@ class TestBlistercenterPortalOrderSheet(HttpCase):
     def _post(self, user, data):
         html = self._page(user)
         token = re.search(r'name="csrf_token" value="([^"]+)"', html)
+        submit = re.search(r'name="bc_submit_token" value="([^"]+)"', html)
         data = dict(data, csrf_token=token.group(1) if token else "")
+        if submit and "bc_submit_token" not in data:
+            data["bc_submit_token"] = submit.group(1)
         return self.url_open("/my/bestellschein", data=data)
 
     def _orders(self, partner=None):

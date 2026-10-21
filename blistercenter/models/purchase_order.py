@@ -1,6 +1,8 @@
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+from ..tools import bc_auth
+
 
 class PurchaseOrder(models.Model):
     _inherit = "purchase.order"
@@ -28,6 +30,43 @@ class PurchaseOrder(models.Model):
                     po=order.name, type=config.receipt_type_id.display_name))
             order._bc_check_collective_quantities()
         return super().button_confirm()
+
+    def button_cancel(self):
+        """Prüfbericht 21.10.2026 Befund 7: Storno direkt im Einkauf hält die Sammelbestellung aktuell.
+
+        Ohne Wareneingang: Sammelbestellung wird mit storniert, die Kundenmengen stehen wieder unter
+        „Zu bestellen“. Mit gebuchtem Wareneingang: Storno gesperrt (sonst würde die schon gelieferte
+        Menge erneut bestellt); den Rest storniert man über den Rückstand des Wareneingangs.
+        """
+        if bc_auth.has(self.env, "collective"):
+            return super().button_cancel()  # Storno aus der Sammelbestellung heraus
+        collective = self.bc_collective_ids.filtered(lambda c: c.state not in ("cancel", "done"))
+        for order in self.filtered("bc_is_collective"):
+            if order.picking_ids.filtered(lambda p: p.state == "done"):
+                raise UserError(self.env._(
+                    "%(po)s stammt aus einer Sammelbestellung und ist schon teilweise eingegangen. Stornieren "
+                    "würde die gelieferte Menge erneut unter „Zu bestellen“ stellen. Bitte nur den offenen Rest "
+                    "im Wareneingang (Rückstand) stornieren.", po=order.name))
+        res = super().button_cancel()
+        for coll in collective.filtered(lambda c: c.purchase_id.state == "cancel"):
+            bc_auth.grant(coll.sudo(), "collective").state = "cancel"
+            coll.message_post(body=self.env._(
+                "Bestellung %(po)s beim Hersteller wurde storniert. Sammelbestellung mit storniert; die "
+                "Kundenmengen stehen wieder unter „Zu bestellen“.", po=coll.purchase_id.name))
+        return res
+
+    def button_draft(self):
+        """Stornierte Herstellerbestellung einer stornierten Sammelbestellung nicht wiederbeleben.
+
+        Sonst stünde die Kundenmenge doppelt im Einkauf (wieder offen unter „Zu bestellen“ und in der
+        reaktivierten Bestellung). Neu bestellen über die Sammelbestellung („Zurück in den Entwurf“).
+        """
+        for order in self.filtered("bc_is_collective"):
+            if all(c.state == "cancel" for c in order.bc_collective_ids):
+                raise UserError(self.env._(
+                    "%(po)s gehört zu einer stornierten Sammelbestellung. Bitte die Sammelbestellung zurück in "
+                    "den Entwurf setzen und neu anfragen.", po=order.name))
+        return super().button_draft()
 
     def _bc_check_collective_quantities(self):
         """Prüfbericht 19.10.2026 R05: Herstellerbestellung muss die Kundenmengen der Sammelbestellung decken."""
