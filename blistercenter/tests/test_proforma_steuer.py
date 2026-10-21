@@ -111,6 +111,7 @@ class TestBlistercenterTaxes(BlistercenterCommon):
             self.skipTest("deutscher Kontenrahmen: Steuern aus l10n_de")
         ust19 = Config._bc_demo_taxes()
         self.assertEqual(ust19.amount, 19.0)
+        self.assertEqual(ust19.tax_group_id.name, "USt 19 %", "Summenzeile zeigt 19 %, nicht die Demogruppe")
         self.assertEqual(self.company.account_sale_tax_id, ust19)
         self.assertEqual(Config._bc_demo_taxes(), ust19, "zweiter Aufruf legt nichts doppelt an")
         self.assertEqual(self.env["account.tax"].search_count([("name", "=", "19% USt"),

@@ -342,11 +342,23 @@ class BlistercenterConfig(models.Model):
             return rec or Fpos.create({"name": name, "sequence": sequence, "auto_apply": True,
                                        "company_id": company.id, **vals})
 
+        Group = self.env["account.tax.group"].with_company(company)
+
+        def group(name):
+            rec = Group.search([("company_id", "=", company.id), ("name", "=", name)], limit=1)
+            return rec or Group.create({"name": name, "company_id": company.id})
+
         def tax(name, amount, **vals):
+            # Eigene Steuergruppe, sonst steht in der Summenzeile „Steuer 15 %“ des Demokontenrahmens
+            vals["tax_group_id"] = group("USt %s %%" % int(amount)).id
             rec = Tax.search([("company_id", "=", company.id), ("name", "=", name),
                               ("type_tax_use", "=", "sale")], limit=1)
-            return rec or Tax.create({"name": name, "amount": amount, "amount_type": "percent",
-                                      "type_tax_use": "sale", "company_id": company.id, **vals})
+            if rec:
+                if rec.tax_group_id.id != vals["tax_group_id"]:
+                    rec.tax_group_id = vals["tax_group_id"]
+                return rec
+            return Tax.create({"name": name, "amount": amount, "amount_type": "percent",
+                               "type_tax_use": "sale", "company_id": company.id, **vals})
 
         inland = fpos("Geschäftspartner Inland", 10, country_id=self.env.ref("base.de").id)
         eu_vat = fpos("Geschäftspartner EU (mit USt-ID)", 20, country_group_id=europe.id, vat_required=True)
@@ -378,9 +390,16 @@ class BlistercenterConfig(models.Model):
             self.env.flush_all()
             self.env.cr.execute("UPDATE res_company SET currency_id = %s WHERE id = %s", (euro.id, company.id))
             self.env.invalidate_all()
-        pricelists = self.env["product.pricelist"].with_context(active_test=False).search(
-            [("company_id", "in", [company.id, False]), ("currency_id", "!=", euro.id)])
+        Pricelist = self.env["product.pricelist"].with_context(active_test=False)
+        pricelists = Pricelist.search([("company_id", "in", [company.id, False]), ("currency_id", "!=", euro.id)])
         pricelists.write({"currency_id": euro.id})
+        pricelists.filtered(lambda p: p.name == "USD").name = "Standard (EUR)"
+        # Eine Preisliste im Shop, kein Preislisten-/Währungswähler (Demo-Preislisten „Benelux“ usw. archivieren)
+        if "selectable" in Pricelist._fields:
+            own = Pricelist.search([("company_id", "in", [company.id, False]), ("active", "=", True)])
+            keep = self._get(company).default_pricelist_id or own.sorted(lambda p: (p.sequence, p.id))[:1]
+            own.write({"selectable": False})
+            (own - keep).filtered("website_id").active = False
 
     @api.model
     def _bc_load_demo_data(self):
