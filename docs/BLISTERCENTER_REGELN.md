@@ -75,6 +75,10 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R52 | **Storno der Herstellerbestellung** (1.5.1): Wird die Bestellung beim Hersteller direkt im Einkauf storniert, storniert Odoo die Sammelbestellung mit; die Kundenmengen stehen wieder unter „Zu bestellen“. Ist schon Ware eingegangen, ist der Storno gesperrt (nur den Rückstand stornieren). | – |
 | R53 | **Preis = HAP** (1.5.1, Teil von „Kundenrabatt auf den HAP fest“): Bei der Bestätigung muss der Preis jeder Warenposition dem HAP des Artikels entsprechen und der Auftrag in Firmenwährung laufen. Eine abweichende Preisliste verhindert die Bestätigung. So stimmen Bestellschein und Auftrag überein. | ja |
 | R54 | **Bestellschein nur einmal absenden** (1.5.1): Jeder angezeigte Bestellschein hat eine Einmal-Kennung. Doppelklick, Neuladen oder Wiederholung nach Verbindungsabbruch ergibt keine zweite Bestellung. Der Bestellschein zeigt vor dem Absenden Packungen und Summe netto. | – |
+| R55 | **Packungen von Hand erfassen** (1.6.0): Im Fenster „Packungen erfassen (Scan oder Hand)“ trägt das Lager Artikel, Charge, Verfall (MM/JJJJ oder TT.MM.JJJJ) und Anzahl ein und klickt „Hinzufügen“. Nur Artikel dieses Eingangs, Charge ohne Leerzeichen (max. 20 Zeichen), Anzahl ≥ 1. Gleiche Charge mit anderem Verfall wird abgelehnt (wie R50). | – |
+| R56 | **Handscanner-Trennzeichen** (1.6.0): Das Scan-Feld setzt Strg+] und Alt+029 (Trennzeichen GS des Handscanners) als GS ein; Enter oder Tab schickt die Packung ab. Schnelle Scans werden der Reihe nach verarbeitet. Scanner, die GS als „#“ ausgeben, gehen ebenfalls. | – |
+| R57 | **Code ohne Trennzeichen** (1.6.0): Ergeben alle möglichen Lesarten denselben Artikel, dieselbe Charge und denselben Verfall, zählt die Packung (gelber Hinweis). Sonst zählt Odoo nichts, belegt Artikel und Verfall in der Handeingabe vor, und das Lager schreibt die Charge von der Packung ab. | – |
+| R58 | **Übersicht im Wareneingang** (1.6.0): Je Artikel bestellt, schon im Eingang, in dieser Liste und Status (fehlt / vollständig / mehr als bestellt). | – |
 
 ## B. Entscheidungen 15.10.2026 (Mehrdad)
 

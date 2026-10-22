@@ -13,14 +13,20 @@
                 <button name="action_bc_mark_picked" type="object" string="Kommissionierung abgeschlossen"
                         class="oe_highlight" groups="blistercenter.group_bc_user"
                         invisible="bc_kind != 'delivery' or bc_picked_by or state not in ('assigned', 'confirmed', 'waiting')"/>
-                <button name="action_bc_scan" type="object" string="Scannen (DataMatrix)" class="oe_highlight"
-                        groups="blistercenter.group_bc_user"
+                <button name="action_bc_scan" type="object" string="Packungen erfassen (Scan oder Hand)"
+                        class="oe_highlight" groups="blistercenter.group_bc_user"
                         invisible="bc_kind != 'receipt' or state in ('done', 'cancel', 'draft')"/>
                 <button name="action_bc_short_approve" type="object" string="Kurzläufer freigeben"
                         class="oe_highlight" groups="blistercenter.group_bc_approver"
                         invisible="not bc_short_open or state in ('done', 'cancel')"/>
             </header>
             <xpath expr="//sheet" position="before">
+                <div class="alert alert-info mb-0" role="status"
+                     invisible="bc_kind != 'receipt' or state in ('done', 'cancel', 'draft')"
+                     groups="blistercenter.group_bc_user">
+                    Chargen und Verfall: oben <strong>„Packungen erfassen (Scan oder Hand)“</strong>. Dort Packungen mit dem
+                    Handscanner lesen oder von Hand eintragen, dann „In den Wareneingang übernehmen“ und hier „Validieren“.
+                </div>
                 <div class="alert alert-info mb-0" role="alert" invisible="bc_kind != 'release' or state in ('done', 'cancel')"
                      groups="blistercenter.group_bc_user">
                     Freigabe aus der Blistercenter-Quarantäne. Bestätigen darf nur die Rolle „Freigabe“ (VP),

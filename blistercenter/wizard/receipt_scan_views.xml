@@ -4,13 +4,17 @@
         <field name="name">blistercenter.receipt.scan.form</field>
         <field name="model">blistercenter.receipt.scan</field>
         <field name="arch" type="xml">
-            <form string="Wareneingang scannen">
+            <form string="Packungen erfassen">
                 <field name="message_type" invisible="1"/>
-                <p class="text-muted">
-                    DataMatrix der Packung scannen. Jeder Scan zählt eine Packung; bei vielen Packungen derselben
-                    Charge genügt ein Scan, dann die Menge eintragen.
+                <field name="allowed_product_ids" invisible="1"/>
+                <field name="applied" invisible="1"/>
+
+                <h5 class="mb-1">1. Scannen</h5>
+                <p class="text-muted mb-1">
+                    DataMatrix der Packung scannen. Jeder Scan zählt eine Packung. Bei vielen Packungen derselben
+                    Charge genügt ein Scan, dann unten die Menge ändern.
                 </p>
-                <field name="scan" default_focus="1" placeholder="Hier scannen …" class="fs-4"/>
+                <field name="scan" widget="bc_scan_input" nolabel="1" class="w-100"/>
                 <div class="alert alert-success mt-2 mb-2" role="status" invisible="message_type != 'ok'">
                     <field name="message"/>
                 </div>
@@ -20,17 +24,40 @@
                 <div class="alert alert-danger mt-2 mb-2" role="alert" invisible="message_type != 'error'">
                     <field name="message"/>
                 </div>
-                <field name="line_ids">
-                    <list editable="bottom" create="false" decoration-warning="warning">
+
+                <h5 class="mt-3 mb-1">2. Code nicht lesbar? Von Hand eintragen</h5>
+                <group class="o_bc_manual mb-0">
+                    <group>
+                        <field name="manual_product_id" options="{'no_create': True, 'no_open': True}"
+                               placeholder="Artikel wählen"/>
+                        <field name="manual_lot" placeholder="wie auf der Packung, z. B. AB1234"/>
+                    </group>
+                    <group>
+                        <field name="manual_expiry" placeholder="MM/JJJJ, z. B. 05/2028"/>
+                        <field name="manual_qty"/>
+                    </group>
+                </group>
+                <div class="text-end">
+                    <button name="action_add_manual" type="object" string="Hinzufügen" class="btn-secondary"
+                            icon="add"/>
+                </div>
+
+                <h5 class="mt-3 mb-1">3. Erfasste Packungen</h5>
+                <field name="line_ids" nolabel="1">
+                    <list editable="bottom" create="false" decoration-warning="warning"
+                          no_open="1">
                         <field name="product_id" readonly="1" force_save="1"/>
                         <field name="lot_name"/>
-                        <field name="expiration_date"/>
+                        <field name="expiration_date" widget="date"/>
                         <field name="qty" string="Menge"/>
                         <field name="warning"/>
                     </list>
                 </field>
+                <field name="overview" nolabel="1" class="d-block mt-2"/>
+
                 <footer>
-                    <button name="action_apply" type="object" string="In den Wareneingang übernehmen" class="btn-primary"/>
+                    <button name="action_apply" type="object" string="In den Wareneingang übernehmen"
+                            class="btn-primary"/>
                     <button string="Abbrechen" special="cancel"/>
                 </footer>
             </form>

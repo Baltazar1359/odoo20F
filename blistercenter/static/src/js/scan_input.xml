@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="blistercenter.BcScanInput">
+        <div class="o_bc_scan_input d-flex align-items-center gap-2 w-100">
+            <input class="o_input fs-4 flex-grow-1"
+                   type="text"
+                   autocomplete="off"
+                   spellcheck="false"
+                   t-att-id="this.props.id"
+                   t-att-placeholder="this.placeholder"
+                   t-att-disabled="this.props.readonly"
+                   t-ref="this.input"/>
+            <span t-if="this.state.pending" class="badge text-bg-info o_bc_scan_pending">
+                <t t-out="this.state.pending"/> in Arbeit
+            </span>
+        </div>
+    </t>
+</templates>

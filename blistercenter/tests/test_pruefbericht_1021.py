@@ -201,7 +201,7 @@ class TestPruefbericht1021(BlistercenterCommon):
         wizard.action_apply()
         self.assertEqual(sum(receipt.move_line_ids.mapped("quantity")), 1)
         self.assertTrue(wizard.applied)
-        self.assertEqual(len(receipt.message_ids.filtered(lambda m: "Gescannt:" in str(m.body))), 1)
+        self.assertEqual(len(receipt.message_ids.filtered(lambda m: "Erfasst:" in str(m.body))), 1)
 
     # ------------------------------------------------------------------
     # Befund 3: Rechnung je Lieferung

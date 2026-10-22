@@ -331,13 +331,13 @@ class StockPicking(models.Model):
                 summary=self.env._("Chargen-Hinweis im Wareneingang %(picking)s prüfen", picking=self.name))
 
     def action_bc_scan(self):
-        """DataMatrix-Codes der Packungen scannen: Artikel, Charge und Verfall werden übernommen."""
+        """Packungen erfassen: DataMatrix scannen oder von Hand eintragen (Artikel, Charge, Verfall, Menge)."""
         self.ensure_one()
         if self.bc_kind != "receipt" or self.state in ("done", "cancel"):
             raise UserError(self.env._("Scannen ist nur in offenen Blistercenter-Wareneingängen möglich."))
         return {
             "type": "ir.actions.act_window",
-            "name": self.env._("Wareneingang scannen"),
+            "name": self.env._("Packungen erfassen"),
             "res_model": "blistercenter.receipt.scan",
             "view_mode": "form",
             "target": "new",

@@ -6,3 +6,4 @@ from . import test_bestellschein
 from . import test_proforma_steuer
 from . import test_chargen
 from . import test_pruefbericht_1021
+from . import test_wareneingang_1_6

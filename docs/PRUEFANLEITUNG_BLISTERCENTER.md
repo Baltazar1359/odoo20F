@@ -1,4 +1,4 @@
-# Prüfanleitung Blistercenter (Modul 20.0.1.5.0, Briefpapier plcs_layout 20.0.1.0.0)
+# Prüfanleitung Blistercenter (Modul 20.0.1.6.0, Briefpapier plcs_layout 20.0.1.0.0)
 
 Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Branch darauf), **nicht Production** – dort ist Blistercenter bewusst nicht installiert (Variante B, 15.10.2026). Falls Blistercenter im Dev-Build fehlt: Apps › „Blistercenter“ installieren. Jeder Push erzeugt eine neue, leere Datenbank; die Dev-Datenbank steht ab 21.10. auf Deutsch und Euro (PLCS GmbH, Deutschland); Steuersätze im Dev-Build: 19 % USt, 0 % Ausfuhr und EU mit USt-IdNr. (Production: deutscher Kontenrahmen).
 
@@ -59,12 +59,15 @@ Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Br
 | T32 | Shop als Kunde öffnen; als Administrator Einstellungen › „Packungsfotos laden“. | Die 11 Shop-Artikel zeigen ihr Packungsfoto (per PZN). Artikel mit Foto bleiben unverändert; Meldung nennt Artikel ohne Foto. |
 | T33 | Zwei Sammelbestellungen nacheinander mit derselben Charge (gleiches Verfallsdatum) eingehen lassen, freigeben, liefern. Lager › Chargen öffnen; Rückrufauswertung für die Charge. | Eine Charge mit der Summe beider Eingänge; die Rückrufauswertung zeigt beide Kunden. |
 | T34 | Wie T33, im zweiten Eingang aber ein anderes Verfallsdatum eintragen; danach eine Charge sperren und erneut eingehen lassen. | Gelber Hinweis im Wareneingang; Buchen geht; Hinweis im Verlauf und Aufgabe für die VP; Verfall der Charge unverändert. Gesperrte Charge: Hinweis, Eingang in die Quarantäne, Freigabe abgelehnt. |
-| T35 | Im Wareneingang „Scannen (DataMatrix)“: zwei Packungen derselben Charge und eine einer anderen scannen, eine fremde Packung scannen, „Übernehmen“, buchen. | Zwei Zeilen (Menge 2 und 1), fremde Packung mit Meldung abgelehnt. Im Eingang die Chargen mit Verfall aus dem Code. |
+| T35 | Im Wareneingang „Packungen erfassen (Scan oder Hand)“: zwei Packungen derselben Charge und eine einer anderen scannen, eine fremde Packung scannen, „Übernehmen“, buchen. | Zwei Zeilen (Menge 2 und 1), fremde Packung mit Meldung abgelehnt. Im Eingang die Chargen mit Verfall aus dem Code. |
 | T36 | Bekannte Charge (aus T33) mit anderem Verfall scannen, „Übernehmen“, buchen. | Spalte „Verfall laut Packung“ zeigt das gescannte Datum; nach dem Buchen Hinweis im Verlauf und Aufgabe für die VP; Verfall der Charge unverändert. |
 | T37 | Dieselbe Charge zweimal mit verschiedenem Verfall scannen. Danach „Übernehmen“ zweimal schnell klicken. | Zweite Packung nicht gezählt, rote Meldung. Doppelklick erhöht die Menge nicht. |
 | T38 | Teillieferung erlauben; zwei Lieferungen desselben Auftrags vorbereiten und in der Liste zusammen bestätigen. | Zwei Rechnungen, jede nur mit der Menge ihrer Lieferung. |
 | T39 | Herstellerbestellung (aus einer Sammelbestellung) bestätigen und direkt im Einkauf stornieren. Danach eine teilweise eingegangene stornieren. | Sammelbestellung storniert, Kundenmenge wieder unter „Zu bestellen“. Teilweise eingegangen: Storno abgelehnt. |
 | T40 | Kunde eine Preisliste mit fester Regel (z. B. 80 €) geben, Bestellung bestätigen. | Abgelehnt: Preis ≠ HAP. Mit Standard-Preisliste geht es. |
 | T41 | Online-Bestellschein: Mengen eintragen (Summe beobachten), „Bestellen“ doppelt klicken bzw. Seite nach dem Absenden neu laden und erneut senden. | Summe netto passt zum späteren Auftrag. Nur eine Bestellung; die Wiederholung zeigt die Danke-Seite derselben Bestellung. |
+| T42 | Wareneingang nach **Testprotokoll** `docs/testprotokoll_blistercenter_wareneingang.pdf` (Schritte 3–8, Codes P1–O1, H1). | Siehe Protokoll: Scans gezählt, Fehlfälle rot, Code ohne Trennzeichen → Handeingabe vorbelegt, Handeingabe zählt, Übersicht vollständig, Buchung mit allen Chargen. |
+| T43 | Handscanner: P1 scannen. Danach Scanner testweise ohne Trennzeichen-Ausgabe und P1 erneut scannen. | Mit Trennzeichen grün. Ohne: gelb (eindeutig) oder rot mit vorbelegter Handeingabe; nie eine falsche Charge ohne Hinweis. |
+| T44 | Handeingabe mit Fehlern: Charge leer, „AB 12“, Verfall 13/2028, Anzahl 0, Artikel leer. | Jeweils Meldung, nichts gezählt. |
 
 Alle Regeln (außer den festen) lassen sich in den Einstellungen abschalten. Die Grenze für Kurzläufer ist dort einstellbar (Standard 3 Monate).
