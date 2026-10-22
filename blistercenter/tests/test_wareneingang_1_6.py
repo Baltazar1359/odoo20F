@@ -275,12 +275,12 @@ class TestWareneingangScanUi(ReceiptMixin, BlistercenterCommon, HttpCase):
 
     def test_scan_field_and_manual_entry_in_browser(self):
         self.assertEqual(self.gtin, "04150123456782", "Die Tour scannt diese GTIN fest codiert")
-        _order, receipt = self._open_receipt(self.customer_invoice, qty=7)
+        _order, receipt = self._open_receipt(self.customer_invoice, qty=9)
         self.start_tour("/odoo/action-blistercenter.action_bc_receipts/%s" % receipt.id,
                         "blistercenter_receipt_scan", login=self.user_bc.login)
         lines = receipt.move_line_ids
         self.assertEqual(
             sorted((l.lot_name or l.lot_id.name, l.quantity) for l in lines),
-            [("CH-ALT", 1), ("CH-AUTO", 1), ("CH-BODY", 1), ("CH-HAND", 2), ("CH-STRG", 2)],
+            [("CH-ALT", 1), ("CH-AUTO", 1), ("CH-BODY", 1), ("CH-HAND", 2), ("CH-KAMERA", 2), ("CH-STRG", 2)],
             "Strg+], Alt+029 und Handeingabe kommen an; kein Scan geht verloren")
         self.assertEqual({l.bc_scanned_expiry for l in lines}, {date(2028, 3, 31), date(2028, 5, 31)})

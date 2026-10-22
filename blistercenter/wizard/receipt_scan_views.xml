@@ -11,8 +11,9 @@
 
                 <h5 class="mb-1">1. Scannen</h5>
                 <p class="text-muted mb-1">
-                    DataMatrix der Packung scannen. Jeder Scan zählt eine Packung. Bei vielen Packungen derselben
-                    Charge genügt ein Scan, dann unten die Menge ändern.
+                    DataMatrix der Packung mit dem Handscanner lesen oder mit „Kamera“ (die Kamera bleibt offen,
+                    bis du sie schließt). Jeder Scan zählt eine Packung. Bei vielen Packungen derselben Charge
+                    genügt ein Scan, dann unten die Menge ändern.
                 </p>
                 <field name="scan" widget="bc_scan_input" nolabel="1" class="w-100"/>
                 <div class="alert alert-success mt-2 mb-2" role="status" invisible="message_type != 'ok'">

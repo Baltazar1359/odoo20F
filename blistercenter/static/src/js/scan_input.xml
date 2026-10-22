@@ -10,6 +10,11 @@
                    t-att-placeholder="this.placeholder"
                    t-att-disabled="this.props.readonly"
                    t-ref="this.input"/>
+            <button t-if="this.cameraSupported and !this.props.readonly" type="button"
+                    class="btn btn-secondary o_bc_camera text-nowrap" t-att-disabled="this.state.camera"
+                    t-on-click="() => this.openCamera()" title="Packungen mit der Kamera lesen">
+                <i class="oi me-1" data-icon="photo_camera"/>Kamera
+            </button>
             <span t-if="this.state.pending" class="badge text-bg-info o_bc_scan_pending">
                 <t t-out="this.state.pending"/> in Arbeit
             </span>

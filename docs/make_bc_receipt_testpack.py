@@ -93,8 +93,8 @@ def steps():
             "Odoo.sh › Branch fix/wareneingang-einfach › Connect (Dev-Build mit Testdaten).",
             "Benutzer Lager A, Lager B (Rolle Blistercenter „Benutzer“, alle Arbeitsbereiche) und VP "
             "(Rolle „Freigabe“) anlegen.",
-            "Handscanner: Tastatursprache Deutsch, nach jedem Code Enter. Trennzeichen (GS) als Strg+] oder "
-            "Alt+029; geht beides nicht, Ersatzzeichen „#“ einstellen (Anleitung des Scanners).",
+            "Handscanner: Tastatursprache Deutsch. Ohne Handscanner: im Fenster den Knopf „Kamera“ nutzen "
+            "(Browser fragt einmal nach der Kamera-Erlaubnis).",
         ], "Drei Benutzer vorhanden, Scanner angeschlossen."),
         ("1 Bestellung", "Lager A", [
             "Blistercenter › Telefonbestellung erfassen. Kunde „Blistercenter Musterstadt (Test)“, Besteller wählen.",
@@ -110,7 +110,8 @@ def steps():
         ], "Fenster mit 1. Scannen, 2. Von Hand, 3. Erfasste Packungen und Übersicht (Forxiga: fehlt 3, "
            "Xigduo: fehlt 2)."),
         ("4 Scannen", "Lager A", [
-            "Codes P1, P2 und P3 nacheinander scannen, ohne zu warten.",
+            "Codes P1, P2 und P3 nacheinander scannen (Handscanner) oder „Kamera“ und die Codes nacheinander vor "
+            "die Kamera halten.",
             "Bei roter Meldung: die Zeile „Gelesen: …“ abschreiben oder Foto machen (zeigt, was der Scanner sendet).",
         ], "Grün. Zwei Zeilen: FX-T01 Menge 2 (Verfall 31.03.2028), FX-T02 Menge 1 (30.11.2027). "
            "Übersicht Forxiga: vollständig."),
@@ -148,7 +149,7 @@ def steps():
 def build():
     check_codes()
     c = canvas.Canvas(OUT, pagesize=A4)
-    c.setTitle("Blistercenter 1.6.1 – Testprotokoll Wareneingang")
+    c.setTitle("Blistercenter 1.6.2 – Testprotokoll Wareneingang")
     w, h = A4
     left, width = 16 * mm, w - 32 * mm
 
@@ -160,7 +161,7 @@ def build():
             c.drawString(left, h - 22 * mm, sub)
         return h - 30 * mm
 
-    y = header("Blistercenter 1.6.1 – Testprotokoll Wareneingang",
+    y = header("Blistercenter 1.6.2 – Testprotokoll Wareneingang",
                "Dev-Build, nicht Production. Codes auf Seite 3 sind Testdaten. Jeden Schritt abhaken, Abweichung "
                "unter „Bemerkung“ notieren.")
     c.setFont("Helvetica", 9)

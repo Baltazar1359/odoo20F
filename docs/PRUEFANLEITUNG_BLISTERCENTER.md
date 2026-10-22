@@ -1,4 +1,4 @@
-# Prüfanleitung Blistercenter (Modul 20.0.1.6.1, Briefpapier plcs_layout 20.0.1.0.0)
+# Prüfanleitung Blistercenter (Modul 20.0.1.6.2, Briefpapier plcs_layout 20.0.1.0.0)
 
 Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Branch darauf), **nicht Production** – dort ist Blistercenter bewusst nicht installiert (Variante B, 15.10.2026). Falls Blistercenter im Dev-Build fehlt: Apps › „Blistercenter“ installieren. Jeder Push erzeugt eine neue, leere Datenbank; die Dev-Datenbank steht ab 21.10. auf Deutsch und Euro (PLCS GmbH, Deutschland); Steuersätze im Dev-Build: 19 % USt, 0 % Ausfuhr und EU mit USt-IdNr. (Production: deutscher Kontenrahmen).
 
@@ -70,5 +70,6 @@ Testumgebung: Odoo.sh-Dev-Build eines Branches (Stand `main` oder ein Feature-Br
 | T43 | Handscanner: P1 scannen. Danach Scanner testweise ohne Trennzeichen-Ausgabe und P1 erneut scannen. | Mit Trennzeichen grün. Ohne: gelb (eindeutig) oder rot mit vorbelegter Handeingabe; nie eine falsche Charge ohne Hinweis. |
 | T44 | Handeingabe mit Fehlern: Charge leer, „AB 12“, Verfall 13/2028, Anzahl 0, Artikel leer. | Jeweils Meldung, nichts gezählt. |
 | T45 | Handscanner: P1 scannen (a) mit Cursor im Scan-Feld, (b) nach einem Klick in die Liste, (c) mit Cursor im Feld „Charge“. Bei rotem Fehler die Zeile „Gelesen: …“ notieren. | In allen drei Fällen grün und gezählt. Fehlermeldung zeigt den gelesenen Code; ‹GS› = Trennzeichen angekommen. |
+| T46 | Kamera (Handy oder Laptop): im Fenster „Kamera“, P1, P2, P3 nacheinander vor die Kamera halten; dann F1; Kamera schließen. | P1–P3 grün gezählt, Kamera öffnet sich jeweils wieder. Bei F1 rote Meldung, Kamera bleibt zu. Nach dem Schließen ist der Knopf wieder aktiv. |
 
 Alle Regeln (außer den festen) lassen sich in den Einstellungen abschalten. Die Grenze für Kurzläufer ist dort einstellbar (Standard 3 Monate).

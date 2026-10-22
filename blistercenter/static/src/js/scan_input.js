@@ -3,6 +3,9 @@ import { registry } from "@web/core/registry";
 import { useBus } from "@web/core/utils/hooks";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
 import { BarcodePlugin } from "@barcodes/barcode_plugin";
+import { BarcodeDialog } from "@web/core/barcode/barcode_dialog";
+import { isBarcodeScannerSupported } from "@web/core/barcode/barcode_video_scanner";
+import { isMobileOS } from "@web/core/browser/feature_detection";
 
 import {
     Component, onMounted, onWillUnmount, proxy, signal, t, useListener, usePlugin, useProps,
@@ -20,6 +23,37 @@ const SCANNER_IDLE_MS = 350;
 const SCANNER_MIN_CHARS = 14;
 
 /**
+ * Kamera als Scanner (1.6.2). Öffnet Odoos Kamera-Fenster und liefert den gelesenen Code,
+ * oder null, wenn das Fenster ohne Code geschlossen wurde (Odoos scanBarcode bleibt dann hängen).
+ * Als Objekt exportiert, damit der Browser-Test die Kamera ersetzen kann.
+ */
+export const cameraScanner = {
+    scan(env) {
+        return new Promise((resolve) => {
+            let done = false;
+            env.services.dialog.add(
+                BarcodeDialog,
+                {
+                    facingMode: "environment",
+                    onResult: (code) => {
+                        done = true;
+                        resolve(code);
+                    },
+                    onError: () => {
+                        done = true;
+                        resolve(null);
+                    },
+                },
+                {
+                    // Beim Schließen ohne Treffer; nach einem Treffer kommt onResult zuerst an
+                    onClose: () => setTimeout(() => !done && resolve(null), 0),
+                }
+            );
+        });
+    },
+};
+
+/**
  * Scan-Feld für den Blistercenter-Wareneingang (1.6.0, R56).
  *
  * Handscanner tippen den DataMatrix-Code wie eine Tastatur. Das Trennzeichen zwischen Charge und
@@ -35,7 +69,8 @@ export class BcScanInput extends Component {
     input = signal.ref();
 
     setup() {
-        this.state = proxy({ pending: 0, last: "" });
+        this.state = proxy({ pending: 0, last: "", camera: false });
+        this.cameraSupported = isBarcodeScannerSupported();
         this.queue = Promise.resolve();
         this.altDigits = null;
         this.burst = 0;
@@ -53,7 +88,8 @@ export class BcScanInput extends Component {
             }
         });
         onWillUnmount(() => clearTimeout(this.idleTimer));
-        onMounted(() => this.input()?.focus());
+        // Auf Handy/Tablet nicht automatisch fokussieren, sonst springt die Tastatur auf
+        onMounted(() => !isMobileOS() && this.input()?.focus());
     }
 
     insert(text) {
@@ -164,8 +200,37 @@ export class BcScanInput extends Component {
             .catch(() => {})
             .finally(() => {
                 this.state.pending--;
-                this.input()?.focus();
+                // Nicht während der Kamera und nicht auf dem Handy (sonst springt die Tastatur auf)
+                if (!this.state.camera && !isMobileOS()) {
+                    this.input()?.focus();
+                }
             });
+    }
+
+    /** Kamera: Packung für Packung lesen, bis das Fenster geschlossen wird oder ein Fehler kommt. */
+    async openCamera() {
+        if (this.state.camera) {
+            return;
+        }
+        this.state.camera = true;
+        try {
+            for (;;) {
+                const code = await cameraScanner.scan(this.env);
+                if (!code) {
+                    break;
+                }
+                this.enqueue(code);
+                await this.queue;
+                if (this.props.record.data.message_type === "error") {
+                    break; // Meldung lesen lassen
+                }
+            }
+        } finally {
+            this.state.camera = false;
+            if (!isMobileOS()) {
+                this.input()?.focus();
+            }
+        }
     }
 
     get placeholder() {

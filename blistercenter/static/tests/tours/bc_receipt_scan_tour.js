@@ -1,8 +1,11 @@
 import { registry } from "@web/core/registry";
+import { cameraScanner } from "@blistercenter/js/scan_input";
 
 // 1.6.0 (R55, R56): Packungen erfassen im Blistercenter-Wareneingang.
 // Handscanner tippen den Code; das Trennzeichen GS kommt als Strg+] oder Alt+029.
 const GTIN = "04150123456782"; // PZN 12345678 (siehe Python-Test)
+const GS_CHAR = String.fromCharCode(29);
+const realCameraScan = cameraScanner.scan;
 
 function key(el, type, init) {
     el.dispatchEvent(new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init }));
@@ -97,6 +100,44 @@ registry.category("web_tour.tours").add("blistercenter_receipt_scan", {
         {
             content: "Scan ohne Fokus gezählt",
             trigger: ".modal .alert-success:contains(CH-BODY)",
+        },
+        {
+            content: "1.6.2: Kamera – zwei Packungen hintereinander, dann Kamera schließen",
+            trigger: ".modal .o_bc_camera",
+            run: () => {
+                // Kamera ersetzen: liefert zwei Codes (wie Odoos Kamera: GS am Anfang), dann „geschlossen“
+                const codes = [
+                    GS_CHAR + "01" + GTIN + "21K1" + GS_CHAR + "10CH-KAMERA" + GS_CHAR + "17280331",
+                    "]d2" + "01" + GTIN + "21K2" + GS_CHAR + "10CH-KAMERA" + GS_CHAR + "17280331",
+                ];
+                cameraScanner.scan = async () => codes.shift() || null;
+                document.querySelector(".modal .o_bc_camera").click();
+            },
+        },
+        {
+            content: "Beide Kamera-Scans gezählt, Kamera-Knopf wieder frei",
+            trigger: ".modal .alert-success:contains(CH-KAMERA):contains(Menge 2)",
+        },
+        {
+            trigger: ".modal .o_bc_camera:not([disabled])",
+            run: () => {
+                // Echtes Kamera-Fenster (im Test ohne Kamera): öffnen und ohne Treffer schließen
+                cameraScanner.scan = realCameraScan;
+                document.querySelector(".modal .o_bc_camera").click();
+            },
+        },
+        {
+            content: "Odoos Kamera-Fenster ist offen",
+            trigger: ".o-barcode-modal",
+        },
+        {
+            content: "Kamera-Fenster schließen",
+            trigger: ".o-barcode-modal .modal-header button[aria-label=Close]",
+            run: "click",
+        },
+        {
+            content: "Nach dem Schließen ohne Treffer ist der Kamera-Knopf wieder frei",
+            trigger: "body:not(:has(.o-barcode-modal)) .modal .o_bc_camera:not([disabled])",
         },
         {
             content: "Charge mit Strg+] zweimal gezählt",
