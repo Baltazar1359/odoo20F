@@ -10,3 +10,4 @@ from . import test_formblatt_pdf
 from . import test_gpt_review
 from . import test_pruefbericht_1019
 from . import test_abort_capture
+from . import test_charge_column

@@ -1,4 +1,4 @@
-from odoo import fields, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 from ..tools import grx_auth
@@ -7,7 +7,14 @@ from ..tools import grx_auth
 class StockMoveLine(models.Model):
     _inherit = "stock.move.line"
 
-    plcs_batch = fields.Char("Charge", related="lot_id.plcs_batch")
+    # GreenRX: Los = Seriennummer, Charge separat. Andere Ware: Los = Charge (1.10.1).
+    plcs_batch = fields.Char("Charge", compute="_compute_plcs_batch")
+
+    @api.depends("lot_id.plcs_batch", "lot_id.plcs_is_grx_serial", "lot_id.name", "lot_name")
+    def _compute_plcs_batch(self):
+        for line in self:
+            lot = line.lot_id
+            line.plcs_batch = lot.plcs_batch if lot.plcs_is_grx_serial else (lot.name or line.lot_name or False)
 
     def _action_done(self):
         self._plcs_grx_check_controlled_locations()
