@@ -34,6 +34,15 @@ async function scanAlt(el, lot, serial) {
     enter(el);
 }
 
+// Scanner tippt sehr schnell, Zeichen für Zeichen (ohne Enter am Ende)
+function typeFast(el, text) {
+    for (const ch of text) {
+        key(el, "keydown", { key: ch });
+        el.setRangeText(ch, el.value.length, el.value.length, "end");
+        el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    }
+}
+
 registry.category("web_tour.tours").add("blistercenter_receipt_scan", {
     steps: () => [
         {
@@ -54,6 +63,40 @@ registry.category("web_tour.tours").add("blistercenter_receipt_scan", {
         {
             content: "Letzter Scan verarbeitet",
             trigger: ".modal .alert-success:contains(CH-ALT)",
+        },
+        {
+            content: "1.6.1: Scanner ohne Enter; Windows-Zeichen „↔“ für Alt+29 als Trennzeichen",
+            trigger: ".modal .o_bc_scan_input input",
+            run: async () => {
+                const el = document.querySelector(".modal .o_bc_scan_input input");
+                typeFast(el, "01" + GTIN + "21S4\u219410CH-AUTO\u219417280331");
+                await new Promise((resolve) => setTimeout(resolve, 800));
+            },
+        },
+        {
+            content: "Ohne Enter abgeschickt und gezählt",
+            trigger: ".modal .alert-success:contains(CH-AUTO)",
+        },
+        {
+            content: "1.6.1: Cursor nicht im Scan-Feld – Scan geht über Odoos Barcode-Erkennung",
+            trigger: ".modal .o_bc_scan_input input",
+            run: async () => {
+                document.activeElement.blur();
+                const body = document.body;
+                const send = (k) => key(body, "keydown", { key: k });
+                for (const ch of "01" + GTIN + "21S5") send(ch);
+                send("Control");
+                send("]");
+                for (const ch of "10CH-BODY") send(ch);
+                send("Control");
+                send("]");
+                for (const ch of "17280331") send(ch);
+                send("Enter");
+            },
+        },
+        {
+            content: "Scan ohne Fokus gezählt",
+            trigger: ".modal .alert-success:contains(CH-BODY)",
         },
         {
             content: "Charge mit Strg+] zweimal gezählt",

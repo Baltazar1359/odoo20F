@@ -111,6 +111,7 @@ def steps():
            "Xigduo: fehlt 2)."),
         ("4 Scannen", "Lager A", [
             "Codes P1, P2 und P3 nacheinander scannen, ohne zu warten.",
+            "Bei roter Meldung: die Zeile „Gelesen: …“ abschreiben oder Foto machen (zeigt, was der Scanner sendet).",
         ], "Grün. Zwei Zeilen: FX-T01 Menge 2 (Verfall 31.03.2028), FX-T02 Menge 1 (30.11.2027). "
            "Übersicht Forxiga: vollständig."),
         ("5 Fehlfälle", "Lager A", [
@@ -147,7 +148,7 @@ def steps():
 def build():
     check_codes()
     c = canvas.Canvas(OUT, pagesize=A4)
-    c.setTitle("Blistercenter 1.6.0 – Testprotokoll Wareneingang")
+    c.setTitle("Blistercenter 1.6.1 – Testprotokoll Wareneingang")
     w, h = A4
     left, width = 16 * mm, w - 32 * mm
 
@@ -159,7 +160,7 @@ def build():
             c.drawString(left, h - 22 * mm, sub)
         return h - 30 * mm
 
-    y = header("Blistercenter 1.6.0 – Testprotokoll Wareneingang",
+    y = header("Blistercenter 1.6.1 – Testprotokoll Wareneingang",
                "Dev-Build, nicht Production. Codes auf Seite 3 sind Testdaten. Jeden Schritt abhaken, Abweichung "
                "unter „Bemerkung“ notieren.")
     c.setFont("Helvetica", 9)

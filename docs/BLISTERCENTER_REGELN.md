@@ -79,6 +79,7 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R56 | **Handscanner-Trennzeichen** (1.6.0): Das Scan-Feld setzt Strg+] und Alt+029 (Trennzeichen GS des Handscanners) als GS ein; Enter oder Tab schickt die Packung ab. Schnelle Scans werden der Reihe nach verarbeitet. Scanner, die GS als „#“ ausgeben, gehen ebenfalls. | – |
 | R57 | **Code ohne Trennzeichen** (1.6.0): Ergeben alle möglichen Lesarten denselben Artikel, dieselbe Charge und denselben Verfall, zählt die Packung (gelber Hinweis). Sonst zählt Odoo nichts, belegt Artikel und Verfall in der Handeingabe vor, und das Lager schreibt die Charge von der Packung ab. | – |
 | R58 | **Übersicht im Wareneingang** (1.6.0): Je Artikel bestellt, schon im Eingang, in dieser Liste und Status (fehlt / vollständig / mehr als bestellt). | – |
+| R59 | **Handscanner robust** (1.6.1): Das Scan-Feld nimmt auch Alt+29 (Windows-Zeichen „↔“), Strg+AltGr+9, die Kennung „]d2“/„+d2“ und das FNC1 am Anfang als Trennzeichen bzw. entfernt sie. Scanner ohne Enter am Ende: Odoo schickt nach kurzer Ruhe selbst ab. Steht der Cursor nicht im Scan-Feld oder in „Charge“/„Verfall“, wird der Scan trotzdem gezählt. Bei Fehlern zeigt die Meldung, was der Scanner geliefert hat („Gelesen: …“, Trennzeichen als ‹GS›), und weist auf eine falsche Tastatursprache hin. | – |
 
 ## B. Entscheidungen 15.10.2026 (Mehrdad)
 

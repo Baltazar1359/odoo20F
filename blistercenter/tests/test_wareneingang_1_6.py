@@ -194,6 +194,59 @@ class TestWareneingangEinfach(ReceiptMixin, BlistercenterCommon):
         self.assertEqual(form.save().line_ids.lot_name, "CH21")
 
     # ------------------------------------------------------------------
+    # 1.6.1 Scanner-Eigenheiten (R59)
+    # ------------------------------------------------------------------
+    def _scan(self, receipt, code):
+        form = Form(self.env["blistercenter.receipt.scan"].with_user(self.user_bc).with_context(
+            default_picking_id=receipt.id))
+        form.scan = code
+        return form
+
+    def test_scanner_variants_are_read(self):
+        """Alt+29 als „↔“, Symbologie-Kennung ]d2 bzw. +d2, FNC1 am Anfang: alle gezählt."""
+        _order, receipt = self._open_receipt(self.customer_invoice, qty=5)
+        variants = {
+            "pfeil": "↔".join(["01%s21S1" % self.gtin, "10CH-V1", "17280331"]),
+            "aim": "]d2" + "\x1d".join(["01%s21S2" % self.gtin, "10CH-V2", "17280331"]),
+            "aim_de": "+d2" + "\x1d".join(["01%s21S3" % self.gtin, "10CH-V3", "17280331"]),
+            "fnc1": "\x1d" + "\x1d".join(["01%s21S4" % self.gtin, "10CH-V4", "17280331"]),
+            "crlf": "\x1d".join(["01%s21S5" % self.gtin, "10CH-V5", "17280331"]) + "\r\n",
+        }
+        for name, code in variants.items():
+            with self.subTest(variant=name):
+                form = self._scan(receipt, code)
+                self.assertIn(form.message_type, ("ok", "warning"), form.message)
+                self.assertIn("CH-V", form.message)
+
+    def test_scan_into_lot_field_is_treated_as_scan(self):
+        """Cursor stand im Feld „Charge“: der Scan landet dort und wird trotzdem gezählt."""
+        _order, receipt = self._open_receipt(self.customer_invoice, qty=3)
+        form = Form(self.env["blistercenter.receipt.scan"].with_user(self.user_bc).with_context(
+            default_picking_id=receipt.id))
+        form.manual_lot = "\x1d".join(["01%s21S9" % self.gtin, "10CH-FELD", "17280331"])
+        self.assertFalse(form.manual_lot)
+        self.assertIn("CH-FELD", form.message)
+        self.assertEqual(form.save().line_ids.lot_name, "CH-FELD")
+        form = Form(form.save())
+        form.manual_lot = "AB1234"
+        self.assertEqual(form.manual_lot, "AB1234", "Normale Charge bleibt stehen")
+
+    def test_scan_error_shows_what_was_read(self):
+        _order, receipt = self._open_receipt(self.customer_invoice, qty=3)
+        form = self._scan(receipt, "kein\x07Code")
+        self.assertEqual(form.message_type, "error")
+        self.assertIn("Gelesen: kein‹07›Code", form.message)
+        self.assertIn("Kein Trennzeichen", form.message)
+
+    def test_scan_with_wrong_keyboard_layout_hints(self):
+        _order, receipt = self._open_receipt(self.customer_invoice, qty=3)
+        # US-Scanner auf deutschem PC: aus „-“ wird „ß“, GS fehlt → nicht lesbar
+        form = self._scan(receipt, "01%s21SER1010CHß2117280331" % self.gtin)
+        self.assertEqual(form.message_type, "error")
+        self.assertIn("Tastatursprache", form.message)
+        self.assertIn("Gelesen:", form.message)
+
+    # ------------------------------------------------------------------
     # R58 Übersicht
     # ------------------------------------------------------------------
     def test_overview_shows_ordered_and_captured(self):
@@ -222,12 +275,12 @@ class TestWareneingangScanUi(ReceiptMixin, BlistercenterCommon, HttpCase):
 
     def test_scan_field_and_manual_entry_in_browser(self):
         self.assertEqual(self.gtin, "04150123456782", "Die Tour scannt diese GTIN fest codiert")
-        _order, receipt = self._open_receipt(self.customer_invoice, qty=5)
+        _order, receipt = self._open_receipt(self.customer_invoice, qty=7)
         self.start_tour("/odoo/action-blistercenter.action_bc_receipts/%s" % receipt.id,
                         "blistercenter_receipt_scan", login=self.user_bc.login)
         lines = receipt.move_line_ids
         self.assertEqual(
             sorted((l.lot_name or l.lot_id.name, l.quantity) for l in lines),
-            [("CH-ALT", 1), ("CH-HAND", 2), ("CH-STRG", 2)],
+            [("CH-ALT", 1), ("CH-AUTO", 1), ("CH-BODY", 1), ("CH-HAND", 2), ("CH-STRG", 2)],
             "Strg+], Alt+029 und Handeingabe kommen an; kein Scan geht verloren")
         self.assertEqual({l.bc_scanned_expiry for l in lines}, {date(2028, 3, 31), date(2028, 5, 31)})

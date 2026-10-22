@@ -24,6 +24,48 @@ from ..tools import bc_auth, gs1
 # Höchstzahl Lesarten, die bei einem Code ohne Trennzeichen verglichen werden
 _MAX_READINGS = 50
 
+# 1.6.1: So kommt das GS-Trennzeichen bei Handscannern im Tastaturmodus oft an.
+# Windows setzt für Alt+29 (ohne führende 0) das Zeichen der Codepage 437 ein: „↔“.
+_GS_LOOKALIKES = ("\u2194", "\u241d")
+# Symbologie-Kennung am Anfang (]d2 = GS1-DataMatrix). Mit US-Tastatur-Emulation auf deutschem
+# Windows wird aus „]“ ein „+“.
+_SYMBOLOGY_PREFIXES = ("]d2", "]d1", "]C1", "]Q3", "]e0", "+d2", "+d1", "+C1", "+Q3", "+e0")
+# Zeichen, die in Packungscodes nicht vorkommen, aber entstehen, wenn der Scanner eine andere
+# Tastatursprache als der PC nutzt
+_LAYOUT_SIGNS = set("ßäöüÄÖÜ´`§°")
+
+
+def clean_scanner_input(raw):
+    """Eingabe des Handscanners bereinigen (1.6.1). Rückgabe: (Code, Hinweise)."""
+    hints = []
+    code = (raw or "").replace("\r", "").replace("\n", "")
+    for sign in _GS_LOOKALIKES:
+        code = code.replace(sign, gs1.FNC1)
+    code = code.strip(" \t")
+    for prefix in _SYMBOLOGY_PREFIXES:
+        if code.startswith(prefix):
+            code = code[len(prefix):]
+            break
+    # Trennzeichen direkt am Anfang ist das FNC1 der GS1-DataMatrix
+    code = code.lstrip(gs1.FNC1)
+    if _LAYOUT_SIGNS & set(code):
+        hints.append("Der Code enthält Zeichen wie ß/ä/ö/ü: Tastatursprache des Scanners auf Deutsch stellen.")
+    return code, hints
+
+
+def visible(raw, limit=90):
+    """Scan für die Anzeige: Steuerzeichen sichtbar machen."""
+    out = []
+    for ch in raw or "":
+        if ch == gs1.FNC1:
+            out.append("‹GS›")
+        elif ord(ch) < 32 or ord(ch) == 127:
+            out.append("‹%02X›" % ord(ch))
+        else:
+            out.append(ch)
+    text = "".join(out)
+    return text if len(text) <= limit else text[:limit] + "…"
+
 
 class BlistercenterReceiptScan(models.TransientModel):
     _name = "blistercenter.receipt.scan"
@@ -167,10 +209,39 @@ class BlistercenterReceiptScan(models.TransientModel):
     # ------------------------------------------------------------------
     @api.onchange("scan")
     def _onchange_scan(self):
-        raw = self.scan
-        if not raw:
+        original = self.scan
+        if not original:
             return
         self.scan = False
+        raw, hints = clean_scanner_input(original)
+        self._bc_process_scan(raw)
+        if self.message_type == "error":
+            # 1.6.1: zeigen, was der Scanner geliefert hat (Fehlersuche ohne Entwickler)
+            extra = [self.env._("Gelesen: %(code)s", code=visible(original))] + hints
+            try:
+                has_gs = gs1.FNC1 in gs1.normalize(raw)
+            except gs1.Gs1Error:
+                has_gs = False
+            if not has_gs:
+                extra.append(self.env._("Kein Trennzeichen (‹GS›) angekommen."))
+            self.message = "%s %s" % (self.message, " · ".join(extra))
+
+    @api.onchange("manual_lot", "manual_expiry")
+    def _onchange_manual_scan(self):
+        """1.6.1: Scan landet im Feld „Charge“ oder „Verfall“ (Cursor stand dort): als Scan behandeln."""
+        for name in ("manual_lot", "manual_expiry"):
+            value = self[name] or ""
+            code, _hints = clean_scanner_input(value)
+            if len(code) >= 20 and (code[:2] == "01" and code[2:16].isdigit() or code.startswith("[)>")):
+                self[name] = False
+                self.scan = value
+                self._onchange_scan()
+                return
+
+    def _bc_process_scan(self, raw):
+        if not raw:
+            self._bc_set_message(self.env._("Leerer Scan."), "error")
+            return
         try:
             data = gs1.parse(raw)
         except gs1.Gs1Error as exc:

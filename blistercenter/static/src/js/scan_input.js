@@ -1,11 +1,23 @@
 import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
+import { useBus } from "@web/core/utils/hooks";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
+import { BarcodePlugin } from "@barcodes/barcode_plugin";
 
-import { Component, onMounted, proxy, signal, t, useListener, useProps } from "@odoo/owl";
+import {
+    Component, onMounted, onWillUnmount, proxy, signal, t, useListener, usePlugin, useProps,
+} from "@odoo/owl";
 
 // GS1-Trennzeichen (FNC1/GS, ASCII 29)
 export const GS = String.fromCharCode(29);
+// Windows setzt für Alt+29 das Codepage-437-Zeichen „↔“ ein (1.6.1)
+const GS_LOOKALIKE = /[\u2194\u241d]/;
+const GS_LOOKALIKE_ALL = /[\u2194\u241d]/g;
+// Handscanner tippen schneller als ein Mensch: Abstand zwischen zwei Zeichen höchstens so viele ms
+const SCANNER_KEY_GAP_MS = 60;
+// Kein Enter nach dem Code: so lange Ruhe, dann gilt der Scan als fertig
+const SCANNER_IDLE_MS = 350;
+const SCANNER_MIN_CHARS = 14;
 
 /**
  * Scan-Feld für den Blistercenter-Wareneingang (1.6.0, R56).
@@ -26,8 +38,21 @@ export class BcScanInput extends Component {
         this.state = proxy({ pending: 0, last: "" });
         this.queue = Promise.resolve();
         this.altDigits = null;
+        this.burst = 0;
+        this.lastKey = 0;
+        this.idleTimer = null;
         useListener(this.input, "keydown", (ev) => this.onKeydown(ev));
         useListener(this.input, "keyup", (ev) => this.onKeyup(ev));
+        useListener(this.input, "input", () => this.onInput());
+        // 1.6.1: Scan, während der Cursor nicht in einem Eingabefeld steht (z. B. nach einem Klick
+        // in die Liste). Odoo erkennt ihn als Barcode; er wird hier wie ein Scan im Feld behandelt.
+        const barcode = usePlugin(BarcodePlugin);
+        useBus(barcode.bus, "barcode_scanned", (ev) => {
+            if (!this.props.readonly && this.input()?.isConnected) {
+                this.enqueue(ev.detail.barcode);
+            }
+        });
+        onWillUnmount(() => clearTimeout(this.idleTimer));
         onMounted(() => this.input()?.focus());
     }
 
@@ -43,19 +68,51 @@ export class BcScanInput extends Component {
         ev.stopPropagation();
     }
 
+    onInput() {
+        const el = this.input();
+        if (GS_LOOKALIKE.test(el.value)) {
+            const pos = el.selectionStart;
+            el.value = el.value.replace(GS_LOOKALIKE_ALL, GS);
+            el.setSelectionRange(pos, pos);
+        }
+    }
+
+    /** Scanner ohne Enter am Ende: nach einer schnellen Zeichenfolge und kurzer Ruhe abschicken. */
+    trackBurst(ev) {
+        if (ev.key.length !== 1) {
+            return;
+        }
+        const now = Date.now();
+        this.burst = now - this.lastKey <= SCANNER_KEY_GAP_MS ? this.burst + 1 : 1;
+        this.lastKey = now;
+        clearTimeout(this.idleTimer);
+        this.idleTimer = setTimeout(() => {
+            const el = this.input();
+            if (el && this.burst >= SCANNER_MIN_CHARS && el.value.length >= SCANNER_MIN_CHARS) {
+                this.submit();
+            }
+        }, SCANNER_IDLE_MS);
+    }
+
     onKeydown(ev) {
+        if (!ev.key) {
+            return;
+        }
         // Enter/Tab am Ende des Scans: Packung abschicken
         if (ev.key === "Enter" || (ev.key === "Tab" && this.input().value)) {
+            clearTimeout(this.idleTimer);
             this.stop(ev);
             this.submit();
             return;
         }
-        // Strg+] (bei deutscher Tastatur dieselbe Taste wie „+“): GS
-        if (ev.ctrlKey && (ev.code === "BracketRight" || (!ev.altKey && ev.key === "]"))) {
+        // Strg+] (bei deutscher Tastatur dieselbe Taste wie „+“, oder Strg+AltGr+9): GS
+        if (ev.ctrlKey && (ev.code === "BracketRight" || ev.key === "]")) {
             this.stop(ev);
             this.insert(GS);
+            this.trackBurst({ key: GS });
             return;
         }
+        this.trackBurst(ev);
         // Alt + Ziffernblock (Alt+029 bzw. Alt+0029): Ziffern sammeln, beim Loslassen von Alt auswerten
         if (ev.key === "Alt") {
             this.altDigits = "";
@@ -89,10 +146,16 @@ export class BcScanInput extends Component {
     }
 
     submit() {
+        clearTimeout(this.idleTimer);
+        this.burst = 0;
         const el = this.input();
         const code = el.value;
         el.value = "";
-        if (!code.trim()) {
+        this.enqueue(code);
+    }
+
+    enqueue(code) {
+        if (!code || !code.trim()) {
             return;
         }
         this.state.pending++;
