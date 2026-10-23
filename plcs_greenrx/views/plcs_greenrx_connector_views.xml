@@ -27,10 +27,12 @@
                     <button name="action_ativ_full" type="object" string="Vollabgleich" class="btn-secondary"
                             invisible="mode != 'ativ'"
                             confirm="Alle Gutschriften des Filters erneut prüfen? Das läuft im Hintergrund und kann einige Minuten dauern."/>
+                    <button name="action_ativ_products_sync" type="object" string="Artikel synchronisieren"
+                            class="btn-secondary" invisible="mode != 'ativ' or not ativ_product_sync"/>
                     <button name="action_ativ_retry" type="object" string="Fehler wiederholen" class="btn-secondary"
                             invisible="mode != 'ativ' or not queue_failed"/>
                     <button name="action_ativ_disable" type="object" string="Integration ausschalten" class="btn-secondary"
-                            invisible="mode != 'ativ' or (not sync_enabled and not webhook_enabled)"/>
+                            invisible="mode != 'ativ' or (not sync_enabled and not webhook_enabled and not ativ_product_sync)"/>
                     <button name="action_sync" type="object" string="Jetzt abrufen" class="btn-primary"
                             invisible="mode != 'legacy'"/>
                 </header>
@@ -38,6 +40,9 @@
                     <div class="oe_button_box" name="button_box" invisible="mode != 'ativ'">
                         <button name="action_open_credit_notes" type="object" class="oe_stat_button" icon="fa-file-text-o">
                             <field name="credit_note_count" widget="statinfo" string="Gutschriften"/>
+                        </button>
+                        <button name="action_open_ativ_products" type="object" class="oe_stat_button" icon="fa-cubes">
+                            <field name="ativ_product_count" widget="statinfo" string="Artikel aus ATIV"/>
                         </button>
                         <button name="action_open_runs" type="object" class="oe_stat_button" icon="fa-history" string="Läufe"/>
                         <button name="action_open_queue" type="object" class="oe_stat_button" icon="fa-tasks">
@@ -91,6 +96,28 @@
                                     <field name="stages_closed"/>
                                     <field name="stages_cancel"/>
                                     <field name="expected_since"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Artikelstamm" name="ativ_products">
+                            <group>
+                                <group string="Artikel aus ATIV">
+                                    <field name="ativ_product_sync"/>
+                                    <field name="ativ_product_domain" invisible="not ativ_product_sync"/>
+                                    <field name="ativ_product_cursor" invisible="not ativ_product_sync"/>
+                                    <field name="ativ_product_run_id" invisible="not ativ_product_sync"/>
+                                    <button name="action_ativ_products_full" type="object" string="Alle Artikel neu abgleichen"
+                                            class="btn-secondary" colspan="2" invisible="not ativ_product_sync"
+                                            confirm="Alle ATIV-Artikel des Filters erneut prüfen? Das läuft im Hintergrund."/>
+                                </group>
+                                <group>
+                                    <div class="text-muted" colspan="2">
+                                        Übernimmt Bezeichnung, PZN, GTIN, Lagerbedingungen und Produktbild.
+                                        Neue Artikel werden vollständig angelegt. Bei vorhandenen Artikeln füllt PLCS nur
+                                        leere Felder; Bezeichnung und Lagertemperatur bleiben. Abweichungen stehen am
+                                        Artikel unter „Abweichung zu ATIV“. Läuft mit dem 12-Stunden-Zeitplan, per Knopf
+                                        und – mit Webhook-Regel auf „Produkt“ bei ATIV – sofort.
+                                    </div>
                                 </group>
                             </group>
                         </page>

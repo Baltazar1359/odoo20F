@@ -11,6 +11,8 @@ import hashlib
 from ..tools.ativ_client import READ_METHODS, AtivError
 
 T0 = "2026-10-01 10:00:00"
+# 1×1-Pixel-PNG als Produktbild
+PNG_B64 = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
 
 
 def _sha1(raw):
@@ -39,7 +41,16 @@ class FakeAtiv:
                      "barcode": False, "x_studio_storage_conditions": p(2, "2–8 °C")},
                 34: {"display_name": "[7560038] BRILIQUE 90 mg", "name": "BRILIQUE 90 mg", "default_code": "7560038",
                      "barcode": False, "x_studio_storage_conditions": p(1, "Raumtemperatur")},
+                # Artikelstamm (1.10.0): nur im Stamm, in keiner Gutschrift
+                35: {"display_name": "[04114918] FORXIGA 10 mg", "name": "FORXIGA 10 mg", "default_code": "04114918",
+                     "barcode": "04150041149186", "x_studio_storage_conditions": p(1, "Raumtemperatur"),
+                     "image_1920": PNG_B64},
+                36: {"display_name": "Versandpauschale", "name": "Versandpauschale", "default_code": False,
+                     "barcode": False, "x_studio_storage_conditions": False},
+                37: {"display_name": "[00000019] TESTARTIKEL", "name": "TESTARTIKEL", "default_code": "00000019",
+                     "barcode": False, "x_studio_storage_conditions": False},
             },
+            "product.template": {},
             "helpdesk.stage": {1: {"name": "New"}, 2: {"name": "In Progress"}, 4: {"name": "Approved"},
                                11: {"name": "Picked Up"}, 9: {"name": "Stock"}, 5: {"name": "Rejected"},
                                7: {"name": "Canceled"}},
@@ -52,6 +63,10 @@ class FakeAtiv:
             "mail.tracking.value": {},
             "account.tax": {23: {"name": "19 % Vorsteuer"}},
         }
+        for pid, rec in self.db["product.product"].items():
+            rec.setdefault("image_1920", False)
+            rec.update({"product_tmpl_id": [pid, rec["name"]], "active": True, "write_date": T0})
+            self.db["product.template"][pid] = {"name": rec["name"], "write_date": T0}
         self._seed()
 
     # ------------------------------------------------------------------

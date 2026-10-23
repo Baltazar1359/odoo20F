@@ -1,6 +1,6 @@
 {
     "name": "PLCS GreenRX Wareneingang",
-    "version": "20.0.1.9.2",
+    "version": "20.0.1.10.0",
     "summary": "GreenRX-Retouren: Scan je Packung (Seriennummer, Charge, Verfall), Boxen, Vorprüfung mit Ampel, KabQ-Drucke, VP-Freigabe",
     "description": """
 GreenRX-Wareneingang für PLCS GmbH
@@ -15,6 +15,8 @@ GreenRX-Wareneingang für PLCS GmbH
 * Freigabe durch die VP im 4-Augen-Prinzip, gesteuerte Bewegungen aus Quarantäne/Sperrlager
 * ATIV-Schnittstelle: Gutschriften mit Tickets, Positionen, Verlauf und Dokumenten (alle 12 Stunden,
   auf Knopfdruck oder per Webhook angestoßen), Datenvertrag plcs.ativ.gutschrift/1
+* ATIV-Artikelstamm (1.10.0): alle Artikel mit Bezeichnung, PZN, GTIN, Lagerbedingungen und Produktbild;
+  vorhandene PLCS-Artikel: nur leere Felder füllen, Abweichungen anzeigen
 """,
     "author": "ETIV-System GmbH",
     "website": "https://etiv-system.de",

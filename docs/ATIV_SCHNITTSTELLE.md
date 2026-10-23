@@ -1,6 +1,6 @@
 # ATIV → PLCS: Schnittstelle Gutschriften und Retourentickets
 
-Stand: 14.10.2026 · Modul `plcs_greenrx` 20.0.1.6.0 · Datenvertrag `plcs.ativ.gutschrift/1`
+Stand: 23.10.2026 · Modul `plcs_greenrx` 20.0.1.10.0 · Datenvertrag `plcs.ativ.gutschrift/1`
 
 ## 1. Architektur
 
@@ -291,3 +291,41 @@ Gruppierung), Retourenvorgänge mit Filter „Aus ATIV“, Summe Soll.
 
 Probelauf mit wenigen Vorgängen und Erstübernahme gegen die ATIV-Testkopie aus dem Dev-Build oder
 Staging, Abgleich mit den Sollwerten oben, Webhook-Test.
+
+## 12. Artikelstamm (ab 1.10.0)
+
+PLCS übernimmt **alle ATIV-Artikel** (`product.product`, Filter „Filter Artikel“, Standard: Artikel
+mit interner Referenz), unabhängig davon, ob sie in einer Gutschrift vorkommen.
+
+| ATIV | PLCS | Regel |
+|---|---|---|
+| `name` | Bezeichnung | nur bei neuem Artikel; sonst nur als „Bezeichnung (ATIV)“ |
+| `default_code` | PZN, interne Referenz | PZN mit Prüfziffer, sonst Artikel übersprungen; nur leere Felder füllen |
+| `barcode` | Barcode (GTIN-14) | nur wenn leer, Prüfziffer gültig, passt zur PZN und in PLCS noch frei |
+| `x_studio_storage_conditions` | Lagertemperatur, „Lagerbedingungen (ATIV)“ | nur bei neuem Artikel (Kühlware 2–8 °C → kühl) |
+| `image_1920` | Produktbild | nur wenn in PLCS kein Bild |
+
+**Nur leere Felder füllen (Entscheidung 23.10.2026):** Vorhandene PLCS-Werte werden nie
+überschrieben. Weicht PLCS bei Bezeichnung, Lagertemperatur oder PZN ab, steht das am Artikel unter
+„Abweichung zu ATIV“ (Filter „Weicht von ATIV ab“) und einmal als Notiz im Verlauf.
+
+**Zuordnung:** zuerst über den ATIV-Schlüssel am Artikel, sonst über GTIN/PZN. Ist die PZN in PLCS
+mehrfach vorhanden oder schon einem anderen ATIV-Artikel zugeordnet, wird der Artikel übersprungen
+(Hinweis am Arbeitsschritt). In PLCS wird nichts gelöscht.
+
+**Ablauf:** eigener Lauf „Artikelstamm“ mit eigenem Fortschrittsstand, getrennt von den
+Gutschriften. Änderungen werden über `write_date` an Artikel **und** Produktvorlage erkannt (ein neues
+Bild ändert nur die Vorlage). Bilder werden in Zehnerportionen gelesen. Ein ungültiges Bild blockiert
+den Artikel nicht.
+
+**Einrichtung:**
+
+1. PLCS: Schnittstelle › Reiter „Artikelstamm“ › „Artikelstamm aus ATIV übernehmen“ einschalten.
+2. Knopf „Artikel synchronisieren“ (beim ersten Mal alle Artikel). Danach im 12-Stunden-Zeitplan.
+3. Optional, für den Sofort-Anstoß: bei ATIV eine weitere Automatisierungsregel „Bei Erstellung und
+   Aktualisierung“ auf **Produktvorlage** (`product.template`) mit „Webhook senden“ an dieselbe
+   PLCS-Webhook-Adresse. Ein neuer Schlüssel ist nicht nötig.
+4. API-Benutzer bei ATIV braucht Leserechte auf Produkte und Produktvorlagen.
+
+**Offen:** Feldnamen gegen die ATIV-Testkopie prüfen (`x_studio_storage_conditions` am Artikel,
+PZN in `default_code`), Anzahl Artikel und Bilder beim ersten Lauf mit ATIV abgleichen.

@@ -13,3 +13,4 @@ from . import plcs_greenrx_scan
 from . import plcs_greenrx_connector
 from . import plcs_ativ_mirror
 from . import plcs_ativ_sync
+from . import plcs_ativ_products

@@ -114,6 +114,10 @@ Ein Paket ist ein **Vorgang** (Referenznummer V…). Er enthält je Produkt ein 
 
 Handscanner im Tastaturmodus müssen beim Retourenschein-QR die **Zeilenumbrüche** mitsenden. Sonst lässt sich der Code nicht eindeutig lesen, und Odoo meldet das. Mit der Handykamera funktioniert es immer.
 
+- **ATIV-Artikelstamm (ab 1.10.0):** Schnittstelle › Reiter „Artikelstamm“. Übernimmt alle ATIV-Artikel mit
+  Bezeichnung, PZN, GTIN, Lagerbedingungen und Produktbild (12-Stunden-Zeitplan, Knopf „Artikel synchronisieren“
+  oder Webhook auf die Produktvorlage). Vorhandene PLCS-Artikel: nur leere Felder werden gefüllt, Abweichungen
+  stehen am Artikel („Weicht von ATIV ab“). Details: [`docs/ATIV_SCHNITTSTELLE.md`](docs/ATIV_SCHNITTSTELLE.md), Abschnitt 12.
 - **ATIV-Schnittstelle (ab 1.6.0):** GreenRX › Konfiguration › Schnittstelle GreenRX-ERP, Art „ATIV-Gutschriften“.
   PLCS liest die ATIV-Gutschriften (`purchase.order`) mit Vorgang, Positionen, Tickets, Kunde, Verlauf und Dokumenten
   über die JSON-2-API (nur lesend). Abruf alle 12 Stunden, per Knopf „ATIV-Daten synchronisieren“ oder sofort nach

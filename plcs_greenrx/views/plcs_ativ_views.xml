@@ -322,6 +322,8 @@
                 <field name="count_unchanged" optional="show"/>
                 <field name="count_failed"/>
                 <field name="count_documents" optional="show"/>
+                <field name="count_products_created" optional="show"/>
+                <field name="count_images" optional="hide"/>
                 <field name="state" widget="badge"/>
             </list>
         </field>
@@ -357,7 +359,12 @@
                             <field name="count_updated"/>
                             <field name="count_failed"/>
                             <field name="count_missing"/>
-                            <field name="count_documents"/>
+                            <field name="count_documents" invisible="mode in ('products', 'products_full')"/>
+                            <field name="count_products_created" invisible="mode not in ('products', 'products_full')"/>
+                            <field name="count_products_updated" invisible="mode not in ('products', 'products_full')"/>
+                            <field name="count_products_skipped" invisible="mode not in ('products', 'products_full')"/>
+                            <field name="count_products_differ" invisible="mode not in ('products', 'products_full')"/>
+                            <field name="count_images" invisible="mode not in ('products', 'products_full')"/>
                             <field name="pending_count"/>
                             <field name="failed_count"/>
                         </group>

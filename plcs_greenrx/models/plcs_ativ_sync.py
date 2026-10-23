@@ -37,6 +37,9 @@ OVERLAP = timedelta(minutes=15)
 RETRY_DELAYS = (5, 15, 60, 240, 720)  # Minuten
 SOURCE_MODELS = ("purchase.order", "purchase.order.line", "helpdesk.ticket", "x_vorgang", "ir.attachment",
                  "res.partner", "mail.message")
+# Artikelstamm (1.10.0): Änderungen an Artikeln stoßen den Artikel-Abgleich an
+PRODUCT_MODELS = ("product.product", "product.template")
+PRODUCT_RUN_MODES = ("products", "products_full")
 
 # Gewünschte Felder je ATIV-Modell: (Pflichtfelder, optionale Felder). Optionale Felder, die es bei
 # ATIV nicht gibt, werden weggelassen und im Verbindungstest gemeldet.
@@ -76,7 +79,8 @@ FIELDS = {
     ),
     "product.product": (
         ("display_name",),
-        ("default_code", "barcode", "name", "x_studio_storage_conditions"),
+        ("default_code", "barcode", "name", "x_studio_storage_conditions", "product_tmpl_id", "active",
+         "write_date"),
     ),
     "ir.attachment": (
         ("name", "res_model", "res_id"),
@@ -332,7 +336,7 @@ class PlcsGreenrxConnector(models.Model):
     def action_ativ_disable(self):
         self.ensure_one()
         self._check_manager()
-        self.write({"sync_enabled": False, "webhook_enabled": False})
+        self.write({"sync_enabled": False, "webhook_enabled": False, "ativ_product_sync": False})
         return self._notify(self.env._("Automatischer Abruf und Webhook sind ausgeschaltet."), False)
 
     def action_generate_webhook_token(self):
@@ -398,7 +402,8 @@ class PlcsGreenrxConnector(models.Model):
             raise UserError(self.env._("Die Schnittstelle ist nicht auf ATIV-Gutschriften eingestellt."))
         self._ativ_try_lock()
         Run = self.env["plcs.ativ.run"].sudo()
-        running = Run.search([("connector_id", "=", self.id), ("state", "=", "running")], limit=1)
+        running = Run.search([("connector_id", "=", self.id), ("state", "=", "running"),
+                              ("mode", "not in", PRODUCT_RUN_MODES)], limit=1)
         if running and mode != "full":
             self._ativ_trigger_worker()
             return running, self.env._("Ein Lauf ist schon in Arbeit (begonnen %s). Er wird fortgesetzt.",
@@ -538,7 +543,12 @@ class PlcsGreenrxConnector(models.Model):
         rec_id = payload.get("_id") or payload.get("id")
         if model == "ir.attachment":
             model, rec_id = payload.get("res_model"), payload.get("res_id")
-        if model not in SOURCE_MODELS or not isinstance(rec_id, int) or isinstance(rec_id, bool):
+        if not isinstance(rec_id, int) or isinstance(rec_id, bool):
+            return False
+        if model in PRODUCT_MODELS:
+            if not self.ativ_product_sync:
+                return False
+        elif model not in SOURCE_MODELS:
             return False
         self._ativ_enqueue(False, "ref", model, [rec_id])
         self._ativ_trigger_worker()
@@ -578,6 +588,14 @@ class PlcsGreenrxConnector(models.Model):
                 _logger.warning("ATIV-Planung %s fehlgeschlagen: %s", connector.name, e)
                 if not odoo_module.current_test:
                     self.env.cr.rollback()
+        for connector in self.search([("mode", "=", "ativ"), ("ativ_product_sync", "=", True)]):
+            try:
+                connector._ativ_plan_products("incremental", "cron")
+                connector._ativ_commit()
+            except Exception as e:  # noqa: BLE001
+                _logger.warning("ATIV-Artikelabgleich %s fehlgeschlagen: %s", connector.name, e)
+                if not odoo_module.current_test:
+                    self.env.cr.rollback()
 
     @api.model
     def _cron_ativ_worker(self):
@@ -600,9 +618,9 @@ class PlcsGreenrxConnector(models.Model):
         self.ensure_one()
         client = None
         batches = 0
-        for kind in ("ref", "po", "document"):
+        for kind in ("ref", "po", "product", "document"):
             while max_batches is None or batches < max_batches:
-                limit = max(1, self.batch_size or 25) if kind != "document" else 5
+                limit = {"document": 5, "product": 50}.get(kind) or max(1, self.batch_size or 25)
                 items = self._ativ_claim(kind, limit)
                 if not items:
                     break
@@ -643,12 +661,16 @@ class PlcsGreenrxConnector(models.Model):
         changed = {}
         for item in items:
             changed.setdefault(item.res_model, set()).add(item.res_id)
+        product_changed = {m: changed.pop(m) for m in PRODUCT_MODELS if m in changed}
         try:
-            po_ids = self._ativ_resolve_po_ids(client, changed)
+            po_ids = self._ativ_resolve_po_ids(client, changed) if changed else []
+            product_ids = self._ativ_resolve_product_ids(client, product_changed) \
+                if product_changed and self.ativ_product_sync else []
         except AtivError as e:
             self._ativ_fail(items, str(e), transient=e.transient)
             return
         self._ativ_enqueue(False, "po", "purchase.order", po_ids)
+        self._ativ_enqueue(False, "product", "product.product", product_ids)
         self._ativ_done(items)
 
     def _ativ_process_po(self, client, items):
@@ -708,6 +730,9 @@ class PlcsGreenrxConnector(models.Model):
                 continue
             failed = Queue.search_count([("run_id", "=", run.id), ("state", "=", "failed")])
             vals = {"finished": fields.Datetime.now(), "state": "partial" if failed else "done"}
+            if run.mode in PRODUCT_RUN_MODES:
+                self._ativ_finalize_product_run(run, vals, failed)
+                continue
             summary = self.env._(
                 "%(cn)s Gutschriften neu, %(cu)s aktualisiert, %(un)s unverändert; Vorgänge: %(gc)s neu, "
                 "%(gu)s aktualisiert; %(f)s Fehler; %(m)s bei ATIV nicht mehr gefunden.",

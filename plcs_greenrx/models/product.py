@@ -5,6 +5,11 @@ from odoo import api, fields, models
 from ..tools import gs1
 
 
+def storage_is_cool(storage):
+    """ATIV-Lagerbedingungen → Kühlware? („Kühlware 2 - 8 °C“, „2–8 °C“ → ja)."""
+    return bool(re.search(r"k(ü|ue)hl|2\s*[-–]\s*8", storage or "", re.IGNORECASE))
+
+
 class ProductTemplate(models.Model):
     _inherit = "product.template"
 
@@ -16,6 +21,18 @@ class ProductTemplate(models.Model):
         [("ambient", "Ambient (15–25 °C)"), ("cool", "Kühl (2–8 °C)")],
         string="Lagertemperatur", default="ambient",
         help="Wird in der KabQ-Checkliste angekreuzt.")
+
+    # Artikelstamm aus ATIV (1.10.0). PLCS-Werte werden nie überschrieben, nur leere Felder gefüllt;
+    # die ATIV-Werte stehen zum Vergleich daneben.
+    plcs_ativ_key = fields.Char("ATIV-Schlüssel", index=True, copy=False, readonly=True,
+                                help="Herkunft im GreenRX-ERP von ATIV (Datenbank:Modell:ID).")
+    plcs_ativ_name = fields.Char("Bezeichnung (ATIV)", copy=False, readonly=True)
+    plcs_ativ_storage = fields.Char("Lagerbedingungen (ATIV)", copy=False, readonly=True)
+    plcs_ativ_sync_date = fields.Datetime("Mit ATIV abgeglichen am", copy=False, readonly=True)
+    plcs_ativ_diff = fields.Char(
+        "Abweichung zu ATIV", copy=False, readonly=True,
+        help="Felder, in denen der PLCS-Artikel von ATIV abweicht. PLCS-Werte bleiben unverändert; "
+             "bei Bedarf von Hand anpassen.")
 
 
 class ProductProduct(models.Model):
@@ -62,7 +79,7 @@ class ProductProduct(models.Model):
         # Prüfbericht 19.10. R11: gleiche PZN-Prüfung wie bei Scan und Handeingabe
         if not (gs1._pzn_check_ok(pzn) and gtin and gs1.gtin_check_digit_ok(gtin) and (name or "").strip()):
             return self.browse()
-        cool = bool(re.search(r"k(ü|ue)hl|2\s*[-–]\s*8", storage or "", re.IGNORECASE))
+        cool = storage_is_cool(storage)
         return self.sudo().create({
             "name": name.strip(),
             "plcs_pzn": pzn,

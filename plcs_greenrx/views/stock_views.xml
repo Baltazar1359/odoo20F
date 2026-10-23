@@ -80,6 +80,24 @@
             <xpath expr="//field[@name='barcode']" position="after">
                 <field name="plcs_pzn"/>
                 <field name="plcs_storage_temp"/>
+                <field name="plcs_ativ_key" invisible="1"/>
+                <field name="plcs_ativ_name" invisible="not plcs_ativ_key"/>
+                <field name="plcs_ativ_storage" invisible="not plcs_ativ_key"/>
+                <field name="plcs_ativ_diff" invisible="not plcs_ativ_diff" decoration-warning="plcs_ativ_diff"/>
+                <field name="plcs_ativ_sync_date" invisible="not plcs_ativ_key"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_template_search_grx" model="ir.ui.view">
+        <field name="name">product.template.search.greenrx</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_search_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='filter_to_sell']" position="before">
+                <filter name="plcs_from_ativ" string="Aus ATIV" domain="[('plcs_ativ_key', '!=', False)]"/>
+                <filter name="plcs_ativ_differs" string="Weicht von ATIV ab" domain="[('plcs_ativ_diff', '!=', False)]"/>
+                <separator/>
             </xpath>
         </field>
     </record>

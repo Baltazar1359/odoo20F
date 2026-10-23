@@ -271,6 +271,7 @@ class PlcsAtivRun(models.Model):
     mode = fields.Selection([
         ("full", "Erstübernahme / Vollabgleich"), ("incremental", "Änderungen"),
         ("single", "Einzelner Vorgang"),
+        ("products", "Artikelstamm: Änderungen"), ("products_full", "Artikelstamm: alle Artikel"),
     ], "Art", readonly=True)
     trigger = fields.Selection([("cron", "Zeitplan"), ("manual", "Von Hand"), ("webhook", "Webhook")],
                                "Auslöser", readonly=True)
@@ -293,6 +294,13 @@ class PlcsAtivRun(models.Model):
     count_failed = fields.Integer("Fehler", readonly=True)
     count_missing = fields.Integer("Bei ATIV nicht mehr vorhanden", readonly=True)
     count_documents = fields.Integer("Dateien übernommen", readonly=True)
+    count_products_created = fields.Integer("Artikel neu", readonly=True)
+    count_products_updated = fields.Integer("Artikel ergänzt", readonly=True)
+    count_products_skipped = fields.Integer("Artikel übersprungen", readonly=True,
+                                            help="Ohne gültige PZN oder PZN nicht eindeutig.")
+    count_products_differ = fields.Integer("Artikel mit Abweichung", readonly=True,
+                                           help="Bezeichnung oder Lagertemperatur in PLCS weicht von ATIV ab.")
+    count_images = fields.Integer("Produktbilder übernommen", readonly=True)
     message = fields.Text("Ergebnis", readonly=True)
     queue_ids = fields.One2many("plcs.ativ.queue", "run_id", "Positionen", readonly=True)
     pending_count = fields.Integer("Offen", compute="_compute_queue_counts")
@@ -327,6 +335,7 @@ class PlcsAtivQueue(models.Model):
     run_id = fields.Many2one("plcs.ativ.run", "Lauf", index=True, ondelete="set null", readonly=True)
     kind = fields.Selection([
         ("po", "Gutschrift abgleichen"), ("ref", "Änderung zuordnen (Webhook)"), ("document", "Datei übernehmen"),
+        ("product", "Artikel abgleichen"),
     ], required=True, readonly=True)
     res_model = fields.Char("Modell (ATIV)", readonly=True)
     res_id = fields.Integer("ID (ATIV)", readonly=True, index=True)
