@@ -1,23 +1,42 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="blistercenter.BcScanInput">
-        <div class="o_bc_scan_input d-flex align-items-center gap-2 w-100">
-            <input class="o_input fs-4 flex-grow-1"
-                   type="text"
-                   autocomplete="off"
-                   spellcheck="false"
-                   t-att-id="this.props.id"
-                   t-att-placeholder="this.placeholder"
-                   t-att-disabled="this.props.readonly"
-                   t-ref="this.input"/>
-            <button t-if="this.cameraSupported and !this.props.readonly" type="button"
-                    class="btn btn-secondary o_bc_camera text-nowrap" t-att-disabled="this.state.camera"
-                    t-on-click="() => this.openCamera()" title="Packungen mit der Kamera lesen">
-                <i class="oi me-1" data-icon="photo_camera"/>Kamera
-            </button>
-            <span t-if="this.state.pending" class="badge text-bg-info o_bc_scan_pending">
-                <t t-out="this.state.pending"/> in Arbeit
-            </span>
+        <div class="o_bc_scan_input w-100">
+            <div class="d-flex align-items-center gap-2 w-100">
+                <input class="o_input fs-4 flex-grow-1"
+                       type="text"
+                       autocomplete="off"
+                       spellcheck="false"
+                       t-att-id="this.props.id"
+                       t-att-placeholder="this.placeholder"
+                       t-att-disabled="this.props.readonly"
+                       t-ref="this.input"/>
+                <button t-if="this.cameraSupported and !this.props.readonly" type="button"
+                        class="btn btn-secondary o_bc_camera text-nowrap" t-att-disabled="this.state.camera"
+                        t-on-click="() => this.openCamera()" title="Packungen mit der Kamera lesen">
+                    <i class="oi me-1" data-icon="photo_camera"/>Kamera
+                </button>
+                <span t-if="this.state.pending" class="badge text-bg-info o_bc_scan_pending">
+                    <t t-out="this.state.pending"/> in Arbeit
+                </span>
+            </div>
+            <!-- 1.6.4 Befund 5: gescheiterte Scans bleiben erhalten und lassen sich wiederholen -->
+            <div t-if="this.state.failed.length" class="alert alert-danger mt-2 mb-0 o_bc_scan_failed" role="alert"
+                 t-att-data-count="this.state.failed.length">
+                <div class="fw-bold">
+                    <t t-out="this.state.failed.length"/> Scan(s) nicht verarbeitet – noch nicht gezählt.
+                </div>
+                <div t-if="this.state.error" t-out="this.state.error"/>
+                <div class="mt-1">
+                    Erst wiederholen, dann übernehmen. Doppelt gezählt wird dabei nichts.
+                </div>
+                <div class="mt-2 d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-primary o_bc_scan_retry"
+                            t-on-click="() => this.retryFailed()">Wiederholen</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary o_bc_scan_drop"
+                            t-on-click="() => this.dropFailed()">Verwerfen (nicht zählen)</button>
+                </div>
+            </div>
         </div>
     </t>
 </templates>

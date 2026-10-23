@@ -86,6 +86,8 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R63 | **Zuordnung Blistercenter** (1.6.3): Lieferung, Bündelung und Hinweis auf offene Posten folgen der bei Bestätigung festgehaltenen Zuordnung des Auftrags, nicht dem aktuellen Kennzeichen am Kontakt. Lieferung ohne Auftrag: Kennzeichen des Kontakts. | – |
 | R64 | **HAP Pflicht** (1.6.3, Teil von R53): Artikel mit Verkaufspreis 0 € lassen sich in Blistercenter-Bestellungen nicht bestätigen. | ja |
 | R65 | **Kurzläufer: Menü = Kachel** (1.6.3): Menü „Kurzläufer im Bestand“ zeigt genau die Liste der Kachel (Grenze aus den Einstellungen). | – |
+| R66 | **Dieselbe Packung zählt einmal** (1.6.4, Code-Review 22.10.2026): Im Fenster „Packungen erfassen“ zählt ein Code mit derselben Seriennummer (gleicher Artikel) nur einmal – z. B. wenn die Kamera die Packung nach dem Treffer noch einmal liest. Gelbe Meldung „schon gezählt“, die Kamera läuft weiter. Andere Seriennummern derselben Charge zählen normal. Menge von Hand ändern und Handeingabe bleiben wie bisher. | – |
+| R67 | **Kein Scan geht verloren** (1.6.4): „Übernehmen“ und „Hinzufügen“ warten, bis alle angenommenen Scans verarbeitet sind (auch ein Scan ohne Enter). Scheitert die Verarbeitung (Verbindung/Server), bleibt der Scan erhalten, die Meldung wird rot, die Kamera hält an; „Übernehmen“/„Hinzufügen“ lehnen ab, bis „Wiederholen“ (zählt nichts doppelt) oder „Verwerfen“ gewählt ist. Bekanntes Tagesdatum wird beim Vorbelegen der Handeingabe nicht auf das Monatsende verlängert. Alt+029 kommt auch ohne Pause vor den Folgezeichen an. | – |
 
 ## B. Entscheidungen 15.10.2026 (Mehrdad)
 

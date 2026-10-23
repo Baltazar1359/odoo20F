@@ -8,6 +8,7 @@
                 <field name="message_type" invisible="1"/>
                 <field name="allowed_product_ids" invisible="1"/>
                 <field name="applied" invisible="1"/>
+                <field name="scan_hold" invisible="1"/>
 
                 <h5 class="mb-1">1. Scannen</h5>
                 <p class="text-muted mb-1">
@@ -52,6 +53,7 @@
                         <field name="expiration_date" widget="date"/>
                         <field name="qty" string="Menge"/>
                         <field name="warning"/>
+                        <field name="serials" column_invisible="1" force_save="1"/>
                     </list>
                 </field>
                 <field name="overview" nolabel="1" class="d-block mt-2"/>

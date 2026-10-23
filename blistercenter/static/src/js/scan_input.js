@@ -1,4 +1,5 @@
 import { _t } from "@web/core/l10n/translation";
+import { ConnectionLostError } from "@web/core/network/rpc";
 import { registry } from "@web/core/registry";
 import { useBus } from "@web/core/utils/hooks";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
@@ -16,6 +17,8 @@ export const GS = String.fromCharCode(29);
 // Windows setzt für Alt+29 das Codepage-437-Zeichen „↔“ ein (1.6.1)
 const GS_LOOKALIKE = /[\u2194\u241d]/;
 const GS_LOOKALIKE_ALL = /[\u2194\u241d]/g;
+// Zeichen, das ein Browser nach Alt+029 bzw. Alt+29 selbst einsetzen kann (1.6.4, Befund 4)
+const ALT_GS_CHAR = /^[\x1d\u2194\u241d]$/;
 // Handscanner tippen schneller als ein Mensch: Abstand zwischen zwei Zeichen höchstens so viele ms
 const SCANNER_KEY_GAP_MS = 60;
 // Kein Enter nach dem Code: so lange Ruhe, dann gilt der Scan als fertig
@@ -62,6 +65,16 @@ export const cameraScanner = {
  * für beide Tastenfolgen das GS-Zeichen ein. Mit Enter (oder Tab) wird die Packung abgeschickt,
  * das Feld ist sofort für die nächste frei. Die Packungen werden der Reihe nach verarbeitet;
  * keine geht verloren, auch wenn schnell hintereinander gescannt wird.
+ *
+ * 1.6.4 (Code-Review 22.10.2026):
+ * - Befund 2: Vor jeder Knopf-Aktion („Übernehmen“, „Hinzufügen“) meldet Odoo NEED_LOCAL_CHANGES.
+ *   Das Feld schickt dann einen Scan ohne Enter ab und wartet, bis die ganze Warteschlange verarbeitet
+ *   ist. Erst danach speichert Odoo und führt die Aktion aus.
+ * - Befund 4: Alt+029 setzt das GS sofort beim Loslassen von Alt ein (kein Timer mehr). Setzt der
+ *   Browser selbst ein Zeichen dafür ein, wird es verworfen.
+ * - Befund 5: Scheitert die Verarbeitung (Server/Verbindung), bleibt der Scan erhalten, die Meldung
+ *   wird rot, die Kamera hält an. „Wiederholen“ schickt die Scans erneut; doppelt zählt dabei nichts
+ *   (die gescheiterte Anfrage hat nichts verändert, und dieselbe Seriennummer zählt nur einmal, R66).
  */
 export class BcScanInput extends Component {
     static template = "blistercenter.BcScanInput";
@@ -69,16 +82,22 @@ export class BcScanInput extends Component {
     input = signal.ref();
 
     setup() {
-        this.state = proxy({ pending: 0, last: "", camera: false });
+        this.state = proxy({ pending: 0, last: "", camera: false, failed: [], error: "" });
         this.cameraSupported = isBarcodeScannerSupported();
         this.queue = Promise.resolve();
         this.altDigits = null;
+        this.altGsPending = false;
         this.burst = 0;
         this.lastKey = 0;
         this.idleTimer = null;
         useListener(this.input, "keydown", (ev) => this.onKeydown(ev));
         useListener(this.input, "keyup", (ev) => this.onKeyup(ev));
+        useListener(this.input, "beforeinput", (ev) => this.onBeforeInput(ev));
         useListener(this.input, "input", () => this.onInput());
+        // Befund 2: Odoo fragt vor dem Speichern (Knopf-Aktion) offene Änderungen ab
+        useBus(this.props.record.model.bus, "NEED_LOCAL_CHANGES", ({ detail }) =>
+            detail.proms.push(this.commitPending())
+        );
         // 1.6.1: Scan, während der Cursor nicht in einem Eingabefeld steht (z. B. nach einem Klick
         // in die Liste). Odoo erkennt ihn als Barcode; er wird hier wie ein Scan im Feld behandelt.
         const barcode = usePlugin(BarcodePlugin);
@@ -104,12 +123,29 @@ export class BcScanInput extends Component {
         ev.stopPropagation();
     }
 
+    /** Befund 4: Zeichen, das der Browser für Alt+029 selbst einsetzt, nicht zusätzlich übernehmen. */
+    onBeforeInput(ev) {
+        if (this.altGsPending && ev.data && ALT_GS_CHAR.test(ev.data)) {
+            this.altGsPending = false;
+            ev.preventDefault();
+        }
+    }
+
     onInput() {
         const el = this.input();
         if (GS_LOOKALIKE.test(el.value)) {
             const pos = el.selectionStart;
             el.value = el.value.replace(GS_LOOKALIKE_ALL, GS);
             el.setSelectionRange(pos, pos);
+        }
+        if (this.altGsPending) {
+            // Rückfall, falls der Browser das Einsetzen nicht abbrechen ließ: doppeltes GS am Cursor entfernen
+            this.altGsPending = false;
+            const pos = el.selectionStart;
+            if (pos >= 2 && el.value[pos - 1] === GS && el.value[pos - 2] === GS) {
+                el.value = el.value.slice(0, pos - 1) + el.value.slice(pos);
+                el.setSelectionRange(pos - 1, pos - 1);
+            }
         }
     }
 
@@ -148,6 +184,10 @@ export class BcScanInput extends Component {
             this.trackBurst({ key: GS });
             return;
         }
+        // Nächstes echtes Zeichen: der Browser hat für Alt+029 kein eigenes Zeichen eingesetzt
+        if (ev.key.length === 1 && !(ev.altKey && /^Numpad\d$/.test(ev.code))) {
+            this.altGsPending = false;
+        }
         this.trackBurst(ev);
         // Alt + Ziffernblock (Alt+029 bzw. Alt+0029): Ziffern sammeln, beim Loslassen von Alt auswerten
         if (ev.key === "Alt") {
@@ -171,14 +211,11 @@ export class BcScanInput extends Component {
         if (!/^0*29$/.test(digits)) {
             return;
         }
-        // Manche Browser setzen das Zeichen selbst ein; dann nicht doppelt
-        const before = this.input().value;
-        setTimeout(() => {
-            const el = this.input();
-            if (el && el.value === before) {
-                this.insert(GS);
-            }
-        }, 0);
+        // Befund 4: sofort einsetzen. Früher per Timer und nur bei unverändertem Feld – folgten die
+        // nächsten Zeichen schneller, ging das GS verloren. Ein vom Browser selbst eingesetztes Zeichen
+        // fangen onBeforeInput/onInput ab.
+        this.insert(GS);
+        this.altGsPending = true;
     }
 
     submit() {
@@ -190,21 +227,130 @@ export class BcScanInput extends Component {
         this.enqueue(code);
     }
 
+    /** Text im Feld (Scanner ohne Enter, Ruhezeit noch nicht um) sofort abschicken. */
+    flushInput() {
+        const el = this.input();
+        if (el && el.value.trim()) {
+            this.submit();
+            return true;
+        }
+        clearTimeout(this.idleTimer);
+        return false;
+    }
+
+    /** Warten, bis alle angenommenen Scans verarbeitet sind (auch die während des Wartens dazukommen). */
+    async drain() {
+        let current;
+        do {
+            current = this.queue;
+            await current;
+        } while (current !== this.queue);
+    }
+
+    /**
+     * Befund 2: vor dem Speichern (Knopf-Aktion) alles verarbeiten. Bleiben Scans ungezählt (Befund 5)
+     * oder endete ein eben erst verarbeiteter Scan mit roter Meldung, setzt das Feld „scan_hold“; der
+     * Server lehnt „Übernehmen“/„Hinzufügen“ dann mit dieser Meldung ab. Ein zweiter Klick ohne neue
+     * Scans geht durch (rote Scan-Meldung gelesen); ungezählte Scans halten bis „Wiederholen“/„Verwerfen“.
+     */
+    async commitPending() {
+        const hadWork = this.flushInput() || this.state.pending > 0;
+        await this.drain();
+        const record = this.props.record;
+        let hold = false;
+        if (this.state.failed.length) {
+            hold = _t(
+                "%(count)s Scan(s) nicht verarbeitet – diese Packungen sind noch nicht gezählt. " +
+                    "Bitte im Fenster „Wiederholen“ (oder „Verwerfen“) wählen.",
+                { count: this.state.failed.length }
+            );
+        } else if (hadWork && record.data.message_type === "error") {
+            hold = _t(
+                "Der zuletzt gescannte Code wurde nicht gezählt: %(message)s Bitte prüfen; " +
+                    "danach erneut klicken.",
+                { message: record.data.message || "" }
+            );
+        }
+        if ("scan_hold" in record.data && (record.data.scan_hold || false) !== hold) {
+            await record.update({ scan_hold: hold });
+        }
+    }
+
+    errorText(error) {
+        if (error instanceof ConnectionLostError) {
+            return _t("Keine Verbindung zum Server.");
+        }
+        return error?.data?.message || error?.message || String(error);
+    }
+
     enqueue(code) {
         if (!code || !code.trim()) {
-            return;
+            return this.queue;
         }
         this.state.pending++;
-        this.queue = this.queue
-            .then(() => this.props.record.update({ [this.props.name]: code }))
-            .catch(() => {})
-            .finally(() => {
+        this.queue = this.queue.then(async () => {
+            try {
+                await this.props.record.update({ [this.props.name]: code });
+                // Odoo verschluckt einen Verbindungsabbruch beim Onchange (update endet ohne Fehler,
+                // der Scan bleibt unverarbeitet im Feld). Der Server leert das Feld bei jeder
+                // Verarbeitung; steht der Code noch drin, ist er nicht angekommen.
+                if (this.props.record.data[this.props.name]) {
+                    throw new ConnectionLostError("onchange");
+                }
+            } catch (error) {
+                // Befund 5: Scan aufbewahren, Fehler zeigen (statt still zu verwerfen)
+                this.state.failed.push(code);
+                this.state.error = this.errorText(error);
+                await this.showFailure();
+            } finally {
                 this.state.pending--;
                 // Nicht während der Kamera und nicht auf dem Handy (sonst springt die Tastatur auf)
                 if (!this.state.camera && !isMobileOS()) {
                     this.input()?.focus();
                 }
-            });
+            }
+        });
+        return this.queue;
+    }
+
+    /** Rote Meldung statt der letzten grünen; nur im Formular, ohne Serveranfrage. */
+    async showFailure() {
+        const count = this.state.failed.length;
+        const message =
+            count === 1
+                ? _t("1 Scan nicht verarbeitet – Packung noch nicht gezählt. %(error)s", {
+                      error: this.state.error,
+                  })
+                : _t("%(count)s Scans nicht verarbeitet – Packungen noch nicht gezählt. %(error)s", {
+                      count,
+                      error: this.state.error,
+                  });
+        try {
+            // message/message_type haben kein Onchange: rein lokal, ohne Serveranfrage
+            await this.props.record.update({ message, message_type: "error" });
+        } catch {
+            // Anzeige im Scan-Feld bleibt (rote Box mit „Wiederholen“)
+        }
+    }
+
+    /** Gescheiterte Scans erneut verarbeiten (Befund 5). */
+    async retryFailed() {
+        const codes = this.state.failed.splice(0);
+        this.state.error = "";
+        for (const code of codes) {
+            this.enqueue(code);
+        }
+        await this.drain();
+    }
+
+    /** Gescheiterte Scans bewusst verwerfen: diese Packungen sind nicht gezählt. */
+    async dropFailed() {
+        this.state.failed.splice(0);
+        this.state.error = "";
+        await this.props.record.update({
+            message: _t("Nicht verarbeitete Scans verworfen – diese Packungen bitte erneut scannen."),
+            message_type: "warning",
+        });
     }
 
     /** Kamera: Packung für Packung lesen, bis das Fenster geschlossen wird oder ein Fehler kommt. */
@@ -220,9 +366,9 @@ export class BcScanInput extends Component {
                     break;
                 }
                 this.enqueue(code);
-                await this.queue;
-                if (this.props.record.data.message_type === "error") {
-                    break; // Meldung lesen lassen
+                await this.drain();
+                if (this.state.failed.length || this.props.record.data.message_type === "error") {
+                    break; // Meldung lesen lassen; bei Verarbeitungsfehler anhalten (Befund 5)
                 }
             }
         } finally {

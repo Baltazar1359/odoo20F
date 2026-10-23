@@ -13,7 +13,14 @@ eingetragen („Hinzufügen“). „Übernehmen“ schreibt die Zeilen in den Wa
   Verfall, wird die Packung gezählt. Sonst werden Artikel und Verfall in die Handeingabe übernommen und
   die Charge wird von der Packung abgeschrieben (R57).
 - Übersicht je Artikel: bestellt, schon im Eingang, in dieser Liste (R58).
+
+1.6.4 (Code-Review 22.10.2026):
+- Befund 1: Ein bekanntes Verfallsdatum wird beim Vorbelegen der Handeingabe nicht mehr auf das Monatsende
+  verlängert (TT.MM.JJJJ, MM/JJJJ nur, wenn das Datum ohnehin das Monatsende ist).
+- Befund 3: Dieselbe Packung (Artikel + Seriennummer) zählt in einem Fenster nur einmal (R66).
 """
+import calendar
+
 from markupsafe import Markup
 
 from odoo import api, fields, models
@@ -53,6 +60,19 @@ def clean_scanner_input(raw):
     return code, hints
 
 
+def expiry_text(value):
+    """Verfall für die Handeingabe vorbelegen, ohne das Datum zu ändern (Befund 1, Code-Review 22.10.2026).
+
+    „MM/JJJJ“ bedeutet beim Hinzufügen das Monatsende. Deshalb steht MM/JJJJ nur da, wenn das Datum schon
+    das Monatsende ist (GS1-Tag 00 oder letzter Tag); sonst das vollständige Datum TT.MM.JJJJ.
+    """
+    if not value:
+        return False
+    if value.day == calendar.monthrange(value.year, value.month)[1]:
+        return value.strftime("%m/%Y")
+    return value.strftime("%d.%m.%Y")
+
+
 def visible(raw, limit=90):
     """Scan für die Anzeige: Steuerzeichen sichtbar machen."""
     out = []
@@ -78,6 +98,9 @@ class BlistercenterReceiptScan(models.TransientModel):
         [("ok", "OK"), ("warning", "Hinweis"), ("error", "Fehler")], readonly=True)
     line_ids = fields.One2many("blistercenter.receipt.scan.line", "scan_id", "Erfasste Packungen")
     applied = fields.Boolean("Übernommen", readonly=True, copy=False)
+    # 1.6.4 (Befund 2/5): vom Scan-Feld gesetzt, wenn Scans unverarbeitet sind oder der eben verarbeitete
+    # Scan rot endete. Dann lehnen „Übernehmen“ und „Hinzufügen“ ab (Text = Grund).
+    scan_hold = fields.Char("Scan offen", copy=False)
 
     # Handeingabe (R55)
     allowed_product_ids = fields.Many2many(
@@ -151,8 +174,24 @@ class BlistercenterReceiptScan(models.TransientModel):
     def _bc_set_message(self, text, kind):
         self.message, self.message_type = text, kind
 
-    def _bc_add_packs(self, product, lot_name, expiry, qty):
-        """Packungen in die Liste aufnehmen. Gibt (Zeile, Fehlertext) zurück."""
+    def _bc_counted_serial(self, product, serial):
+        """Zeile, in der diese Packung (Artikel + Seriennummer) schon gezählt ist (R66)."""
+        if not (product and serial):
+            return self.env["blistercenter.receipt.scan.line"]
+        return self.line_ids.filtered(
+            lambda l: l.product_id == product and serial in (l.serials or "").split("\n"))[:1]
+
+    def _bc_duplicate_text(self, product, line, serial):
+        return self.env._(
+            "Diese Packung ist schon gezählt (%(product)s · Charge %(lot)s · Seriennummer %(serial)s). "
+            "Nicht noch einmal gezählt – nächste Packung scannen. Menge %(qty)s.",
+            product=product.display_name, lot=line.lot_name, serial=serial, qty="%g" % line.qty)
+
+    def _bc_add_packs(self, product, lot_name, expiry, qty, serial=False):
+        """Packungen in die Liste aufnehmen. Gibt (Zeile, Fehlertext) zurück.
+
+        serial: Seriennummer der gescannten Packung; wird an der Zeile vermerkt (R66).
+        """
         line = self.line_ids.filtered(lambda l: l.product_id == product and l.lot_name == lot_name)[:1]
         if line and line.expiration_date != expiry:
             # Prüfbericht 21.10.2026 Befund 2: widersprüchliches Verfallsdatum nicht still überschreiben
@@ -163,8 +202,11 @@ class BlistercenterReceiptScan(models.TransientModel):
                 first=line.expiration_date.strftime("%d.%m.%Y") if line.expiration_date else "-")
         if line:
             line.qty += qty
+            if serial:
+                line.serials = "\n".join(filter(None, [line.serials, serial]))
             return line, False
-        vals = {"product_id": product.id, "lot_name": lot_name, "expiration_date": expiry, "qty": qty}
+        vals = {"product_id": product.id, "lot_name": lot_name, "expiration_date": expiry, "qty": qty,
+                "serials": serial or False}
         Line = self.env["blistercenter.receipt.scan.line"]
         if not isinstance(self.id, int):
             # Formular im Browser (Onchange): Zeile nur im Formular, gespeichert wird mit dem Fenster
@@ -201,7 +243,8 @@ class BlistercenterReceiptScan(models.TransientModel):
             except gs1.Gs1Error:
                 continue
             gtin = ais["01"]
-            readings.append({"gtin": gtin, "pzn": gs1.gtin_to_pzn(gtin), "batch": ais["10"], "expiry": expiry})
+            readings.append({"gtin": gtin, "pzn": gs1.gtin_to_pzn(gtin), "batch": ais["10"], "expiry": expiry,
+                             "serial": ais.get("21") or False})
         return readings
 
     # ------------------------------------------------------------------
@@ -251,7 +294,7 @@ class BlistercenterReceiptScan(models.TransientModel):
             product = self._bc_find_product(data)
             self.manual_product_id = product
             self.manual_lot = data.get("batch") or False
-            self.manual_expiry = data["expiry"].strftime("%m/%Y") if data.get("expiry") else False
+            self.manual_expiry = expiry_text(data.get("expiry"))
             self._bc_set_message(self.env._(
                 "Im Code fehlen Charge oder Verfall. Bitte von der Packung abschreiben und „Hinzufügen“."),
                 "error")
@@ -262,7 +305,12 @@ class BlistercenterReceiptScan(models.TransientModel):
                 "PZN %(pzn)s gehört nicht zu diesem Wareneingang.", pzn=data.get("pzn") or data.get("gtin") or "-"),
                 "error")
             return
-        line, error = self._bc_add_packs(product, data["batch"], data["expiry"], 1)
+        serial = data.get("serial") or False
+        counted = self._bc_counted_serial(product, serial)
+        if counted:
+            self._bc_set_message(self._bc_duplicate_text(product, counted, serial), "warning")
+            return
+        line, error = self._bc_add_packs(product, data["batch"], data["expiry"], 1, serial=serial)
         if error:
             self._bc_set_message(error, "error")
             return
@@ -298,7 +346,13 @@ class BlistercenterReceiptScan(models.TransientModel):
         results = {(p.id, r["batch"], r["expiry"]) for p, r in matching}
         product, reading = matching[0]
         if len(results) == 1 and complete:
-            line, error = self._bc_add_packs(product, reading["batch"], reading["expiry"], 1)
+            serials = {r["serial"] for _p, r in matching}
+            serial = serials.pop() if len(serials) == 1 else False
+            counted = self._bc_counted_serial(product, serial)
+            if counted:
+                self._bc_set_message(self._bc_duplicate_text(product, counted, serial), "warning")
+                return
+            line, error = self._bc_add_packs(product, reading["batch"], reading["expiry"], 1, serial=serial)
             if error:
                 self._bc_set_message(error, "error")
                 return
@@ -309,7 +363,7 @@ class BlistercenterReceiptScan(models.TransientModel):
         products = {p.id for p, _r in matching}
         expiries = {r["expiry"] for _p, r in matching}
         self.manual_product_id = product if len(products) == 1 else False
-        self.manual_expiry = expiries.pop().strftime("%m/%Y") if len(expiries) == 1 else False
+        self.manual_expiry = expiry_text(expiries.pop()) if len(expiries) == 1 else False
         self.manual_lot = False
         self.manual_qty = 1
         self._bc_set_message(self.env._(
@@ -323,6 +377,7 @@ class BlistercenterReceiptScan(models.TransientModel):
     def action_add_manual(self):
         self.ensure_one()
         self._bc_check_open()
+        self._bc_check_scan_hold()
         product = self.manual_product_id
         lot_name = (self.manual_lot or "").strip()
         errors = []
@@ -367,6 +422,10 @@ class BlistercenterReceiptScan(models.TransientModel):
             "context": {"dialog_size": "large"},
         }
 
+    def _bc_check_scan_hold(self):
+        if self.scan_hold:
+            raise UserError(self.scan_hold)
+
     def _bc_check_open(self):
         picking = self.picking_id
         if self.applied or picking.bc_kind != "receipt" or picking.state in ("done", "cancel"):
@@ -386,6 +445,7 @@ class BlistercenterReceiptScan(models.TransientModel):
         picking = self.picking_id
         if picking.bc_kind != "receipt" or picking.state in ("done", "cancel"):
             raise UserError(self.env._("Der Wareneingang ist nicht mehr offen."))
+        self._bc_check_scan_hold()
         lines = self.line_ids.filtered(lambda l: l.qty > 0)
         if not lines:
             raise UserError(self.env._("Noch keine Packung erfasst."))
@@ -466,6 +526,9 @@ class BlistercenterReceiptScanLine(models.TransientModel):
     lot_name = fields.Char("Charge", required=True)
     expiration_date = fields.Date("Verfall", required=True)
     qty = fields.Float("Menge", default=1, digits="Product Unit")
+    # R66: Seriennummern der gescannten Packungen (eine je Zeile), damit dieselbe Packung nicht doppelt zählt.
+    # Menge von Hand ändern bleibt möglich; von Hand erfasste Packungen haben keine Seriennummer.
+    serials = fields.Text("Seriennummern", readonly=True)
     warning = fields.Char("Hinweis", compute="_compute_warning")
 
     @api.depends("product_id", "lot_name", "expiration_date")

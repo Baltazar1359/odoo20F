@@ -158,7 +158,8 @@ class TestWareneingangEinfach(ReceiptMixin, BlistercenterCommon):
         self.assertIn("Charge", form.message)
         self.assertEqual(len(form.line_ids), 0, "Nichts geraten gezählt")
         self.assertEqual(form.manual_product_id, self.product, "Artikel aus dem Code vorbelegt")
-        self.assertEqual(form.manual_expiry, expiry.strftime("%m/%Y"), "Verfall aus dem Code vorbelegt")
+        # 1.6.4 Befund 1: vollständiges Datum, nicht auf das Monatsende verlängert
+        self.assertEqual(gs1.parse_manual_expiry(form.manual_expiry)[0], expiry, "Verfall aus dem Code vorbelegt")
         self.assertFalse(form.manual_lot, "Charge schreibt das Lager von der Packung ab")
 
     def test_scan_without_gs_unique_reading_is_counted(self):
@@ -275,12 +276,14 @@ class TestWareneingangScanUi(ReceiptMixin, BlistercenterCommon, HttpCase):
 
     def test_scan_field_and_manual_entry_in_browser(self):
         self.assertEqual(self.gtin, "04150123456782", "Die Tour scannt diese GTIN fest codiert")
-        _order, receipt = self._open_receipt(self.customer_invoice, qty=9)
+        _order, receipt = self._open_receipt(self.customer_invoice, qty=11)
         self.start_tour("/odoo/action-blistercenter.action_bc_receipts/%s" % receipt.id,
                         "blistercenter_receipt_scan", login=self.user_bc.login)
         lines = receipt.move_line_ids
         self.assertEqual(
             sorted((l.lot_name or l.lot_id.name, l.quantity) for l in lines),
-            [("CH-ALT", 1), ("CH-AUTO", 1), ("CH-BODY", 1), ("CH-HAND", 2), ("CH-KAMERA", 2), ("CH-STRG", 2)],
-            "Strg+], Alt+029 und Handeingabe kommen an; kein Scan geht verloren")
+            [("CH-ALT", 1), ("CH-ALT0", 1), ("CH-ALTB", 1), ("CH-AUTO", 1), ("CH-BODY", 1), ("CH-HAND", 2),
+             ("CH-KAMERA", 2), ("CH-STRG", 2)],
+            "Strg+], Alt+029 (auch ohne Pause) und Handeingabe kommen an; kein Scan geht verloren; "
+            "dieselbe Packung zweimal vor der Kamera zählt einmal")
         self.assertEqual({l.bc_scanned_expiry for l in lines}, {date(2028, 3, 31), date(2028, 5, 31)})
