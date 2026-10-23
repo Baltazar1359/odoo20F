@@ -12,6 +12,7 @@ from datetime import date
 
 from odoo.exceptions import UserError
 from odoo.tests import Form, HttpCase, tagged
+from odoo.tools import mute_logger
 
 from ..tools import gs1
 from ..wizard import receipt_scan
@@ -207,6 +208,7 @@ class TestCodeReview1022Ui(ReceiptMixin, BlistercenterCommon, HttpCase):
     def test_processing_error_keeps_scans(self):
         """Befund 5: Fehler bei der Verarbeitung – aufbewahrt, abgelehnt, wiederholt, nichts doppelt."""
         _order, receipt = self._open_receipt(self.customer_invoice, qty=3)
-        self.start_tour("/odoo/action-blistercenter.action_bc_receipts/%s" % receipt.id,
-                        "blistercenter_receipt_scan_failure", login=self.user_bc.login)
+        with mute_logger("odoo.http"):  # erwartete Warnung: „Übernehmen“ wird absichtlich abgelehnt
+            self.start_tour("/odoo/action-blistercenter.action_bc_receipts/%s" % receipt.id,
+                            "blistercenter_receipt_scan_failure", login=self.user_bc.login)
         self.assertEqual(self._lots(receipt), [("CH-FAIL-A", 3)])

@@ -1,4 +1,5 @@
 from odoo.tests import HttpCase, new_test_user, tagged
+from odoo.tools import mute_logger
 
 from ..tools import gs1
 
@@ -133,7 +134,8 @@ class TestGreenrxManualPackUi(GreenrxUiCase):
         Box = self.env["plcs.greenrx.box"].with_user(self.admin)
         box = Box.browse(Box.grx_open_box(ticket.id, "GX160")["id"])
 
-        self.start_tour("/odoo/action-plcs_greenrx.action_grx_app", "plcs_greenrx_manual_pack", login="admin")
+        with mute_logger("odoo.http"):  # erwartete Warnung: absichtlich falsche PZN-Prüfziffer
+            self.start_tour("/odoo/action-plcs_greenrx.action_grx_app", "plcs_greenrx_manual_pack", login="admin")
 
         box.invalidate_recordset()
         self.assertEqual(box.product_id, product)

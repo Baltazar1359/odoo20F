@@ -4,6 +4,7 @@ import re
 from odoo import Command
 from odoo.exceptions import UserError
 from odoo.tests import HttpCase, new_test_user, tagged
+from odoo.tools import mute_logger
 
 from .test_blistercenter import BlistercenterCommon
 
@@ -212,7 +213,8 @@ class TestBlistercenterPortalOrderSheet(HttpCase):
         self.assertNotIn('name="qty_', html)
         self.authenticate(self.other_user.login, self.other_user.login + "x" * (8 - len(self.other_user.login)))
         # Direkter POST ohne Formular wird abgewiesen (CSRF fehlt oder kein Zugang) – kein Auftrag
-        self.url_open("/my/bestellschein", data={"qty_%s" % self.inside.id: "1"})
+        with mute_logger("odoo.http"):  # erwartete Warnung „No CSRF validation token“
+            self.url_open("/my/bestellschein", data={"qty_%s" % self.inside.id: "1"})
         self.assertFalse(self._orders(self.other_customer))
 
     def test_payment_block_gets_no_form(self):
