@@ -81,6 +81,11 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R58 | **Übersicht im Wareneingang** (1.6.0): Je Artikel bestellt, schon im Eingang, in dieser Liste und Status (fehlt / vollständig / mehr als bestellt). | – |
 | R59 | **Handscanner robust** (1.6.1): Das Scan-Feld nimmt auch Alt+29 (Windows-Zeichen „↔“), Strg+AltGr+9, die Kennung „]d2“/„+d2“ und das FNC1 am Anfang als Trennzeichen bzw. entfernt sie. Scanner ohne Enter am Ende: Odoo schickt nach kurzer Ruhe selbst ab. Steht der Cursor nicht im Scan-Feld oder in „Charge“/„Verfall“, wird der Scan trotzdem gezählt. Bei Fehlern zeigt die Meldung, was der Scanner geliefert hat („Gelesen: …“, Trennzeichen als ‹GS›), und weist auf eine falsche Tastatursprache hin. | – |
 | R60 | **Kamera als Scanner** (1.6.2): Knopf „Kamera“ neben dem Scan-Feld öffnet Odoos Kamera. Jede gelesene Packung wird gezählt, die Kamera öffnet sich für die nächste wieder, bis sie geschlossen wird oder eine rote Meldung kommt. Auf Handy/Tablet springt die Tastatur nicht automatisch auf. | – |
+| R61 | **Zuordnung Herstellerbestellung** (1.6.3, GPT-Prüfbericht 23.10.2026): Eine Position der Herstellerbestellung mit Kundenmengen lässt sich nicht löschen, ersetzen oder auf einen anderen Artikel ändern (Menge ändern geht). Beim Bestätigen muss jede Kundenmenge mit einer Position verbunden und je Position gedeckt sein. Sonst: Sammelbestellung zurück in den Entwurf und neu anfragen. | – |
+| R62 | **Verfallene Ware** (1.6.3): Chargen mit erreichtem Verfallsdatum werden nie freigegeben und nie versendet, auch nicht mit Kurzläufer-Freigabe. Der Eingang in die Quarantäne bleibt möglich (Dokumentation). Fest, nicht abschaltbar. | – |
+| R63 | **Zuordnung Blistercenter** (1.6.3): Lieferung, Bündelung und Hinweis auf offene Posten folgen der bei Bestätigung festgehaltenen Zuordnung des Auftrags, nicht dem aktuellen Kennzeichen am Kontakt. Lieferung ohne Auftrag: Kennzeichen des Kontakts. | – |
+| R64 | **HAP Pflicht** (1.6.3, Teil von R53): Artikel mit Verkaufspreis 0 € lassen sich in Blistercenter-Bestellungen nicht bestätigen. | ja |
+| R65 | **Kurzläufer: Menü = Kachel** (1.6.3): Menü „Kurzläufer im Bestand“ zeigt genau die Liste der Kachel (Grenze aus den Einstellungen). | – |
 
 ## B. Entscheidungen 15.10.2026 (Mehrdad)
 

@@ -66,8 +66,16 @@
               action="action_bc_lots"/>
     <menuitem id="menu_bc_lots_expiry" name="Verfallsdaten" parent="menu_bc_lots" sequence="2"
               action="action_bc_lots_expiry"/>
+    <!-- 1.6.3: Menü zeigt dieselben Kurzläufer wie die Kachel (Grenze aus den Einstellungen) -->
+    <record id="action_bc_short_quants_menu" model="ir.actions.server">
+        <field name="name">Kurzläufer im Bestand</field>
+        <field name="model_id" ref="model_blistercenter_overview"/>
+        <field name="state">code</field>
+        <field name="code">action = model._bc_open_tile("short_dated")</field>
+        <field name="group_ids" eval="[(4, ref('blistercenter.group_bc_user'))]"/>
+    </record>
     <menuitem id="menu_bc_short_quants" name="Kurzläufer im Bestand" parent="menu_bc_lots" sequence="3"
-              action="action_bc_short_quants"/>
+              action="action_bc_short_quants_menu"/>
     <menuitem id="menu_bc_lots_blocked" name="Sperren" parent="menu_bc_lots" sequence="4"
               action="action_bc_lots_blocked"/>
     <menuitem id="menu_bc_recall" name="Rückrufauswertung" parent="menu_bc_lots" sequence="5"

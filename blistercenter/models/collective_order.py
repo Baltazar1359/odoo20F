@@ -248,7 +248,8 @@ class BlistercenterCollectiveOrderLine(models.Model):
             partner = order.partner_id.commercial_partner_id
             if order.company_id != line.order_id.company_id:
                 raise ValidationError(self.env._("Auftrag und Sammelbestellung gehören zu verschiedenen Firmen."))
-            if not partner.bc_is_customer:
+            if not order.bc_is_blistercenter:
+                # 1.6.3: Zuordnung des Auftrags (bei Bestätigung festgehalten), wie Liste „Zu bestellen“
                 raise ValidationError(self.env._("%(order)s ist keine Blistercenter-Bestellung.", order=order.name))
             if order.state != "sale":
                 raise ValidationError(self.env._("%(order)s ist nicht bestätigt.", order=order.name))

@@ -232,8 +232,8 @@ class StockPicking(models.Model):
         """Nur Hinweis auf überfällige Rechnungen des Kunden; der Versand bleibt möglich."""
         for picking in self:
             partner = (picking.sale_id.partner_id or picking.partner_id).commercial_partner_id.with_company(
-                picking.company_id or self.env.company)
-            if picking.bc_kind == "delivery" and partner.bc_is_customer:
+                picking.company_id or self.env.company).with_context(bc_force_overdue=True)
+            if picking.bc_kind == "delivery":
                 picking.bc_overdue_count = partner.bc_overdue_count
                 picking.bc_overdue_amount = partner.bc_overdue_amount
             else:
@@ -242,10 +242,13 @@ class StockPicking(models.Model):
 
     @api.depends("partner_id.commercial_partner_id.bc_is_customer", "sale_id.bc_is_blistercenter")
     def _compute_bc_is_blistercenter(self):
+        # 1.6.3: Mit Auftrag zählt allein die (bei Bestätigung festgehaltene) Zuordnung des Auftrags,
+        # nicht das aktuelle Kennzeichen der Lieferadresse.
         for picking in self:
-            picking.bc_is_blistercenter = bool(
-                picking.sale_id.bc_is_blistercenter or picking.partner_id.commercial_partner_id.bc_is_customer
-            )
+            if picking.sale_id:
+                picking.bc_is_blistercenter = picking.sale_id.bc_is_blistercenter
+            else:
+                picking.bc_is_blistercenter = picking.partner_id.commercial_partner_id.bc_is_customer
 
     @api.depends("picking_type_id", "picking_type_code", "bc_is_blistercenter")
     def _compute_bc_kind(self):
@@ -355,6 +358,13 @@ class StockPicking(models.Model):
         months = self._bc_config().short_shelf_months
         return fields.Datetime.now() + relativedelta(months=months)
 
+    def _bc_expired_lots(self):
+        """Chargen mit Menge, deren Verfall erreicht ist (Verfallsdatum der Charge bis jetzt)."""
+        self.ensure_one()
+        now = fields.Datetime.now()
+        return self.move_line_ids.filtered(
+            lambda ml: ml.quantity > 0 and ml.lot_id.expiration_date and ml.lot_id.expiration_date <= now).lot_id
+
     def _bc_short_lots(self):
         """Chargen mit Restlaufzeit unter der Grenze (nur Zeilen mit Menge)."""
         self.ensure_one()
@@ -422,6 +432,11 @@ class StockPicking(models.Model):
             raise AccessError(self.env._("Kurzläufer gibt nur die Rolle „Blistercenter Freigabe“ (VP) frei."))
         if not (reason or "").strip():
             raise UserError(self.env._("Bitte die Freigabe der Kurzläufer begründen."))
+        expired = self._bc_expired_lots()
+        if expired:
+            raise UserError(self.env._(
+                "%(lots)s ist verfallen. Verfallene Ware kann nicht als Kurzläufer freigegeben werden.",
+                lots=", ".join(expired.mapped("display_name"))))
         lots = self._bc_short_lots()
         if not lots:
             raise UserError(self.env._("%(picking)s enthält keine Kurzläufer.", picking=self.name))
@@ -447,6 +462,14 @@ class StockPicking(models.Model):
             raise UserError(self.env._(
                 "%(picking)s enthält gesperrte Chargen: %(lots)s.",
                 picking=self.name, lots=", ".join(blocked.mapped("name"))))
+        # 1.6.3 (GPT-Prüfbericht 23.10.2026): Verfallene Ware nie freigeben oder versenden – auch nicht mit
+        # Kurzläufer-Freigabe. Gilt unabhängig von den abschaltbaren Regeln.
+        expired = self._bc_expired_lots()
+        if expired:
+            raise UserError(self.env._(
+                "%(picking)s enthält verfallene Chargen: %(lots)s. Verfallene Ware wird nicht freigegeben und "
+                "nicht versendet; bitte sperren und aussondern.",
+                picking=self.name, lots=", ".join(expired.mapped("display_name"))))
         if config.rule_require_lot_tracking:
             missing = lines.filtered(
                 lambda ml: ml.product_id.tracking != "none" and (not ml.lot_id or (

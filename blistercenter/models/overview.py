@@ -132,3 +132,11 @@ class BlistercenterOverview(models.Model):
             "target": "current",
         })
         return action
+
+    @api.model
+    def _bc_open_tile(self, key):
+        """Menüpunkt mit genau derselben Liste wie die Kachel (1.6.3, GPT-Prüfbericht 23.10.2026)."""
+        tile = self.sudo().search([("key", "=", key)], limit=1)
+        if not tile:
+            return False
+        return tile.action_open()

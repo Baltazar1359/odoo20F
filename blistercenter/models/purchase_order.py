@@ -69,16 +69,26 @@ class PurchaseOrder(models.Model):
         return super().button_draft()
 
     def _bc_check_collective_quantities(self):
-        """Prüfbericht 19.10.2026 R05: Herstellerbestellung muss die Kundenmengen der Sammelbestellung decken."""
+        """Herstellerbestellung muss die Kundenmengen der Sammelbestellung decken (Prüfbericht 19.10.2026 R05).
+
+        1.6.3 (GPT-Prüfbericht 23.10.2026): Je Bestellposition geprüft, nicht je Artikel. Jede Kundenmenge
+        muss mit einer Position dieser Bestellung verbunden sein; sonst findet die Freigabe die Lieferung
+        des Kunden nicht (feste Zuordnung).
+        """
         self.ensure_one()
         needed = {}
         for line in self.bc_collective_ids.filtered(lambda c: c.state != "cancel").line_ids:
+            pline = line.purchase_line_id
+            if not pline or pline.order_id != self or pline.product_id != line.product_id:
+                raise UserError(self.env._(
+                    "%(po)s: Die Kundenmenge %(order)s / %(product)s ist mit keiner Position dieser Bestellung "
+                    "verbunden. Bitte die Sammelbestellung zurück in den Entwurf setzen und neu anfragen.",
+                    po=self.name, order=line.sale_order_id.name, product=line.product_id.display_name))
             qty = line.sale_line_id.product_uom_id._compute_quantity(line.qty, line.product_id.uom_id)
-            needed[line.product_id] = needed.get(line.product_id, 0.0) + qty
-        for product, qty in needed.items():
-            ordered = sum(
-                pl.uom_id._compute_quantity(pl.product_qty, product.uom_id)
-                for pl in self.order_line.filtered(lambda pl: pl.product_id == product))
+            needed[pline] = needed.get(pline, 0.0) + qty
+        for pline, qty in needed.items():
+            product = pline.product_id
+            ordered = pline.uom_id._compute_quantity(pline.product_qty, product.uom_id)
             if product.uom_id.compare(ordered, qty) < 0:
                 raise UserError(self.env._(
                     "%(po)s: Für %(product)s sind in der Sammelbestellung %(qty)s Kundenmengen, bestellt werden "
@@ -90,3 +100,35 @@ class PurchaseOrder(models.Model):
         action = self.env["ir.actions.act_window"]._for_xml_id("blistercenter.action_bc_collective_orders")
         action["domain"] = [("id", "in", self.bc_collective_ids.ids)]
         return action
+
+
+class PurchaseOrderLine(models.Model):
+    _inherit = "purchase.order.line"
+
+    def _bc_collective_lines(self):
+        return self.env["blistercenter.collective.order.line"].sudo().search([
+            ("purchase_line_id", "in", self.ids), ("order_id.state", "!=", "cancel")])
+
+    def write(self, vals):
+        # 1.6.3: Artikel einer Position mit Kundenmengen nicht austauschen (Zuordnung ginge verloren)
+        if "product_id" in vals and not bc_auth.has(self.env, "collective"):
+            linked = self._bc_collective_lines().purchase_line_id
+            if linked.filtered(lambda pl: pl.product_id.id != vals["product_id"]):
+                raise UserError(self.env._(
+                    "%(products)s gehört zu einer Sammelbestellung. Der Artikel kann hier nicht getauscht werden; "
+                    "bitte über die Sammelbestellung ändern.",
+                    products=", ".join(linked.product_id.mapped("display_name"))))
+        return super().write(vals)
+
+    def unlink(self):
+        # 1.6.3: Position mit Kundenmengen nicht löschen oder ersetzen; Menge ändern geht weiter
+        if not bc_auth.has(self.env, "collective"):
+            linked = self._bc_collective_lines()
+            if linked:
+                raise UserError(self.env._(
+                    "%(products)s gehört zu Sammelbestellung %(collective)s. Die Position kann nicht gelöscht oder "
+                    "ersetzt werden (sonst fehlt die Zuordnung zum Kunden). Menge ändern ist möglich; sonst die "
+                    "Sammelbestellung zurück in den Entwurf setzen und neu anfragen.",
+                    products=", ".join(linked.product_id.mapped("display_name")),
+                    collective=", ".join(linked.order_id.mapped("name"))))
+        return super().unlink()

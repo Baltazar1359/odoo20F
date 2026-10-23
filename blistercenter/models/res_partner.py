@@ -88,10 +88,11 @@ class ResPartner(models.Model):
             ("invoice_date_due", "<", fields.Date.context_today(self)),
         ])
 
-    @api.depends_context("uid", "allowed_company_ids")
+    @api.depends_context("uid", "allowed_company_ids", "bc_force_overdue")
     def _compute_bc_overdue(self):
         for partner in self:
-            invoices = partner._bc_overdue_invoices() if partner.commercial_partner_id.bc_is_customer else False
+            invoices = partner._bc_overdue_invoices() if (
+                partner.commercial_partner_id.bc_is_customer or self.env.context.get("bc_force_overdue")) else False
             partner.bc_overdue_count = len(invoices) if invoices else 0
             partner.bc_overdue_amount = sum(invoices.mapped("amount_residual_signed")) if invoices else 0.0
 

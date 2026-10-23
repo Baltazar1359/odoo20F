@@ -112,7 +112,8 @@ class SaleOrder(models.Model):
     def _compute_bc_overdue(self):
         """Hinweis auf überfällige Rechnungen des Kunden. Sperrt nichts (Entscheidung PLCS 19.10.2026)."""
         for order in self:
-            partner = order.partner_id.commercial_partner_id.with_company(order.company_id or self.env.company)
+            partner = order.partner_id.commercial_partner_id.with_company(
+                order.company_id or self.env.company).with_context(bc_force_overdue=True)
             if order.bc_is_blistercenter and partner:
                 order.bc_overdue_count = partner.bc_overdue_count
                 order.bc_overdue_amount = partner.bc_overdue_amount
@@ -249,6 +250,12 @@ class SaleOrder(models.Model):
                 return self.env._(
                     "%(order)s: Blistercenter-Bestellungen laufen in %(currency)s (Preisliste des Kunden prüfen).",
                     order=self.name, currency=self.company_id.currency_id.name)
+            # 1.6.3: Ohne HAP (0 €) keine Bestätigung – sonst ginge die Ware kostenlos raus
+            no_hap = goods.product_id.filtered(lambda p: p.currency_id.compare_amounts(p.lst_price, 0) <= 0)
+            if no_hap:
+                return self.env._(
+                    "%(order)s: Für %(products)s ist kein HAP hinterlegt (Verkaufspreis 0 €). Bitte am Artikel "
+                    "den HAP eintragen.", order=self.name, products=", ".join(no_hap.mapped("display_name")))
             wrong = goods.filtered(lambda sol: sol.currency_id.compare_amounts(
                 sol.price_unit, sol.product_id.uom_id._compute_price(sol.product_id.lst_price, sol.product_uom_id)) != 0)
             if wrong:
