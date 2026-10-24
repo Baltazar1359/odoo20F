@@ -11,3 +11,7 @@ rule_bc_collective_company,Sammelbestellung: Firma,blistercenter.collective.orde
 rule_bc_collective_line_company,Sammelbestellung-Position: Firma,blistercenter.collective.order.line,,crud,"[('company_id', 'in', company_ids)]"
 access_bc_partial_wizard_user,bc.partial.wizard.user,blistercenter.partial.wizard,group_bc_user,crud,
 access_bc_short_wizard_approver,bc.short.wizard.approver,blistercenter.short.wizard,group_bc_approver,crud,
+access_bc_receipt_check_wizard_user,bc.receipt.check.wizard.user,blistercenter.receipt.check.wizard,group_bc_user,crud,
+access_bc_auto_release_wizard_approver,bc.auto.release.wizard.approver,blistercenter.auto.release.wizard,group_bc_approver,crud,
+rule_bc_shop_product_template,Geschützter Blistercenter-Shop: Artikel nur für freigegebene Benutzer,product.template,,r,"[(1, '=', 1)] if user.bc_shop_catalog_allowed else [('id', '=', 0)]"
+rule_bc_shop_product_product,Geschützter Blistercenter-Shop: Varianten nur für freigegebene Benutzer,product.product,,r,"[(1, '=', 1)] if user.bc_shop_catalog_allowed else [('id', '=', 0)]"

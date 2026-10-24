@@ -36,4 +36,77 @@
             </form>
         </field>
     </record>
+
+    <record id="view_bc_receipt_check_wizard_form" model="ir.ui.view">
+        <field name="name">blistercenter.receipt.check.wizard.form</field>
+        <field name="model">blistercenter.receipt.check.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Wareneingangsprüfung">
+                <p>
+                    Jede Frage ausdrücklich beantworten. Nur wenn alles „In Ordnung“ ist und die übrigen Kriterien
+                    erfüllt sind, gibt Odoo die Ware nach dem Verfahren der VP automatisch frei. Bei einer Abweichung
+                    bleibt sie in der Quarantäne und die VP entscheidet.
+                </p>
+                <group>
+                    <field name="picking_id"/>
+                    <field name="bc_check_packaging" widget="radio" options="{'horizontal': true}"/>
+                    <field name="bc_check_temperature" widget="radio" options="{'horizontal': true}"/>
+                    <field name="bc_check_documents" widget="radio" options="{'horizontal': true}"/>
+                    <field name="bc_check_quality" widget="radio" options="{'horizontal': true}"/>
+                    <field name="note" placeholder="Pflicht bei Abweichung: was, wie viele Packungen, Foto/Protokoll"/>
+                </group>
+                <footer>
+                    <button name="action_apply" type="object" string="Prüfung speichern" class="btn-primary"/>
+                    <button special="cancel" string="Abbrechen"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_bc_auto_release_wizard_form" model="ir.ui.view">
+        <field name="name">blistercenter.auto.release.wizard.form</field>
+        <field name="model">blistercenter.auto.release.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Automatische Freigabe (Verfahren)">
+                <p>
+                    Regel BC-AUTO-1: Eine Lieferung aus einer Sammelbestellung geht ohne VP-Einzelentscheidung in den
+                    Bestand, wenn sie direkt vom qualifizierten Hersteller kommt, der Bestellung entspricht, die
+                    Wareneingangsprüfung ohne Abweichung erfasst ist, Charge und Verfall vorliegen und keine Charge
+                    gesperrt, abgelaufen oder Kurzläufer ist. Jede Abweichung und jeder fehlende Wert führt zur
+                    VP-Entscheidung wie bisher. Retouren (GreenRX) und andere Abläufe sind nicht betroffen.
+                </p>
+                <group>
+                    <group string="Stand">
+                        <field name="vp_user_id" string="Zuständige VP"/>
+                        <field name="auto_release_enabled"/>
+                        <field name="current_sop"/>
+                        <field name="auto_release_approved_by"/>
+                        <field name="auto_release_approved_date"/>
+                    </group>
+                    <group string="Verfahren freigeben" invisible="auto_release_enabled">
+                        <field name="sop" placeholder="z. B. SOP-QM-014 Wareneingang Blistercenter, Version 3"/>
+                        <field name="confirm"/>
+                    </group>
+                    <group string="Ausschalten" invisible="not auto_release_enabled">
+                        <field name="reason" placeholder="z. B. Verfahren in Überarbeitung"/>
+                    </group>
+                </group>
+                <footer>
+                    <button name="action_enable" type="object" string="Verfahren freigeben und einschalten"
+                            class="btn-primary" invisible="auto_release_enabled"/>
+                    <button name="action_disable" type="object" string="Automatische Freigabe ausschalten"
+                            class="btn-danger" invisible="not auto_release_enabled"/>
+                    <button special="cancel" string="Schließen"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_bc_auto_release" model="ir.actions.server">
+        <field name="name">Automatische Freigabe (Verfahren)</field>
+        <field name="model_id" ref="model_blistercenter_auto_release_wizard"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open()</field>
+        <field name="group_ids" eval="[(4, ref('blistercenter.group_bc_approver'))]"/>
+    </record>
 </odoo>

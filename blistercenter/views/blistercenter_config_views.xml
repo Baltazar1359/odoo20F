@@ -48,6 +48,16 @@
                             <field name="rule_check_four_eyes"/>
                             <field name="rule_partial_needs_approval"/>
                         </group>
+                        <group string="Automatische Freigabe (Regel BC-AUTO-1)">
+                            <field name="auto_release_enabled"/>
+                            <field name="auto_release_sop"/>
+                            <field name="auto_release_approved_by"/>
+                            <field name="auto_release_approved_date"/>
+                            <div colspan="2" class="text-muted small">
+                                Ein- und ausschalten nur über Lager und Versand › Automatische Freigabe (Verfahren).
+                                Einschalten darf nur die zuständige VP; wechselt die VP, schaltet Odoo die Automatik aus.
+                            </div>
+                        </group>
                         <group string="Lager-Einrichtung">
                             <field name="warehouse_id"/>
                             <field name="quarantine_location_id"/>

@@ -1,6 +1,6 @@
 {
     "name": "Blistercenter",
-    "version": "20.0.1.2.1",
+    "version": "20.0.1.3.0",
     "summary": "PLCS-Großhandel für Blistercenter: Kunden, Shop-Bestellungen, Sammelbestellungen beim Hersteller, Versand, Chargen und Rückruf",
     "description": """
 Blistercenter – Großhandel der PLCS GmbH
@@ -19,6 +19,9 @@ parallele Buchhaltung und keine doppelten Bestell- oder Lagerdaten an.
 * Hinweis auf überfällige Rechnungen (keine Sperre)
 * Sammelbestellungen: Liste „Zu bestellen“ je Hersteller, PLCS bündelt und bestellt manuell
 * Wareneingang in Quarantäne, Freigabe durch die VP (Vier-Augen-Prinzip), Kurzläufer-Freigabe
+* Wareneingangsprüfung; automatische Freigabe regulärer, einwandfreier Herstellerlieferungen
+  (Regel BC-AUTO-1, nur nach Verfahrensfreigabe durch die zuständige VP)
+* Geschützter Shop: Artikel, Preise und Bestellung nur für freigegebene Blistercenter-Benutzer
 * Ware fest je Kunde, Endkontrolle durch zweite Person, Teillieferung nur nach Rücksprache
 * Chargen mit Sperre, Rückrufauswertung
 * Einstellungen je Firma: Zuständigkeiten, Benachrichtigungen, Standardwerte, Prozessregeln
@@ -48,6 +51,7 @@ parallele Buchhaltung und keine doppelten Bestell- oder Lagerdaten an.
         "views/collective_order_views.xml",
         "views/stock_views.xml",
         "views/overview_views.xml",
+        "views/website_views.xml",
         "wizard/collective_add_views.xml",
         "wizard/recall_views.xml",
         "wizard/bc_wizards_views.xml",

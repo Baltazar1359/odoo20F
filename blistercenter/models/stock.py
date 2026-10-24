@@ -1,7 +1,7 @@
 from dateutil.relativedelta import relativedelta
 
 from odoo import api, fields, models
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 from ..tools import bc_auth
 
@@ -19,8 +19,24 @@ PICK_RELEVANT_FIELDS = {
 PICKING_PROTECTED_FIELDS = (
     "bc_validated_by", "bc_validated_date", "bc_picked_by", "bc_picked_date",
     "bc_short_approved_lot_ids", "bc_short_approved_by", "bc_short_approved_date", "bc_short_reason",
+    # Wareneingangsprüfung und Freigabeentscheidung (1.3.0)
+    "bc_check_packaging", "bc_check_temperature", "bc_check_documents", "bc_check_quality",
+    "bc_check_note", "bc_checked_by", "bc_checked_date",
+    "bc_receipt_id", "bc_release_mode", "bc_release_rule", "bc_release_result", "bc_release_evaluated_date",
 )
 LOT_PROTECTED_FIELDS = ("bc_blocked_by", "bc_blocked_date")
+
+# Wareneingangsprüfung: jede Frage muss ausdrücklich beantwortet sein; leer gilt als nicht geprüft
+CHECK_ANSWERS = [("ok", "In Ordnung"), ("deviation", "Abweichung")]
+RECEIPT_CHECKS = [
+    ("bc_check_packaging", "Ware unbeschädigt und ordnungsgemäß verpackt"),
+    ("bc_check_temperature", "Keine Temperaturabweichung bekannt (Transport nach Herstellerangaben)"),
+    ("bc_check_documents", "Lieferung entspricht Bestellung und Lieferschein (Artikel, Menge, Charge, Verfall)"),
+    ("bc_check_quality", "Keine Qualitätsbeanstandung, kein Rückruf- oder Fälschungsverdacht bekannt"),
+]
+RELEASE_MODES = [("auto", "Automatisch (Regel BC-AUTO-1)"), ("vp", "Durch die VP")]
+# Kennung der Freigaberegel; bei jeder fachlichen Änderung der Kriterien hochzählen
+AUTO_RELEASE_RULE = "BC-AUTO-1"
 
 
 class StockLot(models.Model):
@@ -128,18 +144,21 @@ class StockMoveLine(models.Model):
     def create(self, vals_list):
         lines = super().create(vals_list)
         lines.picking_id._bc_reset_picked()
+        lines.picking_id._bc_reset_receipt_check()
         return lines
 
     def write(self, vals):
         pickings = self.picking_id if PICK_RELEVANT_FIELDS & set(vals) else self.env["stock.picking"]
         res = super().write(vals)
         pickings._bc_reset_picked()
+        pickings._bc_reset_receipt_check()
         return res
 
     def unlink(self):
         pickings = self.picking_id
         res = super().unlink()
         pickings.exists()._bc_reset_picked()
+        pickings.exists()._bc_reset_receipt_check()
         return res
 
     def _action_done(self):
@@ -153,6 +172,7 @@ class StockMoveLine(models.Model):
         In den Bestand nur über den Vorgangstyp „Blistercenter: Freigabe (VP)“.
         """
         Config = self.env["blistercenter.config"]
+        auto = bc_auth.has(self.env, "auto_release")
         for company in self.company_id:
             quarantine = Config._get(company).quarantine_location_id
             if not quarantine:
@@ -160,7 +180,9 @@ class StockMoveLine(models.Model):
             for line in self.filtered(lambda ml: ml.company_id == company and ml.quantity > 0):
                 if not line.location_id._child_of(quarantine) or line.location_dest_id._child_of(quarantine):
                     continue
-                if not (self.env.su or self.env.user.has_group("blistercenter.group_bc_approver")):
+                # Automatische Freigabe nach Regel BC-AUTO-1 (Freigabe nur aus dem Modulcode, nicht per RPC)
+                auto_ok = auto and line.picking_id.bc_kind == "release" and line.picking_id.bc_release_mode == "auto"
+                if not (self.env.su or auto_ok or self.env.user.has_group("blistercenter.group_bc_approver")):
                     raise UserError(self.env._(
                         "%(product)s (%(lot)s) liegt in der Blistercenter-Quarantäne. Nur die Rolle "
                         "„Blistercenter Freigabe“ (VP) darf die Ware dort herausnehmen.",
@@ -208,6 +230,46 @@ class StockPicking(models.Model):
     )
     bc_overdue_count = fields.Integer("Überfällige Rechnungen", compute="_compute_bc_overdue")
     bc_currency_id = fields.Many2one(related="company_id.currency_id", string="Währung")
+
+    # Wareneingangsprüfung (nur Eingang in die Quarantäne, nur über den Assistenten)
+    bc_check_packaging = fields.Selection(CHECK_ANSWERS, "Verpackung und Zustand", readonly=True, copy=False, tracking=True)
+    bc_check_temperature = fields.Selection(CHECK_ANSWERS, "Temperatur", readonly=True, copy=False, tracking=True)
+    bc_check_documents = fields.Selection(CHECK_ANSWERS, "Abgleich Bestellung/Lieferschein", readonly=True, copy=False, tracking=True)
+    bc_check_quality = fields.Selection(CHECK_ANSWERS, "Qualität/Rückruf", readonly=True, copy=False, tracking=True)
+    bc_check_note = fields.Char("Bemerkung Wareneingangsprüfung", readonly=True, copy=False, tracking=True)
+    bc_checked_by = fields.Many2one("res.users", "Geprüft von", readonly=True, copy=False)
+    bc_checked_date = fields.Datetime("Geprüft am", readonly=True, copy=False)
+    bc_check_state = fields.Selection(
+        [("open", "Nicht geprüft"), ("ok", "Ohne Abweichung"), ("deviation", "Abweichung")],
+        "Wareneingangsprüfung", compute="_compute_bc_check_state", store=True, index=True,
+    )
+
+    # Freigabeentscheidung (Freigabe aus der Quarantäne)
+    bc_receipt_id = fields.Many2one(
+        "stock.picking", "Wareneingang", readonly=True, copy=False, index="btree_not_null",
+        help="Wareneingang, aus dem diese Freigabe entstanden ist.",
+    )
+    bc_release_mode = fields.Selection(
+        RELEASE_MODES, "Freigabeweg", readonly=True, copy=False, index=True, tracking=True,
+        help="Automatisch: alle Kriterien der Regel BC-AUTO-1 erfüllt, Verfahren von der VP freigegeben. "
+             "Durch die VP: mindestens ein Kriterium nicht erfüllt oder nicht geprüft.",
+    )
+    bc_release_rule = fields.Char("Angewendete Freigaberegel", readonly=True, copy=False)
+    bc_release_result = fields.Text("Prüfergebnis Freigaberegel", readonly=True, copy=False)
+    bc_release_evaluated_date = fields.Datetime("Regel geprüft am", readonly=True, copy=False)
+
+    @api.depends("bc_kind", *(f for f, _label in RECEIPT_CHECKS))
+    def _compute_bc_check_state(self):
+        for picking in self:
+            answers = [picking[f] for f, _label in RECEIPT_CHECKS]
+            if picking.bc_kind != "receipt":
+                picking.bc_check_state = False
+            elif "deviation" in answers:
+                picking.bc_check_state = "deviation"
+            elif all(a == "ok" for a in answers):
+                picking.bc_check_state = "ok"
+            else:
+                picking.bc_check_state = "open"
 
     @api.depends_context("uid")
     def _compute_bc_overdue(self):
@@ -300,9 +362,71 @@ class StockPicking(models.Model):
             picking.message_post(body=self.env._(
                 "Kommissionierung geändert – bitte erneut als kommissioniert melden."))
 
+    def _bc_reset_receipt_check(self):
+        """Wareneingangsprüfung zurücksetzen, wenn sich Menge, Charge oder Artikel danach ändern.
+
+        Die Prüfung bezieht sich auf die erfassten Daten; nach einer Änderung muss sie neu erfolgen.
+        """
+        if bc_auth.has(self.env, "in_done"):
+            return
+        for picking in self.filtered(lambda p: p.bc_checked_by and p.state not in ("done", "cancel")):
+            bc_auth.grant(picking.sudo(), "receipt_check").write(
+                {**{f: False for f, _label in RECEIPT_CHECKS},
+                 "bc_check_note": False, "bc_checked_by": False, "bc_checked_date": False})
+            picking.message_post(body=self.env._(
+                "Wareneingang geändert – bitte die Wareneingangsprüfung erneut erfassen."))
+
+    def _bc_receipt_check_passed(self):
+        """Wareneingangsprüfung vollständig erfasst und ohne jede Abweichung."""
+        self.ensure_one()
+        return bool(self.bc_checked_by and self.bc_checked_date and self.bc_check_state == "ok")
+
     # ------------------------------------------------------------------
     # Aktionen
     # ------------------------------------------------------------------
+    def action_bc_receipt_check(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.env._("Wareneingangsprüfung"),
+            "res_model": "blistercenter.receipt.check.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {"default_picking_id": self.id},
+        }
+
+    def _bc_record_receipt_check(self, answers, note=False):
+        """Ergebnis der Wareneingangsprüfung festhalten (wer, wann, Antworten).
+
+        Nur vor der Buchung eines Blistercenter-Eingangs. Jede Frage muss mit „In Ordnung“ oder
+        „Abweichung“ beantwortet sein; eine Abweichung braucht eine Bemerkung.
+        """
+        self.ensure_one()
+        if not (self.env.su or self.env.user.has_group("blistercenter.group_bc_user")):
+            raise AccessError(self.env._("Die Wareneingangsprüfung erfassen nur Blistercenter-Benutzer."))
+        if self.bc_kind != "receipt" or self.state in ("done", "cancel"):
+            raise UserError(self.env._(
+                "Die Wareneingangsprüfung wird vor der Buchung eines Blistercenter-Wareneingangs erfasst."))
+        valid = {key for key, _label in CHECK_ANSWERS}
+        missing = [label for field, label in RECEIPT_CHECKS if answers.get(field) not in valid]
+        if missing:
+            raise UserError(self.env._("Bitte jede Prüffrage beantworten: %(missing)s", missing="; ".join(missing)))
+        deviations = [label for field, label in RECEIPT_CHECKS if answers[field] == "deviation"]
+        if deviations and not (note or "").strip():
+            raise UserError(self.env._("Bitte die Abweichung beschreiben."))
+        bc_auth.grant(self.sudo(), "receipt_check").write({
+            **{field: answers[field] for field, _label in RECEIPT_CHECKS},
+            "bc_check_note": (note or "").strip() or False,
+            "bc_checked_by": self.env.uid,
+            "bc_checked_date": fields.Datetime.now(),
+        })
+        if deviations:
+            body = self.env._("Wareneingangsprüfung mit Abweichung: %(items)s. %(note)s",
+                              items="; ".join(deviations), note=note.strip())
+        else:
+            body = self.env._("Wareneingangsprüfung ohne Abweichung erfasst.")
+        self.message_post(body=body)
+        return True
     def action_bc_mark_picked(self):
         """Kommissionierung abgeschlossen melden. Die Endkontrolle macht eine andere Person."""
         for picking in self:
@@ -379,6 +503,12 @@ class StockPicking(models.Model):
 
     def _bc_check_release(self, config):
         self.ensure_one()
+        if bc_auth.has(self.env, "auto_release"):
+            # Automatische Freigabe: Kriterien der Regel unmittelbar vorher geprüft (_bc_decide_release)
+            if self.bc_release_mode != "auto":
+                raise UserError(self.env._("%(picking)s: keine automatische Freigabe.", picking=self.name))
+            self._bc_check_lots(config)
+            return
         user = self.env.user
         if not (self.env.su or user.has_group("blistercenter.group_bc_approver")):
             raise UserError(self.env._(
@@ -446,8 +576,10 @@ class StockPicking(models.Model):
         done = self.filtered(lambda p: p.state == "done")
         bc_done = done.filtered("bc_kind")
         if bc_done:
+            # Automatische Freigabe: gebucht vom System (OdooBot), nicht von der Person am Wareneingang
+            validator = self.env.ref("base.user_root").id if bc_auth.has(self.env, "auto_release") else self.env.uid
             bc_auth.grant(bc_done.sudo(), "in_done").write({
-                "bc_validated_by": self.env.uid, "bc_validated_date": fields.Datetime.now(),
+                "bc_validated_by": validator, "bc_validated_date": fields.Datetime.now(),
             })
         # Mehrstufiger Versand: wer den Vorschritt gebucht hat, hat kommissioniert
         for picking in done.filtered(lambda p: not p.bc_kind and p.picking_type_code == "internal"):
@@ -514,12 +646,124 @@ class StockPicking(models.Model):
                 })
             release.move_ids._action_confirm(merge=False)
             release.action_assign()
-            release.message_post(body=self.env._(
-                "Freigabe aus der Quarantäne für Wareneingang %(receipt)s. Bitte Ware prüfen und freigeben.",
-                receipt=receipt.name))
-            if config.notify_release and config.vp_user_id:
-                release.with_context(mail_activity_quick_update=True).activity_schedule(
-                    "mail.mail_activity_data_todo",
-                    summary=self.env._("Wareneingang %(receipt)s aus der Quarantäne freigeben", receipt=receipt.name),
-                    user_id=config.vp_user_id.id,
-                )
+            release._bc_decide_release(receipt, config)
+
+    # ------------------------------------------------------------------
+    # Freigabeentscheidung: automatisch (Regel BC-AUTO-1) oder durch die VP
+    # ------------------------------------------------------------------
+    def _bc_auto_release_checks(self, receipt, config):
+        """Kriterien der Regel BC-AUTO-1 als Liste (erfüllt, Text).
+
+        Jedes Kriterium prüft tatsächlich erfasste Daten. Fehlt ein Wert oder ist er unklar, gilt das
+        Kriterium als nicht erfüllt – die Ware bleibt dann in der Quarantäne bei der VP.
+        """
+        self.ensure_one()
+        _ = self.env._
+        checks = []
+        purchase = receipt.purchase_id
+        supplier = purchase.partner_id.commercial_partner_id
+        today = fields.Date.context_today(self)
+        now = fields.Datetime.now()
+
+        checks.append((bool(
+            config.auto_release_enabled and config.auto_release_approved_by and (config.auto_release_sop or "").strip()),
+            _("Verfahren von der VP freigegeben und eingeschaltet")))
+        returned = receipt.return_id or receipt.move_ids.origin_returned_move_id
+        checks.append((bool(
+            receipt.picking_type_id == config.receipt_type_id and purchase.bc_is_collective and not returned),
+            _("Regulärer Wareneingang aus einer Sammelbestellung (keine Retoure, kein Sonderfall)")))
+        checks.append((bool(
+            supplier.bc_is_supplier and supplier.bc_supplier_qualified
+            and (not supplier.bc_supplier_qualified_until or supplier.bc_supplier_qualified_until >= today)),
+            _("Hersteller %(supplier)s GDP-qualifiziert und freigegeben", supplier=supplier.display_name or "-")))
+        checks.append((bool(supplier and receipt.partner_id.commercial_partner_id == supplier),
+                       _("Lieferung direkt vom Hersteller der Bestellung")))
+        moves = receipt.move_ids.filtered(lambda m: m.state == "done" and m.quantity > 0)
+        checks.append((bool(moves) and all(
+            m.purchase_line_id.order_id == purchase and m.product_id == m.purchase_line_id.product_id
+            and m.purchase_line_id.uom_id.compare(m.purchase_line_id.qty_received, m.purchase_line_id.product_qty) <= 0
+            for m in moves),
+            _("Lieferung entspricht der Bestellung (nur bestellte Artikel, keine Mehrmenge)")))
+        checks.append((receipt._bc_receipt_check_passed(),
+                       _("Wareneingangsprüfung erfasst, alle Fragen ohne Abweichung")))
+        lines = receipt.move_line_ids.filtered(lambda ml: ml.quantity > 0)
+        lots = lines.lot_id
+        checks.append((bool(lines) and all(
+            ml.lot_id and ml.lot_id.product_id == ml.product_id and ml.lot_id.expiration_date
+            and ml.product_id.tracking != "none" and ml.product_id.use_expiration_date
+            for ml in lines),
+            _("Charge und Verfallsdatum je Position vorhanden")))
+        checks.append((bool(lots) and not lots.filtered("bc_blocked"),
+                       _("Keine gesperrte oder zurückgerufene Charge")))
+        checks.append((bool(lots) and all(lot.expiration_date and lot.expiration_date > now for lot in lots),
+                       _("Keine abgelaufene Charge")))
+        checks.append((not self._bc_short_lots(),
+                       _("Kein Kurzläufer (Restlaufzeit unter %(months)s Monaten)", months=config.short_shelf_months)))
+        release_lines = self.move_line_ids.filtered(lambda ml: ml.quantity > 0)
+        checks.append((bool(
+            self.state == "assigned" and release_lines and release_lines.lot_id <= lots
+            and all(m.uom_id.compare(m.quantity, m.product_uom_qty) == 0 for m in self.move_ids)),
+            _("Freigabe umfasst genau die eingegangene Ware")))
+        return checks
+
+    def _bc_decide_release(self, receipt, config):
+        """Regel BC-AUTO-1 prüfen, Ergebnis dokumentieren und automatisch oder über die VP freigeben."""
+        self.ensure_one()
+        checks = self._bc_auto_release_checks(receipt, config)
+        passed = all(ok for ok, _text in checks)
+        rule = "%s – %s" % (AUTO_RELEASE_RULE, self.env._(
+            "Verfahren %(sop)s, freigegeben von %(vp)s am %(date)s",
+            sop=config.auto_release_sop or "-", vp=config.auto_release_approved_by.name or "-",
+            date=fields.Datetime.to_string(config.auto_release_approved_date) or "-"))
+        result = "\n".join("%s %s" % ("✓" if ok else "✗", text) for ok, text in checks)
+        receipt_info = ""
+        if receipt.bc_checked_by:
+            receipt_info = "\n" + self.env._(
+                "Wareneingangsprüfung: %(user)s, %(date)s", user=receipt.bc_checked_by.name,
+                date=fields.Datetime.to_string(receipt.bc_checked_date))
+        vals = {
+            "bc_receipt_id": receipt.id,
+            "bc_release_rule": rule,
+            "bc_release_result": result + receipt_info,
+            "bc_release_evaluated_date": fields.Datetime.now(),
+        }
+        if passed and self._bc_auto_release(vals, config):
+            return True
+        bc_auth.grant(self.sudo(), "release_decision").write({**vals, "bc_release_mode": "vp"})
+        failed = [text for ok, text in checks if not ok]
+        self.message_post(body=self.env._(
+            "Freigabe aus der Quarantäne für Wareneingang %(receipt)s durch die VP. Nicht erfüllt: %(failed)s",
+            receipt=receipt.name, failed="; ".join(failed) or "-"))
+        if config.notify_release and config.vp_user_id:
+            summary = self.env._("Wareneingang %(receipt)s aus der Quarantäne freigeben", receipt=receipt.name)
+            if receipt.bc_check_state == "deviation":
+                summary = self.env._("Abweichung beim Wareneingang %(receipt)s prüfen und entscheiden",
+                                     receipt=receipt.name)
+            self.with_context(mail_activity_quick_update=True).activity_schedule(
+                "mail.mail_activity_data_todo", summary=summary, user_id=config.vp_user_id.id)
+        return False
+
+    def _bc_auto_release(self, vals, config):
+        """Freigabe ohne VP-Einzelentscheidung buchen. Scheitert die Buchung, bleibt die Ware bei der VP.
+
+        Läuft mit den Rechten der Person am Wareneingang (kein Superuser); die Quarantäne verlässt die Ware
+        nur mit der internen Freigabe „auto_release“, die ein RPC-Aufruf nicht erzeugen kann.
+        """
+        self.ensure_one()
+        release = bc_auth.grant(self.sudo(False), "auto_release")
+        try:
+            with self.env.cr.savepoint():
+                bc_auth.grant(self.sudo(), "release_decision").write({**vals, "bc_release_mode": "auto"})
+                release.move_ids.picked = True
+                release._action_done()
+                if release.state != "done":
+                    raise UserError(self.env._("Freigabe nicht vollständig gebucht."))
+        except (AccessError, UserError, ValidationError) as error:
+            vals["bc_release_result"] += "\n" + self.env._("Automatische Buchung abgebrochen: %(error)s", error=error)
+            return False
+        message = self.env._(
+            "Automatisch freigegeben nach Regel %(rule)s (Verfahren %(sop)s). Keine VP-Einzelentscheidung nötig.",
+            rule=AUTO_RELEASE_RULE, sop=config.auto_release_sop)
+        self.message_post(body=message)
+        self.bc_receipt_id.message_post(body=message)
+        return True

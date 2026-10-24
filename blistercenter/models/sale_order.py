@@ -187,7 +187,7 @@ class SaleOrder(models.Model):
                 "%(customer)s hat eine Zahlungssperre (%(reason)s). Die Bestellung kann nicht bestätigt werden.",
                 customer=partner.display_name, reason=partner.bc_payment_block_reason or "-",
             )
-        if (self.website_id and config.rule_shop_requires_enable and not self._bc_loading_demo_data()
+        if (self.website_id and self.website_id._bc_shop_restricted() and not self._bc_loading_demo_data()
                 and not (is_bc and partner.bc_shop_enabled)):
             return self.env._(
                 "Shop-Bestellungen sind nur für freigeschaltete Blistercenter möglich (%(customer)s ist nicht freigeschaltet).",
@@ -251,10 +251,15 @@ class SaleOrder(models.Model):
     def _bc_check_shop_access(self):
         for order in self:
             config = self.env["blistercenter.config"]._get(order.company_id)
-            if not config.rule_shop_requires_enable:
+            website = order.website_id
+            if not (website._bc_shop_restricted() if website else config.rule_shop_requires_enable):
                 continue
             partner = order.partner_id.commercial_partner_id
-            if not (partner.bc_is_customer and partner.bc_shop_enabled):
+            user = self.env.user
+            # Bestellen im Shop: freigeschaltetes Blistercenter und, bei Portalbenutzern, Shop-Zugang des Benutzers
+            user_ok = not user.share or (user._bc_shop_access_ok()
+                                         and user.partner_id.commercial_partner_id == partner)
+            if not (partner.bc_is_customer and partner.bc_shop_enabled and user_ok):
                 raise UserError(self.env._(
                     "Der Shop ist nur für freigeschaltete Blistercenter. Bitte melden Sie sich an "
                     "oder wenden Sie sich an PLCS für die Freischaltung."

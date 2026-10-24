@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates>
+    <t t-name="plcs_dashboard.Dashboard">
+        <div class="o_action o_plcs_dashboard">
+            <ControlPanel>
+                <t t-set-slot="control-panel-actions">
+                    <div class="o_plcs_filters d-flex flex-wrap gap-2 align-items-center">
+                        <div class="btn-group" role="group" aria-label="Zeitraum">
+                            <t t-foreach="this.periods" t-as="period" t-key="period[0]">
+                                <button type="button" t-att-data-period="period[0]"
+                                        t-attf-class="btn btn-sm #{this.state.period === period[0] ? 'btn-primary' : 'btn-secondary'}"
+                                        t-on-click="() => this.setPeriod(period[0])" t-out="period[1]"/>
+                            </t>
+                        </div>
+                        <t t-if="this.state.period === 'custom'">
+                            <input type="date" class="form-control form-control-sm o_plcs_date_from" aria-label="Von"
+                                   t-att-value="this.state.dateFrom"
+                                   t-on-change="(ev) => this.setDate('dateFrom', ev.target.value)"/>
+                            <span>–</span>
+                            <input type="date" class="form-control form-control-sm o_plcs_date_to" aria-label="Bis"
+                                   t-att-value="this.state.dateTo"
+                                   t-on-change="(ev) => this.setDate('dateTo', ev.target.value)"/>
+                        </t>
+                        <span t-if="this.state.loading" class="text-muted small">
+                            <i class="fa fa-circle-o-notch fa-spin me-1"/>wird berechnet …
+                        </span>
+                    </div>
+                </t>
+            </ControlPanel>
+            <div class="o_content o_plcs_content">
+                <div t-if="this.state.error" class="alert alert-danger" role="alert" t-out="this.state.error"/>
+                <t t-if="this.state.data">
+                    <div class="o_plcs_meta text-muted small mb-3">
+                        <strong t-out="this.state.data.company"/>
+                        · Zeitraum <t t-out="this.formatDay(this.state.data.date_from)"/> – <t t-out="this.formatDay(this.state.data.date_to)"/>
+                        · Vergleich <t t-out="this.formatDay(this.state.data.prev_from)"/> – <t t-out="this.formatDay(this.state.data.prev_to)"/>
+                        · nur echte Odoo-Daten der aktiven Firma
+                    </div>
+                    <t t-foreach="this.state.data.sections" t-as="section" t-key="section.key">
+                        <section class="o_plcs_section" t-att-data-section="section.key">
+                            <h2 class="o_plcs_section_title" t-out="section.label"/>
+                            <div class="o_plcs_cards">
+                                <t t-foreach="this.kpisOf(section.key)" t-as="kpi" t-key="kpi.key">
+                                    <div t-att-data-kpi="kpi.key"
+                                         t-attf-class="o_plcs_kpi card #{kpi.available ? '' : 'o_plcs_unavailable'} #{kpi.available &amp;&amp; kpi.drill ? 'o_plcs_clickable' : ''}"
+                                         t-att-role="kpi.available &amp;&amp; kpi.drill ? 'button' : undefined"
+                                         t-att-tabindex="kpi.available &amp;&amp; kpi.drill ? 0 : undefined"
+                                         t-att-title="kpi.available &amp;&amp; kpi.drill ? 'Datensätze öffnen' : undefined"
+                                         t-on-click="() => this.openKpi(kpi)">
+                                        <div class="card-body">
+                                            <div class="o_plcs_kpi_label" t-out="kpi.label"/>
+                                            <t t-if="kpi.available">
+                                                <div class="o_plcs_kpi_value" t-out="this.formatValue(kpi.value, kpi.unit)"/>
+                                                <div t-if="this.delta(kpi)" t-attf-class="o_plcs_kpi_delta small #{this.deltaClass(kpi)}"
+                                                     t-out="this.delta(kpi)"/>
+                                                <ul t-if="kpi.breakdown.length" class="o_plcs_breakdown list-unstyled small mb-0">
+                                                    <li t-foreach="kpi.breakdown" t-as="item" t-key="item_index">
+                                                        <span t-out="item.label"/>: <strong t-out="this.formatValue(item.value, item.unit || 'count')"/>
+                                                    </li>
+                                                </ul>
+                                            </t>
+                                            <t t-else="">
+                                                <div class="o_plcs_kpi_value o_plcs_na">nicht verfügbar</div>
+                                                <div class="o_plcs_reason small text-muted" t-out="kpi.reason"/>
+                                            </t>
+                                        </div>
+                                    </div>
+                                </t>
+                            </div>
+                            <div class="o_plcs_charts" t-if="this.chartsOf(section.key).length">
+                                <t t-foreach="this.chartsOf(section.key)" t-as="chart" t-key="chart.key">
+                                    <PlcsDashboardChart chart="chart" currencyId="this.state.data.currency_id"/>
+                                </t>
+                            </div>
+                        </section>
+                    </t>
+                </t>
+            </div>
+        </div>
+    </t>
+
+    <t t-name="plcs_dashboard.Chart">
+        <div class="o_plcs_chart card" t-att-data-chart="this.props.chart.key">
+            <div class="card-body">
+                <h3 class="o_plcs_chart_title" t-out="this.props.chart.title"/>
+                <t t-if="this.props.chart.available">
+                    <div class="o_plcs_chart_canvas"><canvas t-ref="this.chartHook.ref"/></div>
+                    <div t-if="this.props.chart.note" class="small text-muted mt-1" t-out="this.props.chart.note"/>
+                </t>
+                <div t-else="" class="o_plcs_reason small text-muted">
+                    <strong>nicht verfügbar</strong> – <t t-out="this.props.chart.reason"/>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

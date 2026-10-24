@@ -5,6 +5,9 @@ setzt nur der Modulcode in den geprüften Aktionen. Ein Kontextwert aus einem RP
 immer JSON (Text, Zahl, Liste). Die Freigabe hier ist ein Python-Objekt, das ein Aufrufer von
 außen nicht erzeugen kann. Superuser-Aufrufe (nur aus Modulcode, Migration, Cron) sind erlaubt.
 Gleiches Muster wie plcs_greenrx/tools/grx_auth.py.
+
+Freigaben lassen sich verschachteln (z. B. automatische VP-Freigabe, darin die Buchung):
+eine neue Freigabe ergänzt die bestehenden, statt sie zu ersetzen.
 """
 from odoo.exceptions import AccessError
 
@@ -12,25 +15,27 @@ KEY = "bc_internal_auth"
 
 
 class Auth:
-    """Freigabe für einen benannten internen Schritt."""
+    """Freigabe für benannte interne Schritte."""
 
-    __slots__ = ("name",)
+    __slots__ = ("names",)
 
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, names):
+        self.names = frozenset(names)
 
     def __repr__(self):
-        return "<Blistercenter-Freigabe %s>" % self.name
+        return "<Blistercenter-Freigabe %s>" % ", ".join(sorted(self.names))
 
 
 def grant(records, name):
     """Recordset mit Freigabe für den Schritt `name` (nur im Modulcode verwenden)."""
-    return records.with_context(**{KEY: Auth(name)})
+    current = records.env.context.get(KEY)
+    names = {name} | (current.names if isinstance(current, Auth) else set())
+    return records.with_context(**{KEY: Auth(names)})
 
 
 def has(env, name=None):
     auth = env.context.get(KEY)
-    return isinstance(auth, Auth) and (name is None or auth.name == name)
+    return isinstance(auth, Auth) and (name is None or name in auth.names)
 
 
 def check_protected(records, vals, fields, name=None):

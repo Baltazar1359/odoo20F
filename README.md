@@ -5,7 +5,8 @@ Eigene Module für die PLCS GmbH. Die Module liegen direkt im Wurzelverzeichnis,
 | Modul | Inhalt | Stand |
 |---|---|---|
 | `plcs_greenrx` | GreenRX-Wareneingang: Scan je Packung, Boxen, Vorprüfung mit Ampel, KabQ-Drucke, VP-Freigabe | einsatzbereit für den Test |
-| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Proforma, Rechnung je Lieferung, Rabatt 0/1/2 % auf HAP, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | 1.2.1 auf Branch `fix/pruefbericht-1019`, zum Test (nicht in Production) |
+| `blistercenter` | Großhandel für Blistercenter: Shop- und Telefonbestellung, Proforma, Rechnung je Lieferung, Rabatt 0/1/2 % auf HAP, Sammelbestellung beim Hersteller, Quarantäne mit VP-Freigabe, Ware fest je Kunde, Endkontrolle, Rückruf | 1.3.0 auf Branch `feat/vp-autofreigabe-shop-dashboard`: Wareneingangsprüfung, automatische Freigabe (BC-AUTO-1), geschützter Shop – zum Test |
+| `plcs_dashboard` | Geschäftsführungs-Dashboard: Umsatz, Aufträge, Lager, Qualität/GDP mit Zeitfilter, Vergleich und Drill-down ([KPI-Übersicht](docs/DASHBOARD_KPI.md)) | 1.0.0 auf demselben Branch, zum Test |
 
 **Prüfumgebung:** https://baltazar1359-odoo20.odoo.com (Odoo.sh, Branch `main` = Production). Prüfanleitung: [`docs/PRUEFANLEITUNG.md`](docs/PRUEFANLEITUNG.md), Testcodes: [`docs/greenrx_testcodes.pdf`](docs/greenrx_testcodes.pdf).
 
@@ -208,8 +209,8 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 2. **Bestellung:** im Shop oder über **Kundenbestellungen › Telefonbestellung erfassen** (auch Knopf am Kunden). Bestellweg und Besteller sind Pflicht. Preis = HAP (Verkaufspreis am Artikel) minus Kundenrabatt.
 3. **Proforma:** Knopf „Proforma drucken“ im bestätigten Auftrag (nur Information, keine Buchung).
 4. **Zu bestellen:** offene Kundenmengen je Hersteller. PLCS entscheidet, wann bestellt wird: markieren, „Zur Sammelbestellung“, dann „Anfrage erstellen“ und im Einkauf manuell bestellen. Ausnahme: „Aus Lagerbestand liefern“.
-5. **Lager und Versand › Wareneingänge:** Ware mit Charge und Verfall buchen. Sie landet in der Quarantäne (WH/Blistercenter/Quarantäne).
-6. **Freigabe Wareneingang (VP):** eine andere Person mit Rolle Freigabe bestätigt. Kurzläufer (Rest unter 3 Monaten) vorher mit „Kurzläufer freigeben“.
+5. **Lager und Versand › Wareneingänge:** Ware mit Charge und Verfall erfassen, **Wareneingangsprüfung** (vier Fragen) speichern, buchen. Sie landet in der Quarantäne (WH/Blistercenter/Quarantäne).
+6. **Freigabe:** Ist die automatische Freigabe von der VP eingeschaltet und sind alle Kriterien der Regel BC-AUTO-1 erfüllt (qualifizierter Hersteller, Bestellung, Prüfung ohne Abweichung, Charge/Verfall, keine Sperre, kein Kurzläufer, keine Retoure), bucht Odoo die Freigabe sofort. Sonst **Freigabe Wareneingang (VP):** eine andere Person mit Rolle Freigabe bestätigt; der Reiter „Blistercenter“ zeigt, welches Kriterium fehlte. Kurzläufer (Rest unter 3 Monaten) vorher mit „Kurzläufer freigeben“.
 7. **Kommissionierung:** Ware ist dem Kunden fest zugeordnet. Nach dem Packen „Kommissionierung abgeschlossen“.
 8. **Endkontrolle:** eine zweite Person prüft und bestätigt. Odoo prüft Zahlungssperre, Chargensperre, Kurzläufer und Vollständigkeit. Überfällige Rechnungen zeigt Odoo nur als Hinweis.
 9. **Rechnung je Lieferung:** nach jeder Lieferung entsteht die Rechnung über die gelieferte Menge als Entwurf (Aufgabe für die Buchhaltung, keine E-Mail). Lastschrift-Einzug und Mandat nur in DATEV; die Zahlung wird später in Odoo eingebucht.
@@ -219,7 +220,7 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 | Rolle | Darf |
 |---|---|
 | Benutzer | Bestellungen erfassen, bündeln, Wareneingang buchen, kommissionieren, Endkontrolle, Charge sperren, Teillieferung mit Vermerk erlauben |
-| Freigabe (VP) | zusätzlich: Shopfreischaltung, Konditionen, Zahlungssperre, Charge entsperren, Freigabe aus der Quarantäne, Kurzläufer freigeben |
+| Freigabe (VP) | zusätzlich: Shopfreischaltung und Shop-Zugang je Kontakt, Konditionen, Zahlungssperre, Charge entsperren, Freigabe aus der Quarantäne, Kurzläufer freigeben, Lieferantenqualifizierung; die **zuständige** VP schaltet die automatische Freigabe ein |
 | Administrator | zusätzlich: Einstellungen und Prozessregeln |
 
 ### Technik
@@ -231,3 +232,4 @@ Regeln und Entscheidungen: [`docs/BLISTERCENTER_REGELN.md`](docs/BLISTERCENTER_R
 - 1.2.0: Vorkasse entfernt; Migration setzt „Vorkasse“ → „Lastschrift (DATEV)“, „Rechnung“ → „Überweisung“. Bestehende Anzahlungsrechnungen bleiben unverändert.
 - Tests: `odoo-bin ... -i blistercenter --test-enable --test-tags /blistercenter` (70 Tests, zusammen mit `plcs_greenrx` 207).
 - Nachweisfelder sind serverseitig geschützt (`blistercenter/tools/bc_auth.py`, gleiches Muster wie `plcs_greenrx/tools/grx_auth.py`). Umsetzung Prüfbericht 19.10.2026: `docs/PRUEFBERICHT_2026-10-19.md`.
+- 1.3.0: Wareneingangsprüfung, automatische Freigabe (Regel BC-AUTO-1, `StockPicking._bc_decide_release`), geschützter Shop (`ir.http._bc_check_shop_route`, `website.has_ecommerce_access`, Zugriffsregel auf Artikel). Bericht: [`docs/ERGEBNISBERICHT_2026-10-24.md`](docs/ERGEBNISBERICHT_2026-10-24.md).

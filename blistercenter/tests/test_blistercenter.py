@@ -654,6 +654,9 @@ class TestBlistercenterStock(BlistercenterCommon):
             mail_notrack=True).sudo()._create_user()
         self.customer_invoice.invalidate_recordset()
         self.assertEqual(self.customer_invoice.bc_portal_user_count, 1)
+        self.assertTrue(self.customer_invoice.bc_portal_warning, "Portalzugang allein gibt keinen Shop-Zugang (1.3.0)")
+        self.contact_invoice.with_user(self.user_approver).write({"bc_shop_access": True})
+        self.customer_invoice.invalidate_recordset()
         self.assertFalse(self.customer_invoice.bc_portal_warning)
 
 

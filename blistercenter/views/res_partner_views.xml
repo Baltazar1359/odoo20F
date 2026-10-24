@@ -24,10 +24,11 @@
                     <field name="bc_can_approve" invisible="1"/>
                     <field name="bc_portal_warning" invisible="1"/>
                     <div class="alert alert-warning" role="alert" invisible="not bc_portal_warning">
-                        Der Shop ist freigeschaltet, aber kein Kontakt hat einen Portalzugang.
-                        Ohne Zugang kann sich das Blistercenter nicht im Shop anmelden.
+                        Der Shop ist freigeschaltet, aber kein Kontakt hat einen Portalzugang mit „Shop-Zugang (Benutzer)“.
+                        Ohne beides kann niemand des Blistercenters im Shop Artikel sehen oder bestellen.
                         <button name="action_bc_portal_access" type="object" string="Portalzugang verwalten" class="btn-link"/>
                     </div>
+                    <field name="bc_commercial_is_customer" invisible="1"/>
                     <div class="mb-2" invisible="not bc_is_customer">
                         <button name="action_bc_new_phone_order" type="object" string="Telefonbestellung erfassen"
                                 class="btn-primary" icon="fa-phone"/>
@@ -41,6 +42,22 @@
                             <field name="bc_shop_enabled" readonly="not bc_can_approve"/>
                             <field name="bc_shop_enabled_by" invisible="not bc_shop_enabled"/>
                             <field name="bc_shop_enabled_date" invisible="not bc_shop_enabled"/>
+                        </group>
+                        <group string="Shop-Zugang (Benutzer)" invisible="not bc_commercial_is_customer">
+                            <field name="bc_shop_access" readonly="not bc_can_approve"/>
+                            <field name="bc_shop_access_by" invisible="not bc_shop_access"/>
+                            <field name="bc_shop_access_date" invisible="not bc_shop_access"/>
+                            <div colspan="2" class="text-muted small">
+                                Gilt für den Portalzugang dieses Kontakts. Zusätzlich muss das Blistercenter für den Shop
+                                freigeschaltet sein. Entziehen: Haken entfernen oder Portalzugang sperren.
+                            </div>
+                        </group>
+                        <group string="GDP-Qualifizierung (Hersteller)" invisible="not bc_is_supplier">
+                            <field name="bc_supplier_qualified" readonly="not bc_can_approve"/>
+                            <field name="bc_supplier_qualified_until" readonly="not bc_can_approve"/>
+                            <field name="bc_supplier_qualification_ref" readonly="not bc_can_approve"/>
+                            <field name="bc_supplier_qualified_by" invisible="not bc_supplier_qualified"/>
+                            <field name="bc_supplier_qualified_date" invisible="not bc_supplier_qualified"/>
                         </group>
                         <group string="Zahlung und Preis" invisible="not bc_is_customer">
                             <field name="bc_payment_model" readonly="not bc_can_approve"/>
@@ -97,6 +114,8 @@
                 <field name="phone" optional="show"/>
                 <field name="email" optional="show"/>
                 <field name="property_supplier_payment_term_id" string="Zahlungsbedingung Einkauf" optional="show"/>
+                <field name="bc_supplier_qualified" optional="show"/>
+                <field name="bc_supplier_qualified_until" optional="show"/>
                 <field name="bc_supplierinfo_count" string="Konditionen"/>
             </list>
         </field>

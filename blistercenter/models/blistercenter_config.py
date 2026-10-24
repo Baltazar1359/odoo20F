@@ -1,6 +1,13 @@
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
 
+from ..tools import bc_auth
+
+# Freigabe des Verfahrens „automatische Freigabe“ setzt nur die zuständige VP (1.3.0)
+CONFIG_PROTECTED_FIELDS = (
+    "auto_release_enabled", "auto_release_sop", "auto_release_approved_by", "auto_release_approved_date",
+)
+
 # Seit 1.2.0: Rechnung je Lieferung mit Zahlungsziel; Vorkasse entfällt.
 PAYMENT_MODELS = [
     ("direct_debit", "Lastschrift (DATEV)"),
@@ -149,6 +156,21 @@ class BlistercenterConfig(models.Model):
         help="Standard ist Komplettlieferung. Eine Teillieferung muss im Auftrag mit Vermerk erlaubt sein.",
     )
 
+    # Automatische Freigabe regulärer Herstellerlieferungen (Regel BC-AUTO-1, 1.3.0)
+    auto_release_enabled = fields.Boolean(
+        "Automatische Freigabe aktiv", readonly=True, tracking=True, copy=False,
+        help="Reguläre, einwandfreie Herstellerlieferungen gehen nach bestandener Wareneingangsprüfung ohne "
+             "VP-Einzelentscheidung in den Bestand. Jede Abweichung bleibt in der Quarantäne bei der VP. "
+             "Aktivieren kann nur die zuständige VP nach Freigabe des Verfahrens (SOP).",
+    )
+    auto_release_sop = fields.Char(
+        "Freigegebenes Verfahren (SOP)", readonly=True, tracking=True, copy=False,
+        help="Verfahrensanweisung, die die automatische Freigabe beschreibt und von der VP freigegeben ist.",
+    )
+    auto_release_approved_by = fields.Many2one(
+        "res.users", "Verfahren freigegeben von (VP)", readonly=True, tracking=True, copy=False)
+    auto_release_approved_date = fields.Datetime("Verfahren freigegeben am", readonly=True, copy=False)
+
     # Lager-Einrichtung (vom Modul angelegt)
     warehouse_id = fields.Many2one("stock.warehouse", string="Lager", readonly=True, check_company=True)
     quarantine_location_id = fields.Many2one(
@@ -176,6 +198,72 @@ class BlistercenterConfig(models.Model):
         if not config:
             config = self.sudo().create({"company_id": company.id})
         return config
+
+    @api.model
+    def _get_readonly(self, company=None):
+        """Einstellungen der Firma (sudo) ohne Anlegen – für lesende Website-Anfragen.
+
+        Ohne gespeicherten Datensatz gelten die Standardwerte (nicht gespeicherter neuer Datensatz).
+        """
+        company = company or self.env.company
+        config = self.sudo().search([("company_id", "=", company.id)], limit=1)
+        return config or self.sudo().new({"company_id": company.id})
+
+    def write(self, vals):
+        bc_auth.check_protected(self, vals, CONFIG_PROTECTED_FIELDS)
+        vp_changed = self.browse()
+        if "vp_user_id" in vals:
+            vp_changed = self.filtered(lambda c: c.auto_release_enabled and c.vp_user_id.id != vals["vp_user_id"])
+        res = super().write(vals)
+        for config in vp_changed:
+            # Das Verfahren hat die bisherige VP freigegeben; die neue VP muss es selbst freigeben
+            config._bc_set_auto_release_off(self.env._("Zuständige VP geändert – Verfahren neu freigeben."))
+        if {"rule_shop_requires_enable"} & set(vals):
+            # Zugriffsregel der Artikel hängt von dieser Einstellung ab (ir.access-Cache)
+            self.env["res.users"]._bc_invalidate_shop_access()
+        return res
+
+    # ------------------------------------------------------------------
+    # Automatische Freigabe (Regel BC-AUTO-1)
+    # ------------------------------------------------------------------
+    def _bc_enable_auto_release(self, sop):
+        """Verfahren freigeben und Automatik einschalten – nur durch die zuständige VP."""
+        self.ensure_one()
+        user = self.env.user
+        if not self.env.su and not (user.has_group("blistercenter.group_bc_approver") and user == self.vp_user_id):
+            raise AccessError(self.env._(
+                "Die automatische Freigabe schaltet nur die zuständige VP ein (Einstellungen › Zuständig "
+                "Freigabe (VP): %(vp)s).", vp=self.vp_user_id.display_name or "-"))
+        if not (sop or "").strip():
+            raise UserError(self.env._("Bitte das freigegebene Verfahren (SOP, Version) angeben."))
+        bc_auth.grant(self.sudo(), "auto_release_config").write({
+            "auto_release_enabled": True,
+            "auto_release_sop": sop.strip(),
+            "auto_release_approved_by": user.id,
+            "auto_release_approved_date": fields.Datetime.now(),
+        })
+        self.sudo().message_post(body=self.env._(
+            "Automatische Freigabe regulärer Herstellerlieferungen eingeschaltet (Regel BC-AUTO-1, Verfahren: %(sop)s).",
+            sop=sop.strip()))
+        return True
+
+    def _bc_disable_auto_release(self, reason=False):
+        """Automatik ausschalten – VP oder Administrator der App (Ausschalten ist die sichere Richtung)."""
+        self.ensure_one()
+        if not (self.env.su or self.env.user.has_group("blistercenter.group_bc_approver")):
+            raise AccessError(self.env._("Die automatische Freigabe schaltet nur die Rolle „Freigabe“ (VP) aus."))
+        self._bc_set_auto_release_off(reason or self.env._("Von %(user)s ausgeschaltet.", user=self.env.user.name))
+        return True
+
+    def _bc_set_auto_release_off(self, reason):
+        for config in self.filtered("auto_release_enabled"):
+            bc_auth.grant(config.sudo(), "auto_release_config").write({
+                "auto_release_enabled": False,
+                "auto_release_approved_by": False,
+                "auto_release_approved_date": False,
+            })
+            config.sudo().message_post(body=self.env._(
+                "Automatische Freigabe ausgeschaltet: %(reason)s", reason=reason))
 
     @api.model
     def _setup_all(self):

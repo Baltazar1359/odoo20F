@@ -1,4 +1,4 @@
-# Blistercenter – Regelkatalog (Stand 19.10.2026, Modul 20.0.1.2.1)
+# Blistercenter – Regelkatalog (Stand 24.10.2026, Modul 20.0.1.3.0)
 
 Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im Shop, per Telefon, E-Mail oder Fax. PLCS bündelt die Mengen in Sammelbestellungen und bestellt manuell beim Hersteller (z. B. AstraZeneca).
 
@@ -10,8 +10,8 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 2. **Bestellung**: im Shop (nur freigeschaltete Blistercenter) oder als **Telefonbestellung** (Menü Kundenbestellungen › Telefonbestellung erfassen, oder Knopf am Kunden).
 3. **Proforma-Rechnung**: Knopf „Proforma drucken“ im bestätigten Auftrag. Nur Information über Menge und Preis, keine Buchung, kein automatischer Versand.
 4. **Zu bestellen / Sammelbestellung**: PLCS sieht offene Kundenmengen je Hersteller und entscheidet selbst, wann bestellt wird: bündeln → Anfrage beim Hersteller → manuell bestellen. Odoo bestellt nie automatisch.
-5. **Wareneingang** in die **Blistercenter-Quarantäne** (Vorgangstyp BCIN).
-6. **Freigabe durch die VP** (Vorgangstyp BCFRG) in den Bestand. Kurzläufer brauchen eine zusätzliche Freigabe.
+5. **Wareneingang** in die **Blistercenter-Quarantäne** (Vorgangstyp BCIN) mit **Wareneingangsprüfung** (seit 1.3.0).
+6. **Freigabe** (Vorgangstyp BCFRG) in den Bestand: **automatisch** nach Regel BC-AUTO-1, wenn die VP das Verfahren freigegeben hat und alle Kriterien erfüllt sind (seit 1.3.0), sonst **durch die VP** wie bisher. Kurzläufer brauchen immer eine zusätzliche Freigabe der VP.
 7. **Ware fest je Kunde**: Nach der Freigabe reservieren die Lieferungen genau die Ware aus ihrer Sammelbestellung.
 8. **Kommissionierung** (Person 1) → **Endkontrolle** und Bestätigung (Person 2) → Lieferung (komplett oder, nach Rücksprache, als Teillieferung).
 9. **Rechnung je Lieferung**: Nach jeder Lieferung legt Odoo die Rechnung über die gelieferte Menge als Entwurf an. Die Buchhaltung bucht und versendet sie.
@@ -60,6 +60,13 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 | R37 | **Nachweise nur aus dem Ablauf** (Prüfbericht 19.10.2026): Wer kommissioniert, gebucht, Kurzläufer freigegeben, eine Teillieferung abgestimmt oder „Aus Lagerbestand“ gewählt hat, setzt nur Odoo in der jeweiligen Aktion. Status der Sammelbestellung nur über ihre Übergänge. Direkte Schreibzugriffe (z. B. über die Schnittstelle) werden abgelehnt. | – |
 | R38 | **Kennzeichen „Blistercenter“** entfernt nur die Rolle Freigabe. Ein bestätigter Auftrag bleibt Blistercenter-Auftrag, auch wenn das Kennzeichen später fehlt. | – |
 | R39 | **Mengen:** Die Auftragsmenge kann nicht unter die Menge in Sammelbestellungen sinken; eine stornierte Sammelbestellung lässt sich nur reaktivieren, wenn die Menge noch frei ist. Die Herstellerbestellung muss die Kundenmengen decken (mehr ist erlaubt). | – |
+| R40 | **Wareneingangsprüfung** (1.3.0): Vor der Buchung eines Blistercenter-Eingangs beantwortet das Lager vier Fragen ausdrücklich mit „In Ordnung“ oder „Abweichung“: Verpackung/Zustand, Temperatur, Abgleich Bestellung/Lieferschein (Artikel, Menge, Charge, Verfall), Qualität/Rückruf/Fälschungsverdacht. Eine Abweichung braucht eine Beschreibung. Odoo speichert wer und wann. Eine Änderung von Menge, Charge oder Artikel danach setzt die Prüfung zurück. | – |
+| R41 | **Automatische Freigabe (Regel BC-AUTO-1)** (1.3.0): Nach der Buchung des Eingangs gibt Odoo die Ware ohne VP-Einzelentscheidung in den Bestand, wenn **alle** Kriterien erfüllt sind: Verfahren von der VP freigegeben · regulärer Eingang aus einer Sammelbestellung, keine Retoure · Hersteller GDP-qualifiziert (Qualifizierung gültig) · Lieferung direkt vom Hersteller der Bestellung · nur bestellte Artikel, keine Mehrmenge · Wareneingangsprüfung ohne Abweichung · Charge und Verfall je Position · keine gesperrte, zurückgerufene oder abgelaufene Charge · kein Kurzläufer · Freigabe umfasst genau die eingegangene Ware. Fehlt ein Wert oder ist er unklar, gilt das Kriterium als nicht erfüllt. | ja (nur VP) |
+| R42 | **Ausnahme:** Ist ein Kriterium nicht erfüllt, bleibt die Ware in der Quarantäne. Die VP bekommt eine Aufgabe (bei Abweichung: „Abweichung prüfen und entscheiden“) und gibt wie bisher frei (R23, R24, R25). | – |
+| R43 | **Nachweis:** Jede Freigabe speichert Freigabeweg (automatisch/VP), angewendete Regel mit Verfahren (SOP), freigebender VP und Datum, Prüfergebnis je Kriterium (✓/✗), Wareneingangsprüfung (wer, wann) und Zeitpunkt der Prüfung. Automatische Freigaben bucht das System (OdooBot). Liste „Freigaben (Protokoll)“. | – |
+| R44 | **Verfahrensfreigabe:** Die automatische Freigabe schaltet **nur die zuständige VP** (Einstellungen › Zuständig Freigabe (VP)) mit Angabe der SOP und Bestätigung ein (Lager und Versand › Automatische Freigabe (Verfahren)). Ausschalten dürfen VP und Administrator der App. Wechselt die zuständige VP, schaltet Odoo die Automatik aus. Standard: aus. | – |
+| R45 | **Lieferantenqualifizierung:** „GDP-qualifiziert (Direktlieferant)“, „gültig bis“ und Nachweis am Hersteller setzt nur die Rolle Freigabe; Odoo speichert wer und wann. | – |
+| R46 | **Geschützter Shop** (1.3.0): Artikel, Preise, Artikelseiten, Warenkorb, Kasse, Merkliste, Vergleich, Produktkonfigurator, Nachbestellen und Shop-Suche nur für Portalbenutzer, deren Blistercenter für den Shop freigeschaltet ist **und** deren Kontakt „Shop-Zugang (Benutzer)“ hat. Besucher ohne Anmeldung → Anmeldung; andere angemeldete Benutzer → „Zugriff verweigert“. Prüfung serverseitig je Anfrage (auch direkte URL und JSON), dazu Zugriffsregel auf Artikel für Schnittstellen. Shop-Menü, Warenkorb-Symbol, Produkt-Snippets und Sitemap-Einträge erscheinen für Unberechtigte nicht. Registrierung setzt nie einen Shop-Zugang. Erteilen und Entziehen nur durch die Rolle Freigabe; Entzug wirkt sofort. Schalter je Website: „Blistercenter-Shop (nur freigegebene Benutzer)“ (Standard: an). | ja (Website, Firmenregel R3) |
 
 ## B. Entscheidungen 15.10.2026 (Mehrdad)
 
@@ -81,7 +88,7 @@ Blistercenter sind die Kunden des PLCS-Großhandels. Sie bestellen bei PLCS im S
 ## C. Noch offen
 
 1. ~~Zahlungssperre automatisch?~~ Entschieden 19.10.: bei überfälligen Rechnungen nur Hinweis (R36). Die manuelle Zahlungssperre bleibt.
-2. **Shop:** Selbstregistrierung aus, Preise erst nach Anmeldung (Website-Einstellung)? GDP-Kundenqualifizierung als Voraussetzung für die Freischaltung?
+2. **Shop:** ~~Preise erst nach Anmeldung?~~ Umgesetzt 1.3.0 (R46). Offen: Selbstregistrierung in den Website-Einstellungen auf „Nur auf Einladung“ stellen (Registrierung gibt zwar keinen Shop-Zugang, legt aber Portalkonten an). GDP-Kundenqualifizierung (Großhandelserlaubnis/Apothekenbetriebserlaubnis des Blistercenters) als Voraussetzung für die Freischaltung?
 3. **Verfall < 6 Monate im Bestand:** Heute Liste „Kurzläufer im Bestand“ und Kachel (Grenze aus R25). Automatisch sperren?
 4. **Online-Zahlung im Shop:** nicht vorgesehen (Lastschrift über DATEV). Im Shop keinen Zahlungsanbieter aktivieren.
 5. **Zu wenig geliefert:** Liefert der Hersteller weniger als bestellt, reicht die Ware nicht für alle Kunden der Sammelbestellung. Die Reihenfolge legt heute Odoo fest. Soll PLCS die Verteilung selbst bestimmen?
