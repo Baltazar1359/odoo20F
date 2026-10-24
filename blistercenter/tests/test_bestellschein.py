@@ -127,9 +127,13 @@ class TestBlistercenterPortalOrderSheet(HttpCase):
             "name": "Portal-Blistercenter (Test)", "is_company": True, "bc_is_customer": True,
             "bc_shop_enabled": True, "bc_discount": "1", "property_payment_term_id": cls.term.id})
         cls.contact = env["res.partner"].create({"name": "Petra Portal", "parent_id": cls.customer.id,
-                                                 "email": "petra.portal@example.com"})
+                                                 "email": "petra.portal@example.com", "bc_shop_access": True})
         cls.portal_user = new_test_user(env, login="bc_portal_user", groups="base.group_portal",
                                         partner_id=cls.contact.id)
+        # 1.7.0 (R72): Kollegin beim freigeschalteten Kunden, aber ohne „Shop-Zugang (Benutzer)“
+        cls.colleague = env["res.partner"].create({"name": "Klara Kollegin", "parent_id": cls.customer.id})
+        cls.colleague_user = new_test_user(env, login="bc_portal_colleague", groups="base.group_portal",
+                                           partner_id=cls.colleague.id)
         cls.other_customer = env["res.partner"].create({
             "name": "Nicht freigeschaltet (Test)", "is_company": True, "bc_is_customer": True})
         cls.other_contact = env["res.partner"].create({"name": "Otto Ohne", "parent_id": cls.other_customer.id})
@@ -214,6 +218,15 @@ class TestBlistercenterPortalOrderSheet(HttpCase):
         # Direkter POST ohne Formular wird abgewiesen (CSRF fehlt oder kein Zugang) – kein Auftrag
         self.url_open("/my/bestellschein", data={"qty_%s" % self.inside.id: "1"})
         self.assertFalse(self._orders(self.other_customer))
+
+    def test_user_without_shop_access_gets_no_form(self):
+        """1.7.0 (R72): Freigeschalteter Kunde genügt nicht, der Benutzer braucht den Shop-Zugang."""
+        html = self._page(self.colleague_user)
+        self.assertIn("noch nicht freigegeben", html)
+        self.assertNotIn('name="qty_', html)
+        self.assertNotIn("Sortiment Portal 10 St", html, "Keine Artikel und Preise ohne Shop-Zugang")
+        self.contact.write({"bc_shop_access": False})
+        self.assertIn("noch nicht freigegeben", self._page(self.portal_user), "Entzug wirkt sofort")
 
     def test_payment_block_gets_no_form(self):
         self.customer.write({"bc_payment_block": True, "bc_payment_block_reason": "Test"})

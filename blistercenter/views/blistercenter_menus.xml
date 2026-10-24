@@ -51,6 +51,10 @@
               action="action_bc_receipts"/>
     <menuitem id="menu_bc_release" name="Freigabe Wareneingang (VP)" parent="menu_bc_stock" sequence="2"
               action="action_bc_release" groups="blistercenter.group_bc_approver"/>
+    <menuitem id="menu_bc_release_done" name="Freigaben (Protokoll)" parent="menu_bc_stock" sequence="7"
+              action="action_bc_release_done"/>
+    <menuitem id="menu_bc_auto_release" name="Automatische Freigabe (Verfahren)" parent="menu_bc_stock" sequence="8"
+              action="action_bc_auto_release" groups="blistercenter.group_bc_approver"/>
     <menuitem id="menu_bc_picking" name="Kommissionierung" parent="menu_bc_stock" sequence="3"
               action="action_bc_picking"/>
     <menuitem id="menu_bc_check" name="Endkontrolle" parent="menu_bc_stock" sequence="4"

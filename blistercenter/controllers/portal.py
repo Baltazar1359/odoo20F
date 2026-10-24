@@ -46,6 +46,12 @@ class BlistercenterPortal(CustomerPortal):
         if config.rule_shop_requires_enable and not partner.bc_shop_enabled:
             return None, env._("Ihr Kundenkonto ist für Online-Bestellungen noch nicht freigeschaltet. "
                                "Bitte wenden Sie sich an PLCS.")
+        # R72 (1.7.0): Artikel und Preise wie im geschützten Shop nur mit „Shop-Zugang (Benutzer)“
+        website = getattr(request, "website", None)
+        restricted = website._bc_shop_restricted() if website else config.rule_shop_requires_enable
+        if restricted and not user._bc_shop_access_ok():
+            return None, env._("Ihr Benutzer ist für Online-Bestellungen noch nicht freigegeben. "
+                               "Bitte wenden Sie sich an PLCS.")
         if partner.bc_payment_block and config.rule_block_confirm:
             return None, env._("Für Ihr Kundenkonto ist eine Online-Bestellung derzeit nicht möglich. "
                                "Bitte wenden Sie sich an PLCS.")

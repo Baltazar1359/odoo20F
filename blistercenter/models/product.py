@@ -19,7 +19,7 @@ class ProductTemplate(models.Model):
         """Darf der Artikel im Shop erscheinen und bestellt werden? (Regel R40)"""
         self.ensure_one()
         website = website or self.env.website
-        if not website._bc_shop_restricted():
+        if not website._bc_shop_assortment_only():
             return True
         return bool(self.sudo().bc_shop_product)
 

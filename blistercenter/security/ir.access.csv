@@ -15,3 +15,7 @@ access_bc_order_sheet_user,bc.order.sheet.user,blistercenter.order.sheet,group_b
 access_bc_order_sheet_line_user,bc.order.sheet.line.user,blistercenter.order.sheet.line,group_bc_user,crud,
 access_bc_receipt_scan_user,bc.receipt.scan.user,blistercenter.receipt.scan,group_bc_user,crud,
 access_bc_receipt_scan_line_user,bc.receipt.scan.line.user,blistercenter.receipt.scan.line,group_bc_user,crud,
+access_bc_receipt_check_wizard_user,bc.receipt.check.wizard.user,blistercenter.receipt.check.wizard,group_bc_user,crud,
+access_bc_auto_release_wizard_approver,bc.auto.release.wizard.approver,blistercenter.auto.release.wizard,group_bc_approver,crud,
+rule_bc_shop_product_template,Geschützter Blistercenter-Shop: Artikel nur für freigegebene Benutzer,product.template,,r,"[(1, '=', 1)] if user.bc_shop_catalog_allowed else [('id', '=', 0)]"
+rule_bc_shop_product_product,Geschützter Blistercenter-Shop: Varianten nur für freigegebene Benutzer,product.product,,r,"[(1, '=', 1)] if user.bc_shop_catalog_allowed else [('id', '=', 0)]"

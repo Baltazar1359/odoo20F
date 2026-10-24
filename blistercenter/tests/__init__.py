@@ -8,3 +8,5 @@ from . import test_chargen
 from . import test_pruefbericht_1021
 from . import test_wareneingang_1_6
 from . import test_pruefbericht_1023
+from . import test_auto_release
+from . import test_shop_access

@@ -1,0 +1,108 @@
+.o_plcs_dashboard {
+    .o_plcs_content {
+        padding: 16px 24px 32px;
+        background-color: $o-gray-100;
+    }
+
+    .o_plcs_section {
+        margin-bottom: 28px;
+    }
+
+    .o_plcs_section_title {
+        font-size: 1.05rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: $o-gray-700;
+        margin: 0 0 10px;
+    }
+
+    .o_plcs_cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        gap: 12px;
+    }
+
+    .o_plcs_kpi {
+        border: 1px solid $o-gray-200;
+        border-radius: 8px;
+        box-shadow: none;
+
+        .card-body {
+            padding: 12px 14px;
+        }
+
+        &.o_plcs_clickable {
+            cursor: pointer;
+
+            &:hover,
+            &:focus-visible {
+                border-color: $o-brand-primary;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+                outline: none;
+            }
+        }
+
+        &.o_plcs_unavailable {
+            background-color: $o-gray-100;
+            border-style: dashed;
+        }
+    }
+
+    .o_plcs_kpi_label {
+        font-size: 0.85rem;
+        color: $o-gray-700;
+        min-height: 2.4em;
+    }
+
+    .o_plcs_kpi_value {
+        font-size: 1.6rem;
+        font-weight: 600;
+        line-height: 1.2;
+        margin: 4px 0 2px;
+        font-variant-numeric: tabular-nums;
+
+        &.o_plcs_na {
+            font-size: 1rem;
+            color: $o-gray-600;
+        }
+    }
+
+    .o_plcs_breakdown {
+        margin-top: 6px;
+        color: $o-gray-700;
+    }
+
+    .o_plcs_charts {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+    }
+
+    .o_plcs_chart {
+        border: 1px solid $o-gray-200;
+        border-radius: 8px;
+
+        .o_plcs_chart_title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .o_plcs_chart_canvas {
+            position: relative;
+            height: 260px;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .o_plcs_content {
+            padding: 12px;
+        }
+
+        .o_plcs_charts {
+            grid-template-columns: 1fr;
+        }
+    }
+}

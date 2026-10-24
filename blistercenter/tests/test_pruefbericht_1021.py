@@ -371,7 +371,8 @@ class TestPruefbericht1021Portal(HttpCase):
         cls.customer = env["res.partner"].create({
             "name": "Portal-Blistercenter 1021 (Test)", "is_company": True, "bc_is_customer": True,
             "bc_shop_enabled": True, "bc_discount": "2", "property_payment_term_id": term.id})
-        contact = env["res.partner"].create({"name": "Paula Portal", "parent_id": cls.customer.id})
+        contact = env["res.partner"].create({"name": "Paula Portal", "parent_id": cls.customer.id,
+                                             "bc_shop_access": True})
         cls.user = new_test_user(env, login="bc_portal_1021", groups="base.group_portal", partner_id=contact.id)
         cls.product = env["product.product"].create({
             "name": "Sortiment 1021 10 St", "default_code": "22222222", "list_price": 100.0,
